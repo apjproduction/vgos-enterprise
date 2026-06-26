@@ -3,6 +3,7 @@ import {
   BrainCircuit,
   CheckCircle2,
   CircleHelp,
+  Database,
   FlaskConical,
   Lightbulb,
   Network,
@@ -99,7 +100,16 @@ export type EventType =
   | "MILESTONE_COMPLETED"
   | "CONSTRAINT_ADDED"
   | "OUTCOME_PREDICTED"
-  | "CAPABILITY_REGISTERED";
+  | "CAPABILITY_REGISTERED"
+  | "EXECUTION_STARTED"
+  | "EXECUTION_COMPLETED"
+  | "EXECUTION_BLOCKED"
+  | "EXECUTION_FAILED"
+  | "APPROVAL_REQUESTED"
+  | "APPROVAL_APPROVED"
+  | "APPROVAL_REJECTED"
+  | "EVIDENCE_ADDED"
+  | "EXECUTION_RESULT_CREATED";
 
 export type EventSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type EventStatus = "PENDING" | "PROCESSED" | "DISMISSED";
@@ -268,6 +278,84 @@ export type PlanConstraintType =
   | "APPROVAL_REQUIRED";
 
 export type ConstraintSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+export type ExecutionType =
+  | "BLOG_PUBLISH"
+  | "FOUNDER_POST"
+  | "COMPANY_POST"
+  | "X_POST"
+  | "X_THREAD"
+  | "PINTEREST_PIN"
+  | "DIRECTORY_SUBMISSION"
+  | "BACKLINK_OUTREACH"
+  | "COMMUNITY_REPLY"
+  | "DEMO_CREATION"
+  | "FAQ_UPDATE"
+  | "LANDING_PAGE_UPDATE"
+  | "INTERNAL_LINK_UPDATE"
+  | "NEWSLETTER_SEND"
+  | "YOUTUBE_SCRIPT"
+  | "PRODUCT_TASK"
+  | "EXPERIMENT_RUN"
+  | "MANUAL_ACTION";
+
+export type ExecutionStatus =
+  | "QUEUED"
+  | "READY"
+  | "IN_PROGRESS"
+  | "BLOCKED"
+  | "NEEDS_APPROVAL"
+  | "APPROVED"
+  | "COMPLETED"
+  | "FAILED"
+  | "CANCELLED";
+
+export type EvidenceType =
+  | "URL"
+  | "SCREENSHOT"
+  | "FILE"
+  | "NOTE"
+  | "METRIC"
+  | "SOCIAL_POST"
+  | "DIRECTORY_CONFIRMATION"
+  | "BACKLINK_LIVE"
+  | "BLOG_LIVE"
+  | "COMMENT_REPLY"
+  | "DEMO_ASSET";
+
+export type BlockerType =
+  | "MISSING_CONTENT"
+  | "MISSING_GRAPHIC"
+  | "MISSING_APPROVAL"
+  | "MISSING_ACCESS"
+  | "TECHNICAL_ISSUE"
+  | "WAITING_ON_EXTERNAL_SITE"
+  | "NEEDS_REVIEW"
+  | "LOW_CONFIDENCE"
+  | "RESOURCE_LIMIT"
+  | "OTHER";
+
+export type BlockerStatus = "OPEN" | "IN_REVIEW" | "RESOLVED" | "IGNORED";
+
+export type ApprovalType =
+  | "CONTENT_APPROVAL"
+  | "BRAND_APPROVAL"
+  | "SEO_APPROVAL"
+  | "PRODUCT_APPROVAL"
+  | "LEGAL_APPROVAL"
+  | "FOUNDER_APPROVAL"
+  | "PUBLISHING_APPROVAL";
+
+export type ApprovalStatus = "REQUESTED" | "APPROVED" | "REJECTED" | "CHANGES_REQUESTED" | "CANCELLED";
+
+export type ExecutionResultType =
+  | "COMPLETED"
+  | "PARTIAL_SUCCESS"
+  | "FAILED"
+  | "LEARNING_CAPTURED"
+  | "METRIC_IMPROVED"
+  | "NO_IMPACT"
+  | "FOLLOW_UP_REQUIRED";
 
 export type Organization = {
   id: string;
@@ -794,6 +882,74 @@ export type ResourceCapacity = ScopedRecord & {
   notes: string;
 };
 
+export type ExecutionItem = ScopedRecord & {
+  title: string;
+  description: string;
+  executionType: ExecutionType;
+  status: ExecutionStatus;
+  priority: Priority;
+  owner: string;
+  dueDate: string;
+  startedAt?: string;
+  completedAt?: string;
+  sourceType?: string;
+  sourceId?: string;
+  planId?: string;
+  planItemId?: string;
+  recommendedActionId?: string;
+  workflowRunId?: string;
+  objectiveId?: string;
+  campaignId?: string;
+  expectedImpact: string;
+  actualImpact: string;
+  notes: string;
+};
+
+export type ExecutionEvidence = ScopedRecord & {
+  executionItemId: string;
+  evidenceType: EvidenceType;
+  title: string;
+  url?: string;
+  description: string;
+  uploadedAssetUrl?: string;
+  capturedAt: string;
+};
+
+export type ExecutionBlocker = ScopedRecord & {
+  executionItemId: string;
+  title: string;
+  description: string;
+  blockerType: BlockerType;
+  severity: ConstraintSeverity;
+  status: BlockerStatus;
+  owner: string;
+  resolvedAt?: string;
+};
+
+export type ApprovalRequest = ScopedRecord & {
+  executionItemId: string;
+  title: string;
+  description: string;
+  approvalType: ApprovalType;
+  status: ApprovalStatus;
+  requestedBy: string;
+  reviewer: string;
+  requestedAt: string;
+  reviewedAt?: string;
+  decisionNotes?: string;
+};
+
+export type ExecutionResult = ScopedRecord & {
+  executionItemId: string;
+  resultType: ExecutionResultType;
+  summary: string;
+  metricName?: string;
+  metricBefore?: number;
+  metricAfter?: number;
+  impactScore?: number;
+  learning: string;
+};
+
 export type BriefingSection = {
   id: string;
   title: string;
@@ -848,6 +1004,11 @@ export type PlatformState = {
   planConstraints: PlanConstraint[];
   predictedOutcomes: PredictedOutcome[];
   resourceCapacities: ResourceCapacity[];
+  executionItems: ExecutionItem[];
+  executionEvidence: ExecutionEvidence[];
+  executionBlockers: ExecutionBlocker[];
+  approvalRequests: ApprovalRequest[];
+  executionResults: ExecutionResult[];
   events: Event[];
   recommendedActions: RecommendedAction[];
   briefingSections: BriefingSection[];
@@ -866,6 +1027,11 @@ export type PageId =
   | "knowledge"
   | "workflows"
   | "plans"
+  | "executions"
+  | "approvals"
+  | "blockers"
+  | "evidence"
+  | "results"
   | "capabilities"
   | "opportunityQueue"
   | "recommendedActions"
@@ -909,6 +1075,11 @@ export type CollectionKey =
   | "planConstraints"
   | "predictedOutcomes"
   | "resourceCapacities"
+  | "executionItems"
+  | "executionEvidence"
+  | "executionBlockers"
+  | "approvalRequests"
+  | "executionResults"
   | "recommendedActions"
   | "events"
   | "contentAssets"
@@ -1042,6 +1213,41 @@ export const pageDefinitions: PageDefinition[] = [
     description: "Execution plans that sequence objectives, recommendations, constraints, and expected outcomes.",
     icon: Target,
     collection: "plans"
+  },
+  {
+    id: "executions",
+    label: "Executions",
+    description: "Trackable execution items from plans, recommendations, workflows, and campaigns.",
+    icon: CheckCircle2,
+    collection: "executionItems"
+  },
+  {
+    id: "approvals",
+    label: "Approvals",
+    description: "Approval requests for content, brand, SEO, product, founder, and publishing checks.",
+    icon: CircleHelp,
+    collection: "approvalRequests"
+  },
+  {
+    id: "blockers",
+    label: "Blockers",
+    description: "Open and resolved execution blockers that prevent growth work from shipping.",
+    icon: FlaskConical,
+    collection: "executionBlockers"
+  },
+  {
+    id: "evidence",
+    label: "Evidence",
+    description: "Proof that execution happened: URLs, screenshots, files, notes, metrics, and live assets.",
+    icon: Database,
+    collection: "executionEvidence"
+  },
+  {
+    id: "results",
+    label: "Results",
+    description: "Execution results, impact notes, metric movement, follow-ups, and learning.",
+    icon: Sparkles,
+    collection: "executionResults"
   },
   {
     id: "capabilities",
@@ -2173,6 +2379,150 @@ const resourceCapacities: ResourceCapacity[] = ([
   ...scoped(index)
 }));
 
+const executionItemSeeds = [
+  ["execution-blog-004-publish", "Publish BLOG-004: What Is Video Production Intelligence?", "BLOG_PUBLISH", "NEEDS_APPROVAL", "CRITICAL", "Content", "plan-blog-004-010-content", "plan-item-25", "content-blog-004"],
+  ["execution-blog-004-internal-links", "Add internal links from BLOG-002 and BLOG-003 to BLOG-004", "INTERNAL_LINK_UPDATE", "READY", "HIGH", "SEO Strategy", "plan-vpi-authority", "plan-item-05", "content-blog-004"],
+  ["execution-product-page-demo", "Create product-page-to-video demo", "DEMO_CREATION", "BLOCKED", "CRITICAL", "Growth", "plan-product-hunt-follow-up", "plan-item-10", "question-product-page-to-video"],
+  ["execution-futurepedia-submit", "Submit VidMaker to Futurepedia", "DIRECTORY_SUBMISSION", "READY", "HIGH", "Authority", "plan-directory-submission", "plan-item-18", "directory-ai-video-tools"],
+  ["execution-toolify-submit", "Submit VidMaker to Toolify", "DIRECTORY_SUBMISSION", "QUEUED", "HIGH", "Authority", "plan-directory-submission", "plan-item-19", "directory-ai-video-tools"],
+  ["execution-founder-boundaries", "Publish founder post about automation boundaries", "FOUNDER_POST", "NEEDS_APPROVAL", "HIGH", "Tom Promise", "plan-vpi-authority", "plan-item-01", "entity-purpose-specific-ai"],
+  ["execution-pinterest-blog-004", "Publish Pinterest Pin for BLOG-004", "PINTEREST_PIN", "BLOCKED", "MEDIUM", "Design System", "plan-product-hunt-follow-up", "plan-item-12", "content-blog-004"],
+  ["execution-product-hunt-reply", "Reply to Product Hunt comment asking for product-page demo", "COMMUNITY_REPLY", "READY", "CRITICAL", "Community Intelligence", "plan-product-hunt-follow-up", "plan-item-15", "observation-url-product-comments"],
+  ["execution-purpose-specific-faq", "Create FAQ for Purpose-Specific AI", "FAQ_UPDATE", "READY", "HIGH", "Search Strategy", "plan-aeo-geo-visibility", "plan-item-35", "question-purpose-specific-ai"],
+  ["execution-vpi-landing-section", "Update VidMaker landing page with Video Production Intelligence section", "LANDING_PAGE_UPDATE", "BLOCKED", "HIGH", "Growth", "plan-vpi-authority", "plan-item-06", "entity-video-production-intelligence"],
+  ["execution-ph-proof-screenshot", "Add Product Hunt launch proof screenshot", "MANUAL_ACTION", "READY", "HIGH", "Community Intelligence", "plan-product-hunt-follow-up", "plan-item-15", "observation-product-hunt-comments"],
+  ["execution-directory-copy-bank", "Create directory submission copy bank", "DIRECTORY_SUBMISSION", "COMPLETED", "HIGH", "Authority", "plan-directory-submission", "plan-item-17", "directory-ai-video-tools"],
+  ["execution-company-linkedin-blog-004", "Publish company LinkedIn post for BLOG-004", "COMPANY_POST", "NEEDS_APPROVAL", "HIGH", "Content", "plan-blog-004-010-content", "plan-item-25", "content-blog-004"],
+  ["execution-x-thread-blog-004", "Create X thread from BLOG-004", "X_THREAD", "QUEUED", "HIGH", "Content", "plan-product-hunt-follow-up", "plan-item-16", "content-blog-004"],
+  ["execution-4k-proof-asset", "Create demo proof asset for 4K quality", "DEMO_CREATION", "BLOCKED", "HIGH", "Growth", "plan-product-hunt-follow-up", "plan-item-10", "ai-rec-08"],
+  ["execution-blog-005-outline", "Outline BLOG-005 competitor cleanup article", "BLOG_PUBLISH", "QUEUED", "HIGH", "Content", "plan-blog-004-010-content", "plan-item-26", "pattern-02"],
+  ["execution-vpi-newsletter", "Send newsletter section on Video Production Intelligence", "NEWSLETTER_SEND", "QUEUED", "MEDIUM", "Content", "plan-vpi-authority", "plan-item-08", "content-blog-002"],
+  ["execution-vpi-faq", "Answer VPI FAQ", "FAQ_UPDATE", "READY", "HIGH", "Search Strategy", "plan-aeo-geo-visibility", "plan-item-34", "question-video-production-intelligence"],
+  ["execution-product-page-entity", "Update Product Page to Video entity page", "LANDING_PAGE_UPDATE", "QUEUED", "HIGH", "Search Strategy", "plan-aeo-geo-visibility", "plan-item-38", "entity-product-page-to-video"],
+  ["execution-purpose-engines-company-post", "Create company post on Purpose Engines", "COMPANY_POST", "QUEUED", "MEDIUM", "Content", "plan-aeo-geo-visibility", "plan-item-39", "entity-purpose-engines"],
+  ["execution-faq-youtube-script", "Create YouTube script from FAQ set", "YOUTUBE_SCRIPT", "QUEUED", "MEDIUM", "Content", "plan-aeo-geo-visibility", "plan-item-39", "question-video-production-intelligence"],
+  ["execution-answer-coverage-experiment", "Run answer coverage experiment", "EXPERIMENT_RUN", "READY", "HIGH", "Search Strategy", "plan-aeo-geo-visibility", "plan-item-40", "objective-aeo-geo"],
+  ["execution-ai-video-tools-backlink", "Follow up on AI Video Tools backlink", "BACKLINK_OUTREACH", "READY", "HIGH", "Authority", "plan-directory-submission", "plan-item-21", "backlink-ai-video-tools-directory"],
+  ["execution-pinterest-proof-pin-2", "Create Pinterest proof pin 2", "PINTEREST_PIN", "QUEUED", "MEDIUM", "Design System", "plan-product-hunt-follow-up", "plan-item-13", "content-blog-004"],
+  ["execution-founder-vpi-post", "Publish founder authority post on Video Production Intelligence", "FOUNDER_POST", "IN_PROGRESS", "HIGH", "Tom Promise", "plan-vpi-authority", "plan-item-02", "kernel-action-11"]
+] as const;
+
+const executionItems: ExecutionItem[] = executionItemSeeds.map(
+  ([id, title, executionType, status, priority, owner, planId, planItemId, sourceId], index) => ({
+    id,
+    title,
+    description: `${title} for VidMaker execution tracking.`,
+    executionType: executionType as ExecutionType,
+    status: status as ExecutionStatus,
+    priority: priority as Priority,
+    owner,
+    dueDate: daysFromNow((index % 9) + 1),
+    startedAt: ["IN_PROGRESS", "BLOCKED", "NEEDS_APPROVAL"].includes(status) ? daysAgo((index % 4) + 1) : undefined,
+    completedAt: status === "COMPLETED" ? daysAgo(1) : undefined,
+    sourceType: "Seed",
+    sourceId,
+    planId,
+    planItemId,
+    expectedImpact: "Move a planned VidMaker growth action into shipped proof, authority, distribution, or learning.",
+    actualImpact: status === "COMPLETED" ? "Execution completed and learning captured." : "",
+    notes: "",
+    ...scoped(index)
+  })
+);
+
+const executionEvidence: ExecutionEvidence[] = ([
+  ["execution-blog-004-publish", "BLOG-004 draft note", "NOTE", "", "Draft includes Video Production Intelligence positioning and proof placeholders."],
+  ["execution-product-page-demo", "Product-page-to-video demo placeholder", "DEMO_ASSET", "https://vidmaker.com/product-page-to-video", "Placeholder URL for product-page-to-video proof asset."],
+  ["execution-product-hunt-reply", "Product Hunt URL", "URL", "https://www.producthunt.com", "Source thread for launch comments and demo requests."],
+  ["execution-company-linkedin-blog-004", "LinkedIn launch post URL", "SOCIAL_POST", "https://www.linkedin.com/company/vidmaker", "Placeholder for LinkedIn company post proof."],
+  ["execution-futurepedia-submit", "Futurepedia submission placeholder", "DIRECTORY_CONFIRMATION", "https://www.futurepedia.io", "Directory submission confirmation placeholder."],
+  ["execution-toolify-submit", "Toolify submission placeholder", "DIRECTORY_CONFIRMATION", "https://www.toolify.ai", "Directory submission confirmation placeholder."],
+  ["execution-blog-004-internal-links", "Internal link completion note", "NOTE", "", "BLOG-002 and BLOG-003 internal link targets identified."],
+  ["execution-pinterest-blog-004", "Pinterest image brief", "FILE", "", "Image requirements captured for BLOG-004 pin."],
+  ["execution-ph-proof-screenshot", "Product Hunt proof screenshot placeholder", "SCREENSHOT", "", "Screenshot slot for launch proof."],
+  ["execution-directory-copy-bank", "Directory copy bank note", "NOTE", "", "Copy bank emphasizes VPI and product-page-to-video proof."],
+  ["execution-x-thread-blog-004", "X thread draft note", "NOTE", "", "Thread structure drafted from BLOG-004 outline."],
+  ["execution-4k-proof-asset", "4K proof requirement", "NOTE", "", "Proof example must show quality and control."],
+  ["execution-vpi-faq", "FAQ answer draft", "NOTE", "", "Draft answer defines Video Production Intelligence."],
+  ["execution-ai-video-tools-backlink", "AI Video Tools backlink monitor", "BACKLINK_LIVE", "https://example.com/ai-video-tools", "Backlink monitoring placeholder."],
+  ["execution-answer-coverage-experiment", "Answer coverage metric baseline", "METRIC", "", "Baseline answer coverage score captured before experiment."]
+] as const).map(([executionItemId, title, evidenceType, url, description], index) => ({
+  id: `execution-evidence-${String(index + 1).padStart(2, "0")}`,
+  executionItemId,
+  evidenceType: evidenceType as EvidenceType,
+  title,
+  url: url || undefined,
+  description,
+  uploadedAssetUrl: undefined,
+  capturedAt: daysAgo(index % 5),
+  ...scoped(index)
+}));
+
+const executionBlockers: ExecutionBlocker[] = ([
+  ["execution-product-page-demo", "Product-page demo graphic not ready", "MISSING_GRAPHIC", "CRITICAL", "Design System"],
+  ["execution-directory-copy-bank", "Directory copy needs review", "NEEDS_REVIEW", "HIGH", "Authority"],
+  ["execution-blog-004-publish", "BLOG-004 needs final CTA", "MISSING_CONTENT", "HIGH", "Content"],
+  ["execution-pinterest-blog-004", "Pinterest image needed", "MISSING_GRAPHIC", "MEDIUM", "Design System"],
+  ["execution-product-hunt-reply", "Product Hunt comment response pending", "NEEDS_REVIEW", "HIGH", "Community Intelligence"],
+  ["execution-vpi-landing-section", "Landing page proof section needs design", "MISSING_GRAPHIC", "HIGH", "Growth"],
+  ["execution-4k-proof-asset", "4K proof example needed", "MISSING_CONTENT", "HIGH", "Growth"],
+  ["execution-founder-boundaries", "Founder post needs final review", "MISSING_APPROVAL", "HIGH", "Tom Promise"]
+] as const).map(([executionItemId, title, blockerType, severity, owner], index) => ({
+  id: `execution-blocker-${String(index + 1).padStart(2, "0")}`,
+  executionItemId,
+  title,
+  description: `${title} before this execution can be completed.`,
+  blockerType: blockerType as BlockerType,
+  severity: severity as ConstraintSeverity,
+  status: index === 1 ? "IN_REVIEW" : "OPEN",
+  owner,
+  resolvedAt: undefined,
+  ...scoped(index)
+}));
+
+const approvalRequests: ApprovalRequest[] = ([
+  ["execution-blog-004-publish", "Founder approval for BLOG-004", "FOUNDER_APPROVAL", "REQUESTED", "Content", "Tom Promise"],
+  ["execution-product-page-demo", "Brand approval for product-page demo", "BRAND_APPROVAL", "CHANGES_REQUESTED", "Growth", "Brand"],
+  ["execution-blog-004-internal-links", "SEO approval for internal links", "SEO_APPROVAL", "REQUESTED", "SEO Strategy", "SEO Lead"],
+  ["execution-company-linkedin-blog-004", "Publishing approval for LinkedIn company post", "PUBLISHING_APPROVAL", "REQUESTED", "Content", "Growth"],
+  ["execution-product-page-demo", "Product approval for URL-to-video proof messaging", "PRODUCT_APPROVAL", "REQUESTED", "Growth", "Product"],
+  ["execution-founder-boundaries", "Founder post final approval", "FOUNDER_APPROVAL", "REQUESTED", "Content", "Tom Promise"],
+  ["execution-vpi-landing-section", "Brand approval for VPI landing section", "BRAND_APPROVAL", "REQUESTED", "Growth", "Brand"],
+  ["execution-purpose-specific-faq", "Content approval for Purpose-Specific AI FAQ", "CONTENT_APPROVAL", "APPROVED", "Search Strategy", "Content"]
+] as const).map(([executionItemId, title, approvalType, status, requestedBy, reviewer], index) => ({
+  id: `approval-request-${String(index + 1).padStart(2, "0")}`,
+  executionItemId,
+  title,
+  description: `${title} is required before publication or distribution.`,
+  approvalType: approvalType as ApprovalType,
+  status: status as ApprovalStatus,
+  requestedBy,
+  reviewer,
+  requestedAt: daysAgo((index % 4) + 1),
+  reviewedAt: status === "APPROVED" || status === "CHANGES_REQUESTED" ? daysAgo(index % 2) : undefined,
+  decisionNotes: status === "CHANGES_REQUESTED" ? "Clarify proof claim before publishing." : undefined,
+  ...scoped(index)
+}));
+
+const executionResults: ExecutionResult[] = ([
+  ["execution-company-linkedin-blog-004", "COMPLETED", "LinkedIn carousel published", "engagement_rate", 0, 0, 72, "LinkedIn proof-led posts should include source-to-output visuals."],
+  ["execution-product-hunt-reply", "COMPLETED", "Product Hunt launch announcement published", "comment_replies", 0, 3, 78, "Community replies perform better when linked to a concrete demo."],
+  ["execution-x-thread-blog-004", "LEARNING_CAPTURED", "Company X account created", "followers", 0, 12, 55, "X should be used for demo-thread distribution after proof assets are ready."],
+  ["execution-blog-004-internal-links", "COMPLETED", "BLOG-003 published and linked into the VPI cluster", "internal_links", 0, 4, 80, "Cluster linking strengthens VPI category ownership."],
+  ["execution-futurepedia-submit", "FOLLOW_UP_REQUIRED", "Directory submission wave pending", "submissions", 0, 2, 65, "Directory submissions need review-ready copy bank before batching."]
+] as const).map(([executionItemId, resultType, summary, metricName, metricBefore, metricAfter, impactScore, learning], index) => ({
+  id: `execution-result-${String(index + 1).padStart(2, "0")}`,
+  executionItemId,
+  resultType: resultType as ExecutionResultType,
+  summary,
+  metricName,
+  metricBefore,
+  metricAfter,
+  impactScore,
+  learning,
+  ...scoped(index)
+}));
+
 const recommendedActions: RecommendedAction[] = [
   ["CREATE_DEMO", "Pattern", "pattern-01", "Create product-page-to-video demo from a real ecommerce page.", "CRITICAL", "objective-demo-assets", "pattern-01"],
   ["WRITE_BLOG", "Pattern", "pattern-03", "Publish Video Production Intelligence category article.", "CRITICAL", "objective-own-vpi", "pattern-03"],
@@ -2554,6 +2904,11 @@ export const initialPlatformState: PlatformState = {
   planConstraints,
   predictedOutcomes,
   resourceCapacities,
+  executionItems,
+  executionEvidence,
+  executionBlockers,
+  approvalRequests,
+  executionResults,
   events,
   recommendedActions,
   briefingSections
@@ -2605,6 +2960,11 @@ export function getExecutiveMetrics(state: PlatformState, activeWorkspaceId: str
   const planItems = state.planItems.filter((item) => item.workspaceId === activeWorkspaceId);
   const predictedOutcomes = state.predictedOutcomes.filter((item) => item.workspaceId === activeWorkspaceId);
   const resourceCapacities = state.resourceCapacities.filter((item) => item.workspaceId === activeWorkspaceId);
+  const executionItems = state.executionItems.filter((item) => item.workspaceId === activeWorkspaceId);
+  const executionEvidence = state.executionEvidence.filter((item) => item.workspaceId === activeWorkspaceId);
+  const executionBlockers = state.executionBlockers.filter((item) => item.workspaceId === activeWorkspaceId);
+  const approvalRequests = state.approvalRequests.filter((item) => item.workspaceId === activeWorkspaceId);
+  const executionResults = state.executionResults.filter((item) => item.workspaceId === activeWorkspaceId);
   const highImpactActions = state.recommendedActions.filter(
     (item) => item.workspaceId === activeWorkspaceId && ["HIGH", "CRITICAL"].includes(item.priority)
   );
@@ -2664,6 +3024,16 @@ export function getExecutiveMetrics(state: PlatformState, activeWorkspaceId: str
     blockedPlanItems: planItems.filter((item) => item.status === "BLOCKED").length,
     predictedOutcomes: predictedOutcomes.length,
     resourceCapacityHours: resourceCapacities.reduce((total, item) => total + item.weeklyHours, 0),
+    readyExecutions: executionItems.filter((item) => item.status === "READY").length,
+    inProgressExecutions: executionItems.filter((item) => item.status === "IN_PROGRESS").length,
+    blockedExecutions: executionItems.filter((item) => item.status === "BLOCKED").length,
+    pendingApprovals: approvalRequests.filter((item) => item.status === "REQUESTED" || item.status === "CHANGES_REQUESTED").length,
+    completedExecutionsThisWeek: executionItems.filter(
+      (item) => item.status === "COMPLETED" && item.completedAt && new Date(item.completedAt).getTime() >= Date.now() - 7 * 24 * 60 * 60 * 1000
+    ).length,
+    evidenceAdded: executionEvidence.length,
+    executionResults: executionResults.length,
+    openExecutionBlockers: executionBlockers.filter((item) => item.status === "OPEN" || item.status === "IN_REVIEW").length,
     planHealthScore: Math.round(
       Math.max(
         0,
@@ -3180,6 +3550,89 @@ export function createDefaultRecord(collection: CollectionKey, activeWorkspaceId
       weeklyHours: 10,
       focusArea: "Planning",
       notes: ""
+    };
+  }
+
+  if (collection === "executionItems") {
+    return {
+      ...base,
+      planId: "",
+      planItemId: "",
+      recommendedActionId: "",
+      workflowRunId: "",
+      objectiveId: "",
+      campaignId: "",
+      title: "New execution item",
+      description: "",
+      executionType: "MANUAL_ACTION",
+      status: "QUEUED",
+      priority: "HIGH",
+      owner: "Growth",
+      dueDate: daysFromNow(7),
+      startedAt: undefined,
+      completedAt: undefined,
+      sourceType: "Manual",
+      sourceId: "",
+      expectedImpact: "",
+      actualImpact: "",
+      notes: ""
+    };
+  }
+
+  if (collection === "executionEvidence") {
+    return {
+      ...base,
+      executionItemId: "",
+      evidenceType: "NOTE",
+      title: "New evidence",
+      url: "",
+      description: "",
+      uploadedAssetUrl: "",
+      capturedAt: date
+    };
+  }
+
+  if (collection === "executionBlockers") {
+    return {
+      ...base,
+      executionItemId: "",
+      title: "New blocker",
+      description: "",
+      blockerType: "OTHER",
+      severity: "MEDIUM",
+      status: "OPEN",
+      owner: "Growth",
+      resolvedAt: undefined
+    };
+  }
+
+  if (collection === "approvalRequests") {
+    return {
+      ...base,
+      executionItemId: "",
+      title: "New approval request",
+      description: "",
+      approvalType: "CONTENT_APPROVAL",
+      status: "REQUESTED",
+      requestedBy: "Growth",
+      reviewer: "Approver",
+      requestedAt: date,
+      reviewedAt: undefined,
+      decisionNotes: ""
+    };
+  }
+
+  if (collection === "executionResults") {
+    return {
+      ...base,
+      executionItemId: "",
+      resultType: "LEARNING_CAPTURED",
+      summary: "",
+      metricName: "",
+      metricBefore: 0,
+      metricAfter: 0,
+      impactScore: 50,
+      learning: ""
     };
   }
 

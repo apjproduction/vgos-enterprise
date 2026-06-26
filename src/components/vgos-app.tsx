@@ -43,6 +43,18 @@ import {
   generatePlanFromRecommendedActions
 } from "@/kernel/planning/planning-engine";
 import {
+  completeExecution,
+  getExecutionHealth,
+  getExecutionQueue,
+  startExecution
+} from "@/kernel/execution/execution-engine";
+import {
+  batchCreateExecutionsFromPlan,
+  createExecutionFromPlanItem,
+  createExecutionFromRecommendedAction,
+  createExecutionFromWorkflowRun
+} from "@/kernel/execution/execution-builder";
+import {
   calculateOpportunityScore,
   createDefaultRecord,
   createScopedId,
@@ -59,10 +71,13 @@ import {
   type CollectionKey,
   type EventSeverity,
   type EventStatus,
+  type ExecutionItem,
+  type ExecutionStatus,
   type Objective,
   type PageDefinition,
   type PageId,
   type Plan,
+  type PlanItem,
   type PlatformState,
   type Priority,
   type RecommendationType,
@@ -255,6 +270,90 @@ const planConstraintTypeOptions = [
 
 const severityOptions = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 
+const executionTypeOptions = [
+  "BLOG_PUBLISH",
+  "FOUNDER_POST",
+  "COMPANY_POST",
+  "X_POST",
+  "X_THREAD",
+  "PINTEREST_PIN",
+  "DIRECTORY_SUBMISSION",
+  "BACKLINK_OUTREACH",
+  "COMMUNITY_REPLY",
+  "DEMO_CREATION",
+  "FAQ_UPDATE",
+  "LANDING_PAGE_UPDATE",
+  "INTERNAL_LINK_UPDATE",
+  "NEWSLETTER_SEND",
+  "YOUTUBE_SCRIPT",
+  "PRODUCT_TASK",
+  "EXPERIMENT_RUN",
+  "MANUAL_ACTION"
+];
+
+const executionStatusOptions = [
+  "QUEUED",
+  "READY",
+  "IN_PROGRESS",
+  "BLOCKED",
+  "NEEDS_APPROVAL",
+  "APPROVED",
+  "COMPLETED",
+  "FAILED",
+  "CANCELLED"
+];
+
+const evidenceTypeOptions = [
+  "URL",
+  "SCREENSHOT",
+  "FILE",
+  "NOTE",
+  "METRIC",
+  "SOCIAL_POST",
+  "DIRECTORY_CONFIRMATION",
+  "BACKLINK_LIVE",
+  "BLOG_LIVE",
+  "COMMENT_REPLY",
+  "DEMO_ASSET"
+];
+
+const blockerTypeOptions = [
+  "MISSING_CONTENT",
+  "MISSING_GRAPHIC",
+  "MISSING_APPROVAL",
+  "MISSING_ACCESS",
+  "TECHNICAL_ISSUE",
+  "WAITING_ON_EXTERNAL_SITE",
+  "NEEDS_REVIEW",
+  "LOW_CONFIDENCE",
+  "RESOURCE_LIMIT",
+  "OTHER"
+];
+
+const blockerStatusOptions = ["OPEN", "IN_REVIEW", "RESOLVED", "IGNORED"];
+
+const approvalTypeOptions = [
+  "CONTENT_APPROVAL",
+  "BRAND_APPROVAL",
+  "SEO_APPROVAL",
+  "PRODUCT_APPROVAL",
+  "LEGAL_APPROVAL",
+  "FOUNDER_APPROVAL",
+  "PUBLISHING_APPROVAL"
+];
+
+const approvalStatusOptions = ["REQUESTED", "APPROVED", "REJECTED", "CHANGES_REQUESTED", "CANCELLED"];
+
+const executionResultTypeOptions = [
+  "COMPLETED",
+  "PARTIAL_SUCCESS",
+  "FAILED",
+  "LEARNING_CAPTURED",
+  "METRIC_IMPROVED",
+  "NO_IMPACT",
+  "FOLLOW_UP_REQUIRED"
+];
+
 function priorityTone(priority?: Priority) {
   if (priority === "CRITICAL") return "red";
   if (priority === "HIGH") return "amber";
@@ -263,11 +362,11 @@ function priorityTone(priority?: Priority) {
 }
 
 function statusTone(status?: string) {
-  if (status === "LIVE" || status === "PUBLISHED" || status === "ACTIVE" || status === "COMPLETED") return "green";
-  if (status === "IN_PROGRESS" || status === "RESEARCHING" || status === "DRAFT") return "blue";
-  if (status === "BLOCKED") return "red";
-  if (status === "SUBMITTED") return "teal";
-  if (status === "ARCHIVED" || status === "PAUSED") return "slate";
+  if (status === "LIVE" || status === "PUBLISHED" || status === "ACTIVE" || status === "COMPLETED" || status === "APPROVED" || status === "RESOLVED") return "green";
+  if (status === "IN_PROGRESS" || status === "RESEARCHING" || status === "DRAFT" || status === "READY" || status === "IN_REVIEW") return "blue";
+  if (status === "BLOCKED" || status === "FAILED" || status === "REJECTED") return "red";
+  if (status === "SUBMITTED" || status === "QUEUED") return "teal";
+  if (status === "ARCHIVED" || status === "PAUSED" || status === "CANCELLED" || status === "IGNORED") return "slate";
   return "amber";
 }
 
@@ -307,6 +406,11 @@ function sourceTypeToCollection(sourceType: string): EditableCollection {
     PlanConstraint: "planConstraints",
     PredictedOutcome: "predictedOutcomes",
     ResourceCapacity: "resourceCapacities",
+    ExecutionItem: "executionItems",
+    ExecutionEvidence: "executionEvidence",
+    ExecutionBlocker: "executionBlockers",
+    ApprovalRequest: "approvalRequests",
+    ExecutionResult: "executionResults",
     Experiment: "experiments",
     Observation: "observations",
     Insight: "insights",
@@ -348,6 +452,11 @@ function collectionToSourceType(collection: EditableCollection) {
     planConstraints: "PlanConstraint",
     predictedOutcomes: "PredictedOutcome",
     resourceCapacities: "ResourceCapacity",
+    executionItems: "ExecutionItem",
+    executionEvidence: "ExecutionEvidence",
+    executionBlockers: "ExecutionBlocker",
+    approvalRequests: "ApprovalRequest",
+    executionResults: "ExecutionResult",
     experiments: "Experiment",
     insights: "Insight",
     hypotheses: "Hypothesis"
@@ -378,7 +487,12 @@ function eventTypeForCollection(collection: EditableCollection) {
     planItems: "PLAN_ITEM_COMPLETED",
     milestones: "MILESTONE_COMPLETED",
     planConstraints: "CONSTRAINT_ADDED",
-    predictedOutcomes: "OUTCOME_PREDICTED"
+    predictedOutcomes: "OUTCOME_PREDICTED",
+    executionItems: "EXECUTION_STARTED",
+    executionEvidence: "EVIDENCE_ADDED",
+    executionBlockers: "EXECUTION_BLOCKED",
+    approvalRequests: "APPROVAL_REQUESTED",
+    executionResults: "EXECUTION_RESULT_CREATED"
   };
   return map[collection] ?? null;
 }
@@ -772,6 +886,280 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
     }));
   }
 
+  function convertPlanItemToExecution(item: AnyRecord) {
+    const now = new Date().toISOString();
+    const executionItem = createExecutionFromPlanItem(item as PlanItem, {
+      workspaceId: activeWorkspaceId,
+      organizationId: orgId,
+      now
+    });
+    setState((currentState) => ({
+      ...currentState,
+      executionItems: [
+        executionItem,
+        ...currentState.executionItems.filter((record) => record.planItemId !== item.id)
+      ],
+      planItems: currentState.planItems.map((candidate) =>
+        candidate.id === item.id ? { ...candidate, status: "IN_PROGRESS" as const, updatedAt: now } : candidate
+      ),
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "EXECUTION_STARTED" as any,
+          sourceType: "ExecutionItem",
+          sourceId: executionItem.id,
+          title: `${executionItem.title} moved to execution`,
+          description: executionItem.description,
+          metadata: { generatedBy: "execution-engine", planItemId: item.id },
+          severity: executionItem.priority === "CRITICAL" ? "CRITICAL" as EventSeverity : "HIGH" as EventSeverity,
+          status: "PENDING" as EventStatus,
+          createdAt: now
+        },
+        ...currentState.events
+      ]
+    }));
+    setActivePage("executions");
+  }
+
+  function convertPlanToExecutions(plan: AnyRecord) {
+    const now = new Date().toISOString();
+    const planItems = state.planItems.filter((item) => item.planId === plan.id && item.status !== "ARCHIVED");
+    const executionItems = batchCreateExecutionsFromPlan(plan as Plan, planItems, {
+      workspaceId: activeWorkspaceId,
+      organizationId: orgId,
+      now
+    });
+    setState((currentState) => ({
+      ...currentState,
+      executionItems: [
+        ...executionItems,
+        ...currentState.executionItems.filter((record) => record.planId !== plan.id)
+      ],
+      events: [
+        ...executionItems.map((executionItem) => ({
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "EXECUTION_STARTED" as any,
+          sourceType: "ExecutionItem",
+          sourceId: executionItem.id,
+          title: `${executionItem.title} queued from plan`,
+          description: executionItem.description,
+          metadata: { generatedBy: "execution-engine", planId: plan.id },
+          severity: executionItem.priority === "CRITICAL" ? "CRITICAL" as EventSeverity : "HIGH" as EventSeverity,
+          status: "PENDING" as EventStatus,
+          createdAt: now
+        })),
+        ...currentState.events
+      ]
+    }));
+    setActivePage("executions");
+  }
+
+  function convertRecommendedActionToExecution(action: AnyRecord) {
+    const now = new Date().toISOString();
+    const executionItem = createExecutionFromRecommendedAction(action as any, {
+      workspaceId: activeWorkspaceId,
+      organizationId: orgId,
+      now
+    });
+    setState((currentState) => ({
+      ...currentState,
+      executionItems: [
+        executionItem,
+        ...currentState.executionItems.filter((record) => record.recommendedActionId !== action.id)
+      ],
+      recommendedActions: currentState.recommendedActions.map((candidate) =>
+        candidate.id === action.id ? { ...candidate, status: "IN_PROGRESS" as ActionStatus, updatedAt: now } : candidate
+      ),
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "EXECUTION_STARTED" as any,
+          sourceType: "ExecutionItem",
+          sourceId: executionItem.id,
+          title: `${executionItem.title} created from recommendation`,
+          description: executionItem.description,
+          metadata: { generatedBy: "execution-engine", recommendedActionId: action.id },
+          severity: executionItem.priority === "CRITICAL" ? "CRITICAL" as EventSeverity : "HIGH" as EventSeverity,
+          status: "PENDING" as EventStatus,
+          createdAt: now
+        },
+        ...currentState.events
+      ]
+    }));
+    setActivePage("executions");
+  }
+
+  function convertWorkflowRunToExecution(run: AnyRecord) {
+    const now = new Date().toISOString();
+    const executionItem = createExecutionFromWorkflowRun(run as any, {
+      workspaceId: activeWorkspaceId,
+      organizationId: orgId,
+      now
+    });
+    setState((currentState) => ({
+      ...currentState,
+      executionItems: [executionItem, ...currentState.executionItems],
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "EXECUTION_STARTED" as any,
+          sourceType: "ExecutionItem",
+          sourceId: executionItem.id,
+          title: `${executionItem.title} created from workflow output`,
+          description: executionItem.description,
+          metadata: { generatedBy: "execution-engine", workflowRunId: run.id },
+          severity: "HIGH" as EventSeverity,
+          status: "PENDING" as EventStatus,
+          createdAt: now
+        },
+        ...currentState.events
+      ]
+    }));
+    setActivePage("executions");
+  }
+
+  function startExecutionItem(item: AnyRecord) {
+    const now = new Date().toISOString();
+    const nextItem = startExecution(item as ExecutionItem, { now });
+    setState((currentState) => ({
+      ...currentState,
+      executionItems: currentState.executionItems.map((candidate) =>
+        candidate.id === item.id ? nextItem : candidate
+      ),
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "EXECUTION_STARTED" as any,
+          sourceType: "ExecutionItem",
+          sourceId: item.id,
+          title: `${item.title} started`,
+          description: item.description ?? "",
+          metadata: { generatedBy: "execution-engine" },
+          severity: item.priority === "CRITICAL" ? "CRITICAL" as EventSeverity : "HIGH" as EventSeverity,
+          status: "PENDING" as EventStatus,
+          createdAt: now
+        },
+        ...currentState.events
+      ]
+    }));
+  }
+
+  function completeExecutionItem(item: AnyRecord) {
+    const now = new Date().toISOString();
+    const nextItem = completeExecution(item as ExecutionItem, "Execution completed from VGOS.", { now });
+    const result = {
+      id: createScopedId("execution-result"),
+      organizationId: orgId,
+      workspaceId: activeWorkspaceId,
+      executionItemId: item.id,
+      resultType: "COMPLETED" as const,
+      summary: `${item.title} completed.`,
+      metricName: "",
+      metricBefore: 0,
+      metricAfter: 0,
+      impactScore: 75,
+      learning: item.notes ?? "",
+      createdAt: now,
+      updatedAt: now
+    };
+    setState((currentState) => ({
+      ...currentState,
+      executionItems: currentState.executionItems.map((candidate) =>
+        candidate.id === item.id ? nextItem : candidate
+      ),
+      planItems: item.planItemId
+        ? currentState.planItems.map((candidate) =>
+            candidate.id === item.planItemId ? { ...candidate, status: "COMPLETED" as const, updatedAt: now } : candidate
+          )
+        : currentState.planItems,
+      recommendedActions: item.recommendedActionId
+        ? currentState.recommendedActions.map((candidate) =>
+            candidate.id === item.recommendedActionId
+              ? { ...candidate, status: "COMPLETED" as ActionStatus, completedAt: now, updatedAt: now }
+              : candidate
+          )
+        : currentState.recommendedActions,
+      executionResults: [result, ...currentState.executionResults],
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "EXECUTION_COMPLETED" as any,
+          sourceType: "ExecutionItem",
+          sourceId: item.id,
+          title: `${item.title} completed`,
+          description: result.summary,
+          metadata: { generatedBy: "execution-engine", resultId: result.id },
+          severity: "HIGH" as EventSeverity,
+          status: "PENDING" as EventStatus,
+          createdAt: now
+        },
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "EXECUTION_RESULT_CREATED" as any,
+          sourceType: "ExecutionResult",
+          sourceId: result.id,
+          title: `${item.title} result captured`,
+          description: result.learning || result.summary,
+          metadata: { generatedBy: "execution-engine", executionItemId: item.id },
+          severity: "MEDIUM" as EventSeverity,
+          status: "PENDING" as EventStatus,
+          createdAt: now
+        },
+        ...currentState.events
+      ]
+    }));
+  }
+
+  function addEvidenceForExecution(item: AnyRecord) {
+    setDraft({
+      collection: "executionEvidence",
+      item: {
+        ...createDefaultRecord("executionEvidence", activeWorkspaceId),
+        executionItemId: item.id,
+        title: `${item.title} evidence`
+      },
+      isNew: true
+    });
+  }
+
+  function addBlockerForExecution(item: AnyRecord) {
+    setDraft({
+      collection: "executionBlockers",
+      item: {
+        ...createDefaultRecord("executionBlockers", activeWorkspaceId),
+        executionItemId: item.id,
+        title: `${item.title} blocker`
+      },
+      isNew: true
+    });
+  }
+
+  function requestApprovalForExecution(item: AnyRecord) {
+    setDraft({
+      collection: "approvalRequests",
+      item: {
+        ...createDefaultRecord("approvalRequests", activeWorkspaceId),
+        executionItemId: item.id,
+        title: `${item.title} approval`
+      },
+      isNew: true
+    });
+  }
+
   function markActionCompleted(actionId: string) {
     const completedAt = new Date().toISOString();
     setState((currentState) => ({
@@ -848,8 +1236,16 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
       generatePlanFromRecommendedActionQueue(item);
       return;
     }
+    if (conversion === "RecommendedActionToExecution") {
+      convertRecommendedActionToExecution(item);
+      return;
+    }
     if (conversion === "PatternToPlan") {
       generatePlanFromPatternQueue(item);
+      return;
+    }
+    if (conversion === "PlanToExecutions") {
+      convertPlanToExecutions(item);
       return;
     }
     if (conversion === "ActivatePlan") {
@@ -862,6 +1258,26 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
     }
     if (conversion === "CompletePlanItem") {
       markPlanItemComplete(item);
+      return;
+    }
+    if (conversion === "PlanItemToExecution") {
+      convertPlanItemToExecution(item);
+      return;
+    }
+    if (conversion === "WorkflowRunToExecution") {
+      convertWorkflowRunToExecution(item);
+      return;
+    }
+    if (conversion === "StartExecution") {
+      startExecutionItem(item);
+      return;
+    }
+    if (conversion === "CompleteExecution") {
+      completeExecutionItem(item);
+      return;
+    }
+    if (conversion === "AddExecutionEvidence") {
+      addEvidenceForExecution(item);
       return;
     }
     if (conversion === "PlanAddDependency") {
@@ -1094,12 +1510,13 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
               metrics={metrics}
               onCreate={openCreate}
               onEdit={openEdit}
-              onNavigate={navigateTo}
-              onRunAgent={runAgentManually}
-              onGeneratePlan={() => generatePlanFromRecommendedActionQueue()}
-              markActionCompleted={markActionCompleted}
-              convertActionToTask={convertActionToTask}
-            />
+            onNavigate={navigateTo}
+            onRunAgent={runAgentManually}
+            onGeneratePlan={() => generatePlanFromRecommendedActionQueue()}
+            onConvertPlanToExecutions={convertPlanToExecutions}
+            markActionCompleted={markActionCompleted}
+            convertActionToTask={convertActionToTask}
+          />
           ) : activePage === "briefing" ? (
             <BriefingPage state={state} activeWorkspaceId={activeWorkspaceId} />
           ) : activePage === "intelligencePipeline" ? (
@@ -1256,6 +1673,27 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
               onGenerateFromPatterns={() => generatePlanFromPatternQueue()}
               onActivatePlan={activatePlanRecord}
               onCompletePlanItem={markPlanItemComplete}
+              onConvertPlanToExecutions={convertPlanToExecutions}
+              onConvertPlanItemToExecution={convertPlanItemToExecution}
+            />
+          ) : activePage === "executions" ? (
+            <ExecutionsPage
+              state={state}
+              page={page}
+              activeWorkspaceId={activeWorkspaceId}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              priorityFilter={priorityFilter}
+              setPriorityFilter={setPriorityFilter}
+              onCreate={openCreate}
+              onEdit={openEdit}
+              onStartExecution={startExecutionItem}
+              onCompleteExecution={completeExecutionItem}
+              onAddEvidence={addEvidenceForExecution}
+              onAddBlocker={addBlockerForExecution}
+              onRequestApproval={requestApprovalForExecution}
             />
           ) : activePage === "capabilities" ? (
             <CapabilitiesPage page={page} />
@@ -1299,6 +1737,7 @@ function MissionControl({
   onNavigate,
   onRunAgent,
   onGeneratePlan,
+  onConvertPlanToExecutions,
   markActionCompleted,
   convertActionToTask
 }: {
@@ -1310,6 +1749,7 @@ function MissionControl({
   onNavigate: (page: PageId) => void;
   onRunAgent: () => void;
   onGeneratePlan: () => void;
+  onConvertPlanToExecutions: (plan: AnyRecord) => void;
   markActionCompleted: (id: string) => void;
   convertActionToTask: (action: AnyRecord) => void;
 }) {
@@ -1375,6 +1815,23 @@ function MissionControl({
         constraints: state.planConstraints.filter((item) => item.planId === topActivePlan.id)
       })
     : null;
+  const workspaceExecutionItems = state.executionItems.filter((item) => item.workspaceId === activeWorkspaceId);
+  const executionQueue = getExecutionQueue(workspaceExecutionItems);
+  const executionHealth = getExecutionHealth(
+    workspaceExecutionItems,
+    state.executionEvidence.filter((item) => item.workspaceId === activeWorkspaceId),
+    state.executionBlockers.filter((item) => item.workspaceId === activeWorkspaceId),
+    state.executionResults.filter((item) => item.workspaceId === activeWorkspaceId)
+  );
+  const readyExecutionItems = executionQueue.filter((item) => item.status === "READY" || item.status === "APPROVED").slice(0, 5);
+  const blockedExecutionItems = executionQueue.filter((item) => item.status === "BLOCKED").slice(0, 5);
+  const approvalQueue = state.approvalRequests
+    .filter((item) => item.workspaceId === activeWorkspaceId && (item.status === "REQUESTED" || item.status === "CHANGES_REQUESTED"))
+    .slice(0, 5);
+  const recentlyCompletedExecutions = workspaceExecutionItems
+    .filter((item) => item.status === "COMPLETED")
+    .sort((a, b) => new Date(b.completedAt ?? b.updatedAt).getTime() - new Date(a.completedAt ?? a.updatedAt).getTime())
+    .slice(0, 5);
 
   return (
     <div className="space-y-4">
@@ -1401,6 +1858,15 @@ function MissionControl({
         <MetricCard label="Blocked Items" value={metrics.blockedPlanItems} />
         <MetricCard label="Predicted Outcomes" value={metrics.predictedOutcomes} />
         <MetricCard label="Resource Capacity" value={`${metrics.resourceCapacityHours}h`} />
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <MetricCard label="Ready Executions" value={metrics.readyExecutions} />
+        <MetricCard label="In Progress" value={metrics.inProgressExecutions} />
+        <MetricCard label="Blocked Executions" value={metrics.blockedExecutions} />
+        <MetricCard label="Pending Approvals" value={metrics.pendingApprovals} />
+        <MetricCard label="Completed This Week" value={metrics.completedExecutionsThisWeek} />
+        <MetricCard label="Evidence Added" value={metrics.evidenceAdded} />
       </section>
 
       <section className="space-y-3">
@@ -1537,6 +2003,59 @@ function MissionControl({
             <Button onClick={() => onCreate("planConstraints")}>
               <Plus className="h-4 w-4" />
               Add Constraint
+            </Button>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <CardTitle>Execution Engine</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Execution tracks owners, approvals, blockers, evidence, results, and learning from planned work.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => onNavigate("executions")}>
+              <ArrowRight className="h-4 w-4" />
+              Open queue
+            </Button>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2">
+            <InlineList title="Top Ready Execution Items" items={readyExecutionItems.map((item) => item.title)} />
+            <InlineList title="Blocked Items" items={blockedExecutionItems.map((item) => item.title)} />
+            <InlineList title="Approval Queue" items={approvalQueue.map((item) => `${item.title} - ${item.reviewer}`)} />
+            <InlineList title="Recently Completed" items={recentlyCompletedExecutions.map((item) => item.title)} />
+            <InlineList title="Execution Results" items={state.executionResults.filter((item) => item.workspaceId === activeWorkspaceId).slice(0, 5).map((item) => item.summary)} />
+            <InlineList title="Execution Health Score" items={[`${executionHealth.score}/100 - ${executionHealth.rationale}`]} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Execution Actions</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            <Button variant="outline" onClick={() => onCreate("executionItems")}>
+              <Plus className="h-4 w-4" />
+              Create Execution Item
+            </Button>
+            <Button variant="outline" onClick={() => topActivePlan && onConvertPlanToExecutions(topActivePlan)}>
+              <ArrowRight className="h-4 w-4" />
+              Convert Plan
+            </Button>
+            <Button variant="outline" onClick={() => onNavigate("approvals")}>
+              <ArrowRight className="h-4 w-4" />
+              Review Approvals
+            </Button>
+            <Button variant="outline" onClick={() => onCreate("executionEvidence")}>
+              <Plus className="h-4 w-4" />
+              Add Evidence
+            </Button>
+            <Button onClick={() => onNavigate("executions")}>
+              <ArrowRight className="h-4 w-4" />
+              View Execution Queue
             </Button>
           </CardContent>
         </Card>
@@ -2404,15 +2923,26 @@ function getConversionOptions(collection: EditableCollection) {
     aiRecommendations: [{ label: "Create action", value: "AIRecommendationToRecommendedAction" }],
     recommendedActions: [
       { label: "Generate plan", value: "RecommendedActionToPlan" },
+      { label: "Create execution", value: "RecommendedActionToExecution" },
       { label: "Convert to task", value: "RecommendedActionToTask" }
     ],
     plans: [
       { label: "Activate plan", value: "ActivatePlan" },
+      { label: "Batch executions", value: "PlanToExecutions" },
       { label: "Complete plan", value: "CompletePlan" },
       { label: "Add dependency", value: "PlanAddDependency" },
       { label: "Add constraint", value: "PlanAddConstraint" }
     ],
-    planItems: [{ label: "Mark complete", value: "CompletePlanItem" }]
+    planItems: [
+      { label: "Create execution", value: "PlanItemToExecution" },
+      { label: "Mark complete", value: "CompletePlanItem" }
+    ],
+    workflowRuns: [{ label: "Create execution", value: "WorkflowRunToExecution" }],
+    executionItems: [
+      { label: "Start execution", value: "StartExecution" },
+      { label: "Complete execution", value: "CompleteExecution" },
+      { label: "Add evidence", value: "AddExecutionEvidence" }
+    ]
   };
   return options[collection] ?? [];
 }
@@ -2725,7 +3255,9 @@ function PlansPage({
   onGenerateFromActions,
   onGenerateFromPatterns,
   onActivatePlan,
-  onCompletePlanItem
+  onCompletePlanItem,
+  onConvertPlanToExecutions,
+  onConvertPlanItemToExecution
 }: {
   state: PlatformState;
   page: PageDefinition;
@@ -2738,6 +3270,8 @@ function PlansPage({
   onGenerateFromPatterns: () => void;
   onActivatePlan: (plan: AnyRecord) => void;
   onCompletePlanItem: (item: AnyRecord) => void;
+  onConvertPlanToExecutions: (plan: AnyRecord) => void;
+  onConvertPlanItemToExecution: (item: AnyRecord) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [planTypeFilter, setPlanTypeFilter] = useState<FilterValue<string>>("ALL");
@@ -2864,6 +3398,10 @@ function PlansPage({
                   <Edit3 className="h-4 w-4" />
                   Edit
                 </Button>
+                <Button variant="outline" size="sm" onClick={() => onConvertPlanToExecutions(selectedPlan)}>
+                  <ArrowRight className="h-4 w-4" />
+                  To Execution
+                </Button>
                 <Button size="sm" onClick={() => onActivatePlan(selectedPlan)}>
                   <ArrowRight className="h-4 w-4" />
                   Activate
@@ -2945,6 +3483,9 @@ function PlansPage({
                           <Edit3 className="h-4 w-4" />
                           Edit
                         </Button>
+                        <Button variant="outline" size="sm" onClick={() => onConvertPlanItemToExecution(item)}>
+                          Execute
+                        </Button>
                         <Button size="sm" onClick={() => onCompletePlanItem(item)}>
                           Complete
                         </Button>
@@ -2962,6 +3503,427 @@ function PlansPage({
                 <InlineList title="Constraints" items={constraints.map((constraint) => `${constraint.title} - ${formatEnum(constraint.severity)}`)} />
                 <InlineList title="Predicted Outcomes" items={outcomes.map((outcome) => `${outcome.metricName}: ${outcome.predictedValue}`)} />
                 <InlineList title="Health Rationale" items={health ? [health.rationale] : []} />
+              </div>
+            </CardContent>
+          ) : null}
+        </Card>
+      </section>
+    </div>
+  );
+}
+
+function ExecutionsPage({
+  state,
+  page,
+  activeWorkspaceId,
+  searchQuery,
+  setSearchQuery,
+  statusFilter,
+  setStatusFilter,
+  priorityFilter,
+  setPriorityFilter,
+  onCreate,
+  onEdit,
+  onStartExecution,
+  onCompleteExecution,
+  onAddEvidence,
+  onAddBlocker,
+  onRequestApproval
+}: {
+  state: PlatformState;
+  page: PageDefinition;
+  activeWorkspaceId: string;
+  searchQuery: string;
+  setSearchQuery: (value: string) => void;
+  statusFilter: FilterValue<string>;
+  setStatusFilter: (value: FilterValue<string>) => void;
+  priorityFilter: FilterValue<Priority>;
+  setPriorityFilter: (value: FilterValue<Priority>) => void;
+  onCreate: (collection: EditableCollection) => void;
+  onEdit: (collection: EditableCollection, item: AnyRecord) => void;
+  onStartExecution: (item: AnyRecord) => void;
+  onCompleteExecution: (item: AnyRecord) => void;
+  onAddEvidence: (item: AnyRecord) => void;
+  onAddBlocker: (item: AnyRecord) => void;
+  onRequestApproval: (item: AnyRecord) => void;
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<FilterValue<string>>("ALL");
+  const workspaceExecutions = state.executionItems.filter((item) => item.workspaceId === activeWorkspaceId);
+  const executions = getExecutionQueue(
+    workspaceExecutions
+      .filter((item) => typeFilter === "ALL" || item.executionType === typeFilter)
+      .filter((item) => itemMatchesFilters(item, searchQuery, statusFilter, priorityFilter))
+  );
+  const selectedExecution = executions.find((item) => item.id === selectedId) ?? executions[0];
+  const executionEvidence = selectedExecution
+    ? state.executionEvidence.filter((item) => item.executionItemId === selectedExecution.id)
+    : [];
+  const executionBlockers = selectedExecution
+    ? state.executionBlockers.filter((item) => item.executionItemId === selectedExecution.id)
+    : [];
+  const executionApprovals = selectedExecution
+    ? state.approvalRequests.filter((item) => item.executionItemId === selectedExecution.id)
+    : [];
+  const executionResults = selectedExecution
+    ? state.executionResults.filter((item) => item.executionItemId === selectedExecution.id)
+    : [];
+  const executionHealth = getExecutionHealth(
+    workspaceExecutions,
+    state.executionEvidence.filter((item) => item.workspaceId === activeWorkspaceId),
+    state.executionBlockers.filter((item) => item.workspaceId === activeWorkspaceId),
+    state.executionResults.filter((item) => item.workspaceId === activeWorkspaceId)
+  );
+  const sourceRecord =
+    selectedExecution?.sourceType && selectedExecution.sourceId
+      ? findSourceRecord(state, selectedExecution.sourceType, selectedExecution.sourceId)
+      : undefined;
+  const relatedPlan = selectedExecution?.planId
+    ? state.plans.find((item) => item.id === selectedExecution.planId)
+    : undefined;
+  const relatedPlanItem = selectedExecution?.planItemId
+    ? state.planItems.find((item) => item.id === selectedExecution.planItemId)
+    : undefined;
+  const relatedRecommendation = selectedExecution?.recommendedActionId
+    ? state.recommendedActions.find((item) => item.id === selectedExecution.recommendedActionId)
+    : undefined;
+  const relatedObjective = selectedExecution?.objectiveId
+    ? state.objectives.find((item) => item.id === selectedExecution.objectiveId)
+    : undefined;
+  const relatedCampaign = selectedExecution?.campaignId
+    ? state.campaigns.find((item) => item.id === selectedExecution.campaignId)
+    : undefined;
+  const timeline = selectedExecution
+    ? [
+        ...state.events
+          .filter(
+            (event) =>
+              event.sourceId === selectedExecution.id &&
+              (event.sourceType === "ExecutionItem" || event.sourceType === "executionItems")
+          )
+          .map((event) => ({
+            id: event.id,
+            at: event.createdAt,
+            label: formatEnum(String(event.eventType)),
+            description: event.description
+          })),
+        ...executionEvidence.map((item) => ({
+          id: item.id,
+          at: item.capturedAt,
+          label: `Evidence: ${formatEnum(item.evidenceType)}`,
+          description: item.title
+        })),
+        ...executionBlockers.map((item) => ({
+          id: item.id,
+          at: item.resolvedAt ?? item.createdAt,
+          label: `Blocker: ${formatEnum(item.status)}`,
+          description: item.title
+        })),
+        ...executionApprovals.map((item) => ({
+          id: item.id,
+          at: item.reviewedAt ?? item.requestedAt,
+          label: `Approval: ${formatEnum(item.status)}`,
+          description: item.title
+        })),
+        ...executionResults.map((item) => ({
+          id: item.id,
+          at: item.createdAt,
+          label: `Result: ${formatEnum(item.resultType)}`,
+          description: item.summary
+        }))
+      ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+    : [];
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <CardTitle>{page.label}</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">{page.description}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => onCreate("approvalRequests")}>
+              <Plus className="h-4 w-4" />
+              Approval
+            </Button>
+            <Button variant="outline" onClick={() => onCreate("executionBlockers")}>
+              <Plus className="h-4 w-4" />
+              Blocker
+            </Button>
+            <Button variant="outline" onClick={() => onCreate("executionEvidence")}>
+              <Plus className="h-4 w-4" />
+              Evidence
+            </Button>
+            <Button onClick={() => onCreate("executionItems")}>
+              <Plus className="h-4 w-4" />
+              Execution
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <FocusRow label="Health" value={`${executionHealth.score}/100`} />
+            <FocusRow label="Ready" value={String(executionHealth.ready)} />
+            <FocusRow label="In Progress" value={String(executionHealth.inProgress)} />
+            <FocusRow label="Blocked" value={String(executionHealth.blocked)} />
+            <FocusRow label="Evidence" value={String(executionHealth.evidenceCount)} />
+          </div>
+          <div className="mt-3">
+            <TableFilters
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              priorityFilter={priorityFilter}
+              setPriorityFilter={setPriorityFilter}
+              hasStatus
+              hasPriority
+            >
+              <Select
+                value={typeFilter}
+                onChange={(event) => setTypeFilter(event.target.value as FilterValue<string>)}
+              >
+                <option value="ALL">All execution types</option>
+                {executionTypeOptions.map((type) => (
+                  <option key={type} value={type}>
+                    {formatEnum(type)}
+                  </option>
+                ))}
+              </Select>
+            </TableFilters>
+          </div>
+        </CardContent>
+      </Card>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,0.86fr)_minmax(460px,1.14fr)]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Execution Queue</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">{executionHealth.rationale}</p>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {executions.map((item) => {
+              const blockers = state.executionBlockers.filter(
+                (blocker) =>
+                  blocker.executionItemId === item.id &&
+                  (blocker.status === "OPEN" || blocker.status === "IN_REVIEW")
+              );
+              const evidenceCount = state.executionEvidence.filter(
+                (evidence) => evidence.executionItemId === item.id
+              ).length;
+              return (
+                <button
+                  key={item.id}
+                  className={cn(
+                    "w-full rounded-md border border-border p-3 text-left transition-colors hover:bg-muted/45",
+                    selectedExecution?.id === item.id ? "bg-muted" : "bg-background"
+                  )}
+                  onClick={() => setSelectedId(item.id)}
+                >
+                  <div className="flex flex-wrap gap-2">
+                    <Badge tone={statusTone(item.status)}>{formatEnum(item.status)}</Badge>
+                    <Badge tone={priorityTone(item.priority)}>{formatEnum(item.priority)}</Badge>
+                    <Badge tone="violet">{formatEnum(item.executionType)}</Badge>
+                  </div>
+                  <p className="mt-2 text-sm font-semibold">{item.title}</p>
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                    {item.expectedImpact}
+                  </p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    <FocusRow label="Owner" value={item.owner} />
+                    <FocusRow label="Due" value={formatDate(item.dueDate)} />
+                    <FocusRow label="Proof" value={`${evidenceCount} / ${blockers.length} blockers`} />
+                  </div>
+                </button>
+              );
+            })}
+            {executions.length === 0 ? (
+              <div className="flex min-h-40 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
+                No execution items match this view.
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <CardTitle>{selectedExecution?.title ?? "Execution Detail"}</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {selectedExecution?.description ?? "Select an execution item to inspect ownership, proof, blockers, and results."}
+              </p>
+            </div>
+            {selectedExecution ? (
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => onEdit("executionItems", selectedExecution)}>
+                  <Edit3 className="h-4 w-4" />
+                  Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onStartExecution(selectedExecution)}
+                  disabled={selectedExecution.status === "COMPLETED" || selectedExecution.status === "IN_PROGRESS"}
+                >
+                  <ArrowRight className="h-4 w-4" />
+                  Start
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => onAddEvidence(selectedExecution)}>
+                  <Plus className="h-4 w-4" />
+                  Evidence
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => onAddBlocker(selectedExecution)}>
+                  <Plus className="h-4 w-4" />
+                  Blocker
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => onRequestApproval(selectedExecution)}>
+                  <Plus className="h-4 w-4" />
+                  Approval
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => onCompleteExecution(selectedExecution)}
+                  disabled={selectedExecution.status === "COMPLETED"}
+                >
+                  Complete
+                </Button>
+              </div>
+            ) : null}
+          </CardHeader>
+          {selectedExecution ? (
+            <CardContent className="space-y-4">
+              <div className="grid gap-2 sm:grid-cols-4">
+                <FocusRow label="Status" value={formatEnum(selectedExecution.status)} />
+                <FocusRow label="Owner" value={selectedExecution.owner} />
+                <FocusRow label="Due" value={formatDate(selectedExecution.dueDate)} />
+                <FocusRow label="Impact" value={selectedExecution.actualImpact ? "Captured" : "Pending"} />
+              </div>
+
+              <div className="rounded-md border border-border bg-background p-3">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Expected Impact</p>
+                <p className="mt-2 text-sm font-semibold">{selectedExecution.expectedImpact}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  {selectedExecution.actualImpact || selectedExecution.notes || "No completion impact has been recorded yet."}
+                </p>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <InlineList
+                  title="Supported Work"
+                  items={[
+                    relatedObjective ? `Objective: ${relatedObjective.title}` : "",
+                    relatedPlan ? `Plan: ${relatedPlan.title}` : "",
+                    relatedPlanItem ? `Plan Item: ${relatedPlanItem.title}` : "",
+                    relatedRecommendation ? `Recommendation: ${relatedRecommendation.title}` : "",
+                    relatedCampaign ? `Campaign: ${relatedCampaign.title}` : ""
+                  ].filter(Boolean)}
+                />
+                <div className="rounded-md border border-border bg-background p-3">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">Source</p>
+                  <p className="mt-2 text-sm font-semibold">
+                    {sourceRecord ? getTitle(sourceRecord) : selectedExecution.sourceType ?? "Manual action"}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    {selectedExecution.sourceId ?? "Created directly in the execution queue."}
+                  </p>
+                  {sourceRecord && selectedExecution.sourceType ? (
+                    <Button
+                      className="mt-3"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onEdit(sourceTypeToCollection(selectedExecution.sourceType ?? ""), sourceRecord)}
+                    >
+                      Inspect Source
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+
+              <section className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">Evidence</h3>
+                  <Button variant="outline" size="sm" onClick={() => onAddEvidence(selectedExecution)}>
+                    <Plus className="h-4 w-4" />
+                    Evidence
+                  </Button>
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {executionEvidence.slice(0, 6).map((item) => (
+                    <button
+                      key={item.id}
+                      className="rounded-md border border-border bg-background p-3 text-left hover:bg-muted/45"
+                      onClick={() => onEdit("executionEvidence", item)}
+                    >
+                      <Badge tone="green">{formatEnum(item.evidenceType)}</Badge>
+                      <p className="mt-2 text-sm font-semibold">{item.title}</p>
+                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                        {item.description}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <section className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold">Blockers</h3>
+                    <Button variant="outline" size="sm" onClick={() => onAddBlocker(selectedExecution)}>
+                      <Plus className="h-4 w-4" />
+                      Blocker
+                    </Button>
+                  </div>
+                  {executionBlockers.slice(0, 5).map((item) => (
+                    <button
+                      key={item.id}
+                      className="w-full rounded-md border border-border bg-background p-3 text-left hover:bg-muted/45"
+                      onClick={() => onEdit("executionBlockers", item)}
+                    >
+                      <div className="flex flex-wrap gap-2">
+                        <Badge tone={statusTone(item.status)}>{formatEnum(item.status)}</Badge>
+                        <Badge tone={priorityTone(item.severity)}>{formatEnum(item.severity)}</Badge>
+                      </div>
+                      <p className="mt-2 text-sm font-semibold">{item.title}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Owner {item.owner}</p>
+                    </button>
+                  ))}
+                </section>
+
+                <section className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold">Approvals</h3>
+                    <Button variant="outline" size="sm" onClick={() => onRequestApproval(selectedExecution)}>
+                      <Plus className="h-4 w-4" />
+                      Approval
+                    </Button>
+                  </div>
+                  {executionApprovals.slice(0, 5).map((item) => (
+                    <button
+                      key={item.id}
+                      className="w-full rounded-md border border-border bg-background p-3 text-left hover:bg-muted/45"
+                      onClick={() => onEdit("approvalRequests", item)}
+                    >
+                      <div className="flex flex-wrap gap-2">
+                        <Badge tone={statusTone(item.status)}>{formatEnum(item.status)}</Badge>
+                        <Badge tone="violet">{formatEnum(item.approvalType)}</Badge>
+                      </div>
+                      <p className="mt-2 text-sm font-semibold">{item.title}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Reviewer {item.reviewer}</p>
+                    </button>
+                  ))}
+                </section>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <InlineList
+                  title="Results"
+                  items={executionResults.map((item) => `${formatEnum(item.resultType)}: ${item.summary}`)}
+                />
+                <InlineList
+                  title="Timeline"
+                  items={timeline.slice(0, 8).map((item) => `${formatDate(item.at)} - ${item.label}: ${item.description}`)}
+                />
               </div>
             </CardContent>
           ) : null}
@@ -3746,6 +4708,7 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
   const planOptions = state.plans.map((plan) => plan.id);
   const milestoneOptions = state.milestones.map((milestone) => milestone.id);
   const planItemOptions = state.planItems.map((item) => item.id);
+  const executionItemOptions = state.executionItems.map((item) => item.id);
   const objectiveOptions = state.objectives.map((objective) => objective.id);
   const commonCore: FieldConfig[] = [
     { key: "title", label: "Title" },
@@ -4121,6 +5084,81 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
       { key: "toItemId", label: "To Item", kind: "select", options: planItemOptions },
       { key: "dependencyType", label: "Dependency Type", kind: "select", options: planDependencyTypeOptions },
       { key: "reason", label: "Reason", kind: "textarea" }
+    ];
+  }
+
+  if (collection === "executionItems") {
+    return [
+      { key: "title", label: "Title" },
+      { key: "description", label: "Description", kind: "textarea" },
+      { key: "executionType", label: "Execution Type", kind: "select", options: executionTypeOptions },
+      { key: "status", label: "Status", kind: "select", options: executionStatusOptions },
+      { key: "priority", label: "Priority", kind: "select", options: priorityOptions },
+      { key: "owner", label: "Owner" },
+      { key: "dueDate", label: "Due Date" },
+      { key: "startedAt", label: "Started At" },
+      { key: "completedAt", label: "Completed At" },
+      { key: "sourceType", label: "Source Type" },
+      { key: "sourceId", label: "Source ID" },
+      { key: "planId", label: "Plan", kind: "select", options: ["", ...planOptions] },
+      { key: "planItemId", label: "Plan Item", kind: "select", options: ["", ...planItemOptions] },
+      { key: "objectiveId", label: "Objective", kind: "select", options: ["", ...objectiveOptions] },
+      { key: "expectedImpact", label: "Expected Impact", kind: "textarea" },
+      { key: "actualImpact", label: "Actual Impact", kind: "textarea" },
+      { key: "notes", label: "Notes", kind: "textarea" }
+    ];
+  }
+
+  if (collection === "executionEvidence") {
+    return [
+      { key: "executionItemId", label: "Execution Item", kind: "select", options: ["", ...executionItemOptions] },
+      { key: "evidenceType", label: "Evidence Type", kind: "select", options: evidenceTypeOptions },
+      { key: "title", label: "Title" },
+      { key: "url", label: "URL" },
+      { key: "uploadedAssetUrl", label: "Uploaded Asset URL" },
+      { key: "capturedAt", label: "Captured At" },
+      { key: "description", label: "Description", kind: "textarea" }
+    ];
+  }
+
+  if (collection === "executionBlockers") {
+    return [
+      { key: "executionItemId", label: "Execution Item", kind: "select", options: ["", ...executionItemOptions] },
+      { key: "title", label: "Title" },
+      { key: "description", label: "Description", kind: "textarea" },
+      { key: "blockerType", label: "Blocker Type", kind: "select", options: blockerTypeOptions },
+      { key: "severity", label: "Severity", kind: "select", options: severityOptions },
+      { key: "status", label: "Status", kind: "select", options: blockerStatusOptions },
+      { key: "owner", label: "Owner" },
+      { key: "resolvedAt", label: "Resolved At" }
+    ];
+  }
+
+  if (collection === "approvalRequests") {
+    return [
+      { key: "executionItemId", label: "Execution Item", kind: "select", options: ["", ...executionItemOptions] },
+      { key: "title", label: "Title" },
+      { key: "description", label: "Description", kind: "textarea" },
+      { key: "approvalType", label: "Approval Type", kind: "select", options: approvalTypeOptions },
+      { key: "status", label: "Status", kind: "select", options: approvalStatusOptions },
+      { key: "requestedBy", label: "Requested By" },
+      { key: "reviewer", label: "Reviewer" },
+      { key: "requestedAt", label: "Requested At" },
+      { key: "reviewedAt", label: "Reviewed At" },
+      { key: "decisionNotes", label: "Decision Notes", kind: "textarea" }
+    ];
+  }
+
+  if (collection === "executionResults") {
+    return [
+      { key: "executionItemId", label: "Execution Item", kind: "select", options: ["", ...executionItemOptions] },
+      { key: "resultType", label: "Result Type", kind: "select", options: executionResultTypeOptions },
+      { key: "summary", label: "Summary", kind: "textarea" },
+      { key: "metricName", label: "Metric Name" },
+      { key: "metricBefore", label: "Metric Before", kind: "number" },
+      { key: "metricAfter", label: "Metric After", kind: "number" },
+      { key: "impactScore", label: "Impact Score", kind: "number" },
+      { key: "learning", label: "Learning", kind: "textarea" }
     ];
   }
 

@@ -110,6 +110,18 @@ export const capabilityRegistry: CapabilityDefinition[] = [
     status: "BETA"
   },
   {
+    id: "execution-engine",
+    name: "Execution Engine",
+    description: "Turns plans, recommendations, workflows, and mission priorities into tracked execution items with approvals, evidence, blockers, outcomes, and learning.",
+    version: "1.0.0",
+    inputs: ["PlanItem", "Plan", "RecommendedAction", "WorkflowRun", "Objective", "Campaign"],
+    outputs: ["ExecutionItem", "ExecutionEvidence", "ExecutionResult", "Events"],
+    dependencies: ["Planning Engine", "Recommendation Engine", "Workflow Engine", "Event System"],
+    eventsConsumed: ["PLAN_ACTIVATED", "PLAN_ITEM_COMPLETED", "AI_RECOMMENDATION_CREATED", "WORKFLOW_RUN_COMPLETED"],
+    eventsProduced: ["EXECUTION_STARTED", "EXECUTION_BLOCKED", "EXECUTION_COMPLETED", "EXECUTION_RESULT_CREATED"],
+    status: "BETA"
+  },
+  {
     id: "opportunity-engine",
     name: "Opportunity Engine",
     description: "Builds a unified opportunity queue across questions, pain points, content, authority, and experiments.",
@@ -162,4 +174,3 @@ export function getCapabilityDependencies(id: string) {
     .map((name) => capabilityRegistry.find((candidate) => candidate.name === name || candidate.id === name))
     .filter(Boolean) as CapabilityDefinition[];
 }
-

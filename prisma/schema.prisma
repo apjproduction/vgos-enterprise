@@ -109,6 +109,15 @@ enum EventType {
   CONSTRAINT_ADDED
   OUTCOME_PREDICTED
   CAPABILITY_REGISTERED
+  EXECUTION_STARTED
+  EXECUTION_COMPLETED
+  EXECUTION_BLOCKED
+  EXECUTION_FAILED
+  APPROVAL_REQUESTED
+  APPROVAL_APPROVED
+  APPROVAL_REJECTED
+  EVIDENCE_ADDED
+  EXECUTION_RESULT_CREATED
 }
 
 enum EventSeverity {
@@ -341,6 +350,101 @@ enum ConstraintSeverity {
   CRITICAL
 }
 
+enum ExecutionType {
+  BLOG_PUBLISH
+  FOUNDER_POST
+  COMPANY_POST
+  X_POST
+  X_THREAD
+  PINTEREST_PIN
+  DIRECTORY_SUBMISSION
+  BACKLINK_OUTREACH
+  COMMUNITY_REPLY
+  DEMO_CREATION
+  FAQ_UPDATE
+  LANDING_PAGE_UPDATE
+  INTERNAL_LINK_UPDATE
+  NEWSLETTER_SEND
+  YOUTUBE_SCRIPT
+  PRODUCT_TASK
+  EXPERIMENT_RUN
+  MANUAL_ACTION
+}
+
+enum ExecutionStatus {
+  QUEUED
+  READY
+  IN_PROGRESS
+  BLOCKED
+  NEEDS_APPROVAL
+  APPROVED
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum EvidenceType {
+  URL
+  SCREENSHOT
+  FILE
+  NOTE
+  METRIC
+  SOCIAL_POST
+  DIRECTORY_CONFIRMATION
+  BACKLINK_LIVE
+  BLOG_LIVE
+  COMMENT_REPLY
+  DEMO_ASSET
+}
+
+enum BlockerType {
+  MISSING_CONTENT
+  MISSING_GRAPHIC
+  MISSING_APPROVAL
+  MISSING_ACCESS
+  TECHNICAL_ISSUE
+  WAITING_ON_EXTERNAL_SITE
+  NEEDS_REVIEW
+  LOW_CONFIDENCE
+  RESOURCE_LIMIT
+  OTHER
+}
+
+enum BlockerStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  IGNORED
+}
+
+enum ApprovalType {
+  CONTENT_APPROVAL
+  BRAND_APPROVAL
+  SEO_APPROVAL
+  PRODUCT_APPROVAL
+  LEGAL_APPROVAL
+  FOUNDER_APPROVAL
+  PUBLISHING_APPROVAL
+}
+
+enum ApprovalStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+  CANCELLED
+}
+
+enum ExecutionResultType {
+  COMPLETED
+  PARTIAL_SUCCESS
+  FAILED
+  LEARNING_CAPTURED
+  METRIC_IMPROVED
+  NO_IMPACT
+  FOLLOW_UP_REQUIRED
+}
+
 model Organization {
   id                   String                @id @default(cuid())
   name                 String
@@ -390,6 +494,11 @@ model Organization {
   planConstraints      PlanConstraint[]
   predictedOutcomes    PredictedOutcome[]
   resourceCapacities   ResourceCapacity[]
+  executionItems       ExecutionItem[]
+  executionEvidence    ExecutionEvidence[]
+  executionBlockers    ExecutionBlocker[]
+  approvalRequests     ApprovalRequest[]
+  executionResults     ExecutionResult[]
   events               Event[]
   recommendedActions   RecommendedAction[]
   createdAt            DateTime              @default(now())
@@ -444,6 +553,11 @@ model Workspace {
   planConstraints      PlanConstraint[]
   predictedOutcomes    PredictedOutcome[]
   resourceCapacities   ResourceCapacity[]
+  executionItems       ExecutionItem[]
+  executionEvidence    ExecutionEvidence[]
+  executionBlockers    ExecutionBlocker[]
+  approvalRequests     ApprovalRequest[]
+  executionResults     ExecutionResult[]
   events               Event[]
   recommendedActions   RecommendedAction[]
   createdAt            DateTime              @default(now())
@@ -803,6 +917,7 @@ model Campaign {
   personas       Persona[]
   contentAssets  CampaignContentAsset[]
   tasks          Task[]
+  executionItems ExecutionItem[]
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
 
@@ -1205,6 +1320,7 @@ model Objective {
   keyResults         KeyResult[]
   recommendedActions RecommendedAction[]
   plans              Plan[]
+  executionItems     ExecutionItem[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -1435,6 +1551,7 @@ model WorkflowRun {
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   workspace         Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   workflow          Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  executionItems    ExecutionItem[]
 
   @@index([organizationId])
   @@index([workspaceId])
@@ -1491,6 +1608,7 @@ model Plan {
   dependencies      PlanDependency[]
   constraints       PlanConstraint[]
   predictedOutcomes PredictedOutcome[]
+  executionItems    ExecutionItem[]
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
@@ -1555,6 +1673,7 @@ model PlanItem {
   milestone            Milestone?          @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
   outgoingDependencies PlanDependency[]    @relation("PlanDependencyFrom")
   incomingDependencies PlanDependency[]    @relation("PlanDependencyTo")
+  executionItems       ExecutionItem[]
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
 
@@ -1659,6 +1778,166 @@ model ResourceCapacity {
   @@index([focusArea])
 }
 
+model ExecutionItem {
+  id                  String              @id @default(cuid())
+  organizationId      String
+  workspaceId         String
+  title               String
+  description         String              @db.Text
+  executionType       ExecutionType
+  status              ExecutionStatus     @default(QUEUED)
+  priority            Priority            @default(MEDIUM)
+  owner               String
+  dueDate             DateTime
+  startedAt           DateTime?
+  completedAt         DateTime?
+  sourceType          String?
+  sourceId            String?
+  planId              String?
+  planItemId          String?
+  recommendedActionId String?
+  workflowRunId       String?
+  objectiveId         String?
+  campaignId          String?
+  expectedImpact      String              @db.Text
+  actualImpact        String              @db.Text
+  notes               String              @db.Text
+  organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace           Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  plan                Plan?               @relation(fields: [planId], references: [id], onDelete: SetNull)
+  planItem            PlanItem?           @relation(fields: [planItemId], references: [id], onDelete: SetNull)
+  recommendedAction   RecommendedAction?  @relation(fields: [recommendedActionId], references: [id], onDelete: SetNull)
+  workflowRun         WorkflowRun?        @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
+  objective           Objective?          @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
+  campaign            Campaign?           @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  evidence            ExecutionEvidence[]
+  blockers            ExecutionBlocker[]
+  approvals           ApprovalRequest[]
+  results             ExecutionResult[]
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([executionType])
+  @@index([status])
+  @@index([priority])
+  @@index([owner])
+  @@index([dueDate])
+  @@index([sourceType, sourceId])
+  @@index([planId])
+  @@index([planItemId])
+  @@index([recommendedActionId])
+  @@index([workflowRunId])
+  @@index([objectiveId])
+  @@index([campaignId])
+}
+
+model ExecutionEvidence {
+  id                String        @id @default(cuid())
+  organizationId    String
+  workspaceId       String
+  executionItemId   String
+  evidenceType      EvidenceType
+  title             String
+  url               String?       @db.Text
+  description       String        @db.Text
+  uploadedAssetUrl  String?       @db.Text
+  capturedAt        DateTime
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  executionItem     ExecutionItem @relation(fields: [executionItemId], references: [id], onDelete: Cascade)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([executionItemId])
+  @@index([evidenceType])
+  @@index([capturedAt])
+}
+
+model ExecutionBlocker {
+  id              String             @id @default(cuid())
+  organizationId  String
+  workspaceId     String
+  executionItemId String
+  title           String
+  description     String             @db.Text
+  blockerType     BlockerType
+  severity        ConstraintSeverity @default(MEDIUM)
+  status          BlockerStatus      @default(OPEN)
+  owner           String
+  resolvedAt      DateTime?
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  executionItem   ExecutionItem      @relation(fields: [executionItemId], references: [id], onDelete: Cascade)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([executionItemId])
+  @@index([blockerType])
+  @@index([severity])
+  @@index([status])
+  @@index([owner])
+}
+
+model ApprovalRequest {
+  id              String         @id @default(cuid())
+  organizationId  String
+  workspaceId     String
+  executionItemId String
+  title           String
+  description     String         @db.Text
+  approvalType    ApprovalType
+  status          ApprovalStatus @default(REQUESTED)
+  requestedBy     String
+  reviewer        String
+  requestedAt     DateTime
+  reviewedAt      DateTime?
+  decisionNotes   String?        @db.Text
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  executionItem   ExecutionItem  @relation(fields: [executionItemId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([executionItemId])
+  @@index([approvalType])
+  @@index([status])
+  @@index([reviewer])
+  @@index([requestedAt])
+}
+
+model ExecutionResult {
+  id              String              @id @default(cuid())
+  organizationId  String
+  workspaceId     String
+  executionItemId String
+  resultType      ExecutionResultType
+  summary         String              @db.Text
+  metricName      String?
+  metricBefore    Float?
+  metricAfter     Float?
+  impactScore     Int?
+  learning        String              @db.Text
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  executionItem   ExecutionItem       @relation(fields: [executionItemId], references: [id], onDelete: Cascade)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([executionItemId])
+  @@index([resultType])
+  @@index([metricName])
+}
+
 model Event {
   id             String        @id @default(cuid())
   workspaceId    String
@@ -1724,6 +2003,7 @@ model RecommendedAction {
   competitor            Competitor?          @relation(fields: [competitorId], references: [id], onDelete: SetNull)
   objective             Objective?           @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
   pattern               Pattern?             @relation(fields: [patternId], references: [id], onDelete: SetNull)
+  executionItems        ExecutionItem[]
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
 

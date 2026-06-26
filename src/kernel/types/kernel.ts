@@ -25,6 +25,11 @@ export type KernelArtifactType =
   | "PlanConstraint"
   | "PredictedOutcome"
   | "ResourceCapacity"
+  | "ExecutionItem"
+  | "ExecutionEvidence"
+  | "ExecutionBlocker"
+  | "ApprovalRequest"
+  | "ExecutionResult"
   | "AIRecommendation"
   | "RecommendedAction"
   | "Event";

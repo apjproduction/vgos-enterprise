@@ -111,6 +111,113 @@ const PlanningEventType = {
   CAPABILITY_REGISTERED: "CAPABILITY_REGISTERED"
 } as const;
 
+const ExecutionType = {
+  BLOG_PUBLISH: "BLOG_PUBLISH",
+  FOUNDER_POST: "FOUNDER_POST",
+  COMPANY_POST: "COMPANY_POST",
+  X_POST: "X_POST",
+  X_THREAD: "X_THREAD",
+  PINTEREST_PIN: "PINTEREST_PIN",
+  DIRECTORY_SUBMISSION: "DIRECTORY_SUBMISSION",
+  BACKLINK_OUTREACH: "BACKLINK_OUTREACH",
+  COMMUNITY_REPLY: "COMMUNITY_REPLY",
+  DEMO_CREATION: "DEMO_CREATION",
+  FAQ_UPDATE: "FAQ_UPDATE",
+  LANDING_PAGE_UPDATE: "LANDING_PAGE_UPDATE",
+  INTERNAL_LINK_UPDATE: "INTERNAL_LINK_UPDATE",
+  NEWSLETTER_SEND: "NEWSLETTER_SEND",
+  YOUTUBE_SCRIPT: "YOUTUBE_SCRIPT",
+  PRODUCT_TASK: "PRODUCT_TASK",
+  EXPERIMENT_RUN: "EXPERIMENT_RUN",
+  MANUAL_ACTION: "MANUAL_ACTION"
+} as const;
+
+const ExecutionStatus = {
+  QUEUED: "QUEUED",
+  READY: "READY",
+  IN_PROGRESS: "IN_PROGRESS",
+  BLOCKED: "BLOCKED",
+  NEEDS_APPROVAL: "NEEDS_APPROVAL",
+  APPROVED: "APPROVED",
+  COMPLETED: "COMPLETED",
+  FAILED: "FAILED",
+  CANCELLED: "CANCELLED"
+} as const;
+
+const EvidenceType = {
+  URL: "URL",
+  SCREENSHOT: "SCREENSHOT",
+  FILE: "FILE",
+  NOTE: "NOTE",
+  METRIC: "METRIC",
+  SOCIAL_POST: "SOCIAL_POST",
+  DIRECTORY_CONFIRMATION: "DIRECTORY_CONFIRMATION",
+  BACKLINK_LIVE: "BACKLINK_LIVE",
+  BLOG_LIVE: "BLOG_LIVE",
+  COMMENT_REPLY: "COMMENT_REPLY",
+  DEMO_ASSET: "DEMO_ASSET"
+} as const;
+
+const BlockerType = {
+  MISSING_CONTENT: "MISSING_CONTENT",
+  MISSING_GRAPHIC: "MISSING_GRAPHIC",
+  MISSING_APPROVAL: "MISSING_APPROVAL",
+  MISSING_ACCESS: "MISSING_ACCESS",
+  TECHNICAL_ISSUE: "TECHNICAL_ISSUE",
+  WAITING_ON_EXTERNAL_SITE: "WAITING_ON_EXTERNAL_SITE",
+  NEEDS_REVIEW: "NEEDS_REVIEW",
+  LOW_CONFIDENCE: "LOW_CONFIDENCE",
+  RESOURCE_LIMIT: "RESOURCE_LIMIT",
+  OTHER: "OTHER"
+} as const;
+
+const BlockerStatus = {
+  OPEN: "OPEN",
+  IN_REVIEW: "IN_REVIEW",
+  RESOLVED: "RESOLVED",
+  IGNORED: "IGNORED"
+} as const;
+
+const ApprovalType = {
+  CONTENT_APPROVAL: "CONTENT_APPROVAL",
+  BRAND_APPROVAL: "BRAND_APPROVAL",
+  SEO_APPROVAL: "SEO_APPROVAL",
+  PRODUCT_APPROVAL: "PRODUCT_APPROVAL",
+  LEGAL_APPROVAL: "LEGAL_APPROVAL",
+  FOUNDER_APPROVAL: "FOUNDER_APPROVAL",
+  PUBLISHING_APPROVAL: "PUBLISHING_APPROVAL"
+} as const;
+
+const ApprovalStatus = {
+  REQUESTED: "REQUESTED",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  CHANGES_REQUESTED: "CHANGES_REQUESTED",
+  CANCELLED: "CANCELLED"
+} as const;
+
+const ExecutionResultType = {
+  COMPLETED: "COMPLETED",
+  PARTIAL_SUCCESS: "PARTIAL_SUCCESS",
+  FAILED: "FAILED",
+  LEARNING_CAPTURED: "LEARNING_CAPTURED",
+  METRIC_IMPROVED: "METRIC_IMPROVED",
+  NO_IMPACT: "NO_IMPACT",
+  FOLLOW_UP_REQUIRED: "FOLLOW_UP_REQUIRED"
+} as const;
+
+const ExecutionEventType = {
+  EXECUTION_STARTED: "EXECUTION_STARTED",
+  EXECUTION_COMPLETED: "EXECUTION_COMPLETED",
+  EXECUTION_BLOCKED: "EXECUTION_BLOCKED",
+  EXECUTION_FAILED: "EXECUTION_FAILED",
+  APPROVAL_REQUESTED: "APPROVAL_REQUESTED",
+  APPROVAL_APPROVED: "APPROVAL_APPROVED",
+  APPROVAL_REJECTED: "APPROVAL_REJECTED",
+  EVIDENCE_ADDED: "EVIDENCE_ADDED",
+  EXECUTION_RESULT_CREATED: "EXECUTION_RESULT_CREATED"
+} as const;
+
 const orgId = "org-apj-labs";
 const workspaceId = "workspace-vidmaker-growth-os";
 
@@ -1319,7 +1426,6 @@ async function seedKernel() {
     ["memory-4k-quality-proof", "4K quality proof concern", "4K Video Production", "Audience skepticism exists around claims like 4K unless proof and output control are shown clearly.", ["Observation", "Competitor"], ["observation-hn-skepticism"], 3, 0.72, 74],
     ["memory-workflow-positioning", "Workflow positioning resonance", "Video Workflow Automation", "Audience responds better to workflow positioning than one-off text-to-video generation claims.", ["Insight", "ContentAsset"], ["insight-workflow-positioning", "content-blog-003"], 5, 0.82, 84]
   ] as const;
-
   await Promise.all(
     memoryData.map(([id, topic, entity, summary, sourceTypes, linkedSourceIds, frequency, confidenceScore, importanceScore], index) =>
       prisma.memory.upsert({
@@ -2482,6 +2588,259 @@ async function seedRecommendedActions() {
   );
 }
 
+async function seedExecutionEngine() {
+  const executionPrisma = prisma as PrismaClient & Record<
+    | "executionItem"
+    | "executionEvidence"
+    | "executionBlocker"
+    | "approvalRequest"
+    | "executionResult",
+    { upsert: (args: any) => Promise<unknown> }
+  >;
+
+  const executionItemSeeds = [
+    ["execution-blog-004-publish", "Publish BLOG-004: What Is Video Production Intelligence?", ExecutionType.BLOG_PUBLISH, ExecutionStatus.NEEDS_APPROVAL, Priority.CRITICAL, "Content", "plan-blog-004-010-content", "plan-item-25", "action-03", "ContentAsset", "content-blog-004", "objective-aeo-geo"],
+    ["execution-blog-004-internal-links", "Add internal links from BLOG-002 and BLOG-003 to BLOG-004", ExecutionType.INTERNAL_LINK_UPDATE, ExecutionStatus.READY, Priority.HIGH, "SEO Strategy", "plan-vpi-authority", "plan-item-05", "action-04", "ContentAsset", "content-blog-004", "objective-own-vpi"],
+    ["execution-product-page-demo", "Create product-page-to-video demo", ExecutionType.DEMO_CREATION, ExecutionStatus.BLOCKED, Priority.CRITICAL, "Growth", "plan-product-hunt-follow-up", "plan-item-10", "action-02", "Question", "question-product-page-to-video", "objective-product-hunt"],
+    ["execution-futurepedia-submit", "Submit VidMaker to Futurepedia", ExecutionType.DIRECTORY_SUBMISSION, ExecutionStatus.READY, Priority.HIGH, "Authority", "plan-directory-submission", "plan-item-18", "action-05", "DirectorySubmission", "directory-ai-video-tools", "objective-authority"],
+    ["execution-toolify-submit", "Submit VidMaker to Toolify", ExecutionType.DIRECTORY_SUBMISSION, ExecutionStatus.QUEUED, Priority.HIGH, "Authority", "plan-directory-submission", "plan-item-19", "action-05", "DirectorySubmission", "directory-ai-video-tools", "objective-authority"],
+    ["execution-founder-boundaries", "Publish founder post about automation boundaries", ExecutionType.FOUNDER_POST, ExecutionStatus.NEEDS_APPROVAL, Priority.HIGH, "Tom Promise", "plan-vpi-authority", "plan-item-01", "action-08", "Insight", "insight-url-to-video-trust", "objective-own-vpi"],
+    ["execution-pinterest-blog-004", "Publish Pinterest Pin for BLOG-004", ExecutionType.PINTEREST_PIN, ExecutionStatus.BLOCKED, Priority.MEDIUM, "Design System", "plan-product-hunt-follow-up", "plan-item-12", "action-10", "ContentAsset", "content-blog-004", "objective-product-hunt"],
+    ["execution-product-hunt-reply", "Reply to Product Hunt comment asking for product-page demo", ExecutionType.COMMUNITY_REPLY, ExecutionStatus.READY, Priority.CRITICAL, "Community Intelligence", "plan-product-hunt-follow-up", "plan-item-15", "action-12", "Observation", "observation-url-product-comments", "objective-product-hunt"],
+    ["execution-purpose-specific-faq", "Create FAQ for Purpose-Specific AI", ExecutionType.FAQ_UPDATE, ExecutionStatus.READY, Priority.HIGH, "Search Strategy", "plan-aeo-geo-visibility", "plan-item-35", "action-06", "Question", "question-purpose-specific-ai", "objective-aeo-geo"],
+    ["execution-vpi-landing-section", "Update VidMaker landing page with Video Production Intelligence section", ExecutionType.LANDING_PAGE_UPDATE, ExecutionStatus.BLOCKED, Priority.HIGH, "Growth", "plan-vpi-authority", "plan-item-06", "action-14", "Entity", "entity-video-production-intelligence", "objective-own-vpi"],
+    ["execution-ph-proof-screenshot", "Add Product Hunt launch proof screenshot", ExecutionType.MANUAL_ACTION, ExecutionStatus.READY, Priority.HIGH, "Community Intelligence", "plan-product-hunt-follow-up", "plan-item-15", "action-12", "Observation", "observation-product-hunt-comments", "objective-product-hunt"],
+    ["execution-directory-copy-bank", "Create directory submission copy bank", ExecutionType.DIRECTORY_SUBMISSION, ExecutionStatus.COMPLETED, Priority.HIGH, "Authority", "plan-directory-submission", "plan-item-17", "action-05", "DirectorySubmission", "directory-ai-video-tools", "objective-authority"],
+    ["execution-company-linkedin-blog-004", "Publish company LinkedIn post for BLOG-004", ExecutionType.COMPANY_POST, ExecutionStatus.NEEDS_APPROVAL, Priority.HIGH, "Content", "plan-blog-004-010-content", "plan-item-25", "action-09", "Campaign", "campaign-product-page-to-video-proof", "objective-aeo-geo"],
+    ["execution-x-thread-blog-004", "Create X thread from BLOG-004", ExecutionType.X_THREAD, ExecutionStatus.QUEUED, Priority.HIGH, "Content", "plan-product-hunt-follow-up", "plan-item-16", "action-07", "ContentAsset", "content-blog-004", "objective-product-hunt"],
+    ["execution-4k-proof-asset", "Create demo proof asset for 4K quality", ExecutionType.DEMO_CREATION, ExecutionStatus.BLOCKED, Priority.HIGH, "Growth", "plan-product-hunt-follow-up", "plan-item-10", "action-21", "AIRecommendation", "ai-rec-08", "objective-demo-assets"],
+    ["execution-blog-005-outline", "Outline BLOG-005 competitor cleanup article", ExecutionType.BLOG_PUBLISH, ExecutionStatus.QUEUED, Priority.HIGH, "Content", "plan-blog-004-010-content", "plan-item-26", "action-17", "Pattern", "pattern-02", "objective-aeo-geo"],
+    ["execution-vpi-newsletter", "Send newsletter section on Video Production Intelligence", ExecutionType.NEWSLETTER_SEND, ExecutionStatus.QUEUED, Priority.MEDIUM, "Content", "plan-vpi-authority", "plan-item-08", "action-18", "ContentAsset", "content-blog-002", "objective-own-vpi"],
+    ["execution-vpi-faq", "Answer VPI FAQ", ExecutionType.FAQ_UPDATE, ExecutionStatus.READY, Priority.HIGH, "Search Strategy", "plan-aeo-geo-visibility", "plan-item-34", "action-06", "Question", "question-video-production-intelligence", "objective-aeo-geo"],
+    ["execution-product-page-entity", "Update Product Page to Video entity page", ExecutionType.LANDING_PAGE_UPDATE, ExecutionStatus.QUEUED, Priority.HIGH, "Search Strategy", "plan-aeo-geo-visibility", "plan-item-38", "action-14", "Entity", "entity-product-page-to-video", "objective-aeo-geo"],
+    ["execution-purpose-engines-company-post", "Create company post on Purpose Engines", ExecutionType.COMPANY_POST, ExecutionStatus.QUEUED, Priority.MEDIUM, "Content", "plan-aeo-geo-visibility", "plan-item-39", "action-09", "Entity", "entity-purpose-engines", "objective-aeo-geo"],
+    ["execution-faq-youtube-script", "Create YouTube script from FAQ set", ExecutionType.YOUTUBE_SCRIPT, ExecutionStatus.QUEUED, Priority.MEDIUM, "Content", "plan-aeo-geo-visibility", "plan-item-39", "action-06", "Question", "question-video-production-intelligence", "objective-aeo-geo"],
+    ["execution-answer-coverage-experiment", "Run answer coverage experiment", ExecutionType.EXPERIMENT_RUN, ExecutionStatus.READY, Priority.HIGH, "Search Strategy", "plan-aeo-geo-visibility", "plan-item-40", "action-13", "Objective", "objective-aeo-geo", "objective-aeo-geo"],
+    ["execution-ai-video-tools-backlink", "Follow up on AI Video Tools backlink", ExecutionType.BACKLINK_OUTREACH, ExecutionStatus.READY, Priority.HIGH, "Authority", "plan-directory-submission", "plan-item-21", "action-11", "Backlink", "backlink-ai-video-tools-directory", "objective-authority"],
+    ["execution-pinterest-proof-pin-2", "Create Pinterest proof pin 2", ExecutionType.PINTEREST_PIN, ExecutionStatus.QUEUED, Priority.MEDIUM, "Design System", "plan-product-hunt-follow-up", "plan-item-13", "action-10", "ContentAsset", "content-blog-004", "objective-product-hunt"],
+    ["execution-founder-vpi-post", "Publish founder authority post on Video Production Intelligence", ExecutionType.FOUNDER_POST, ExecutionStatus.IN_PROGRESS, Priority.HIGH, "Tom Promise", "plan-vpi-authority", "plan-item-02", "action-08", "RecommendedAction", "kernel-action-11", "objective-own-vpi"]
+  ] as const;
+  const executionStartedStatuses = [
+    ExecutionStatus.IN_PROGRESS,
+    ExecutionStatus.BLOCKED,
+    ExecutionStatus.NEEDS_APPROVAL
+  ] as readonly string[];
+
+  await Promise.all(
+    executionItemSeeds.map(([id, title, executionType, status, priority, owner, planId, planItemId, recommendedActionId, sourceType, sourceId, objectiveId], index) =>
+      executionPrisma.executionItem.upsert({
+        where: { id },
+        update: {
+          title,
+          executionType,
+          status,
+          priority,
+          owner,
+          sourceType,
+          sourceId,
+          planId,
+          planItemId,
+          recommendedActionId,
+          objectiveId,
+          dueDate: dateFromNow((index % 9) + 1),
+          startedAt: executionStartedStatuses.includes(status) ? dateFromNow(-((index % 4) + 1)) : null,
+          completedAt: status === ExecutionStatus.COMPLETED ? dateFromNow(-1) : null
+        },
+        create: {
+          ...tenant,
+          id,
+          title,
+          description: `${title} for VidMaker execution tracking.`,
+          executionType,
+          status,
+          priority,
+          owner,
+          dueDate: dateFromNow((index % 9) + 1),
+          startedAt: executionStartedStatuses.includes(status) ? dateFromNow(-((index % 4) + 1)) : null,
+          completedAt: status === ExecutionStatus.COMPLETED ? dateFromNow(-1) : null,
+          sourceType,
+          sourceId,
+          planId,
+          planItemId,
+          recommendedActionId,
+          objectiveId,
+          expectedImpact: "Move a planned VidMaker growth action into shipped proof, authority, distribution, or learning.",
+          actualImpact: status === ExecutionStatus.COMPLETED ? "Execution completed and learning captured." : "",
+          notes: ""
+        } as any
+      })
+    )
+  );
+
+  const evidenceSeeds = [
+    ["execution-blog-004-publish", "BLOG-004 draft note", EvidenceType.NOTE, "", "Draft includes Video Production Intelligence positioning and proof placeholders."],
+    ["execution-product-page-demo", "Product-page-to-video demo placeholder", EvidenceType.DEMO_ASSET, "https://vidmaker.com/product-page-to-video", "Placeholder URL for product-page-to-video proof asset."],
+    ["execution-product-hunt-reply", "Product Hunt URL", EvidenceType.URL, "https://www.producthunt.com", "Source thread for launch comments and demo requests."],
+    ["execution-company-linkedin-blog-004", "LinkedIn launch post URL", EvidenceType.SOCIAL_POST, "https://www.linkedin.com/company/vidmaker", "Placeholder for LinkedIn company post proof."],
+    ["execution-futurepedia-submit", "Futurepedia submission placeholder", EvidenceType.DIRECTORY_CONFIRMATION, "https://www.futurepedia.io", "Directory submission confirmation placeholder."],
+    ["execution-toolify-submit", "Toolify submission placeholder", EvidenceType.DIRECTORY_CONFIRMATION, "https://www.toolify.ai", "Directory submission confirmation placeholder."],
+    ["execution-blog-004-internal-links", "Internal link completion note", EvidenceType.NOTE, "", "BLOG-002 and BLOG-003 internal link targets identified."],
+    ["execution-pinterest-blog-004", "Pinterest image brief", EvidenceType.FILE, "", "Image requirements captured for BLOG-004 pin."],
+    ["execution-ph-proof-screenshot", "Product Hunt proof screenshot placeholder", EvidenceType.SCREENSHOT, "", "Screenshot slot for launch proof."],
+    ["execution-directory-copy-bank", "Directory copy bank note", EvidenceType.NOTE, "", "Copy bank emphasizes VPI and product-page-to-video proof."],
+    ["execution-x-thread-blog-004", "X thread draft note", EvidenceType.NOTE, "", "Thread structure drafted from BLOG-004 outline."],
+    ["execution-4k-proof-asset", "4K proof requirement", EvidenceType.NOTE, "", "Proof example must show quality and control."],
+    ["execution-vpi-faq", "FAQ answer draft", EvidenceType.NOTE, "", "Draft answer defines Video Production Intelligence."],
+    ["execution-ai-video-tools-backlink", "AI Video Tools backlink monitor", EvidenceType.BACKLINK_LIVE, "https://example.com/ai-video-tools", "Backlink monitoring placeholder."],
+    ["execution-answer-coverage-experiment", "Answer coverage metric baseline", EvidenceType.METRIC, "", "Baseline answer coverage score captured before experiment."]
+  ] as const;
+
+  await Promise.all(
+    evidenceSeeds.map(([executionItemId, title, evidenceType, url, description], index) =>
+      executionPrisma.executionEvidence.upsert({
+        where: { id: `execution-evidence-${String(index + 1).padStart(2, "0")}` },
+        update: { executionItemId, title, evidenceType, url: url || null, description },
+        create: {
+          ...tenant,
+          id: `execution-evidence-${String(index + 1).padStart(2, "0")}`,
+          executionItemId,
+          evidenceType,
+          title,
+          url: url || null,
+          description,
+          uploadedAssetUrl: null,
+          capturedAt: dateFromNow(-(index % 5))
+        } as any
+      })
+    )
+  );
+
+  const blockerSeeds = [
+    ["execution-product-page-demo", "Product-page demo graphic not ready", BlockerType.MISSING_GRAPHIC, ConstraintSeverity.CRITICAL, "Design System"],
+    ["execution-directory-copy-bank", "Directory copy needs review", BlockerType.NEEDS_REVIEW, ConstraintSeverity.HIGH, "Authority"],
+    ["execution-blog-004-publish", "BLOG-004 needs final CTA", BlockerType.MISSING_CONTENT, ConstraintSeverity.HIGH, "Content"],
+    ["execution-pinterest-blog-004", "Pinterest image needed", BlockerType.MISSING_GRAPHIC, ConstraintSeverity.MEDIUM, "Design System"],
+    ["execution-product-hunt-reply", "Product Hunt comment response pending", BlockerType.NEEDS_REVIEW, ConstraintSeverity.HIGH, "Community Intelligence"],
+    ["execution-vpi-landing-section", "Landing page proof section needs design", BlockerType.MISSING_GRAPHIC, ConstraintSeverity.HIGH, "Growth"],
+    ["execution-4k-proof-asset", "4K proof example needed", BlockerType.MISSING_CONTENT, ConstraintSeverity.HIGH, "Growth"],
+    ["execution-founder-boundaries", "Founder post needs final review", BlockerType.MISSING_APPROVAL, ConstraintSeverity.HIGH, "Tom Promise"]
+  ] as const;
+
+  await Promise.all(
+    blockerSeeds.map(([executionItemId, title, blockerType, severity, owner], index) =>
+      executionPrisma.executionBlocker.upsert({
+        where: { id: `execution-blocker-${String(index + 1).padStart(2, "0")}` },
+        update: { executionItemId, title, blockerType, severity, owner },
+        create: {
+          ...tenant,
+          id: `execution-blocker-${String(index + 1).padStart(2, "0")}`,
+          executionItemId,
+          title,
+          description: `${title} before this execution can be completed.`,
+          blockerType,
+          severity,
+          status: index === 1 ? BlockerStatus.IN_REVIEW : BlockerStatus.OPEN,
+          owner,
+          resolvedAt: null
+        } as any
+      })
+    )
+  );
+
+  const approvalSeeds = [
+    ["execution-blog-004-publish", "Founder approval for BLOG-004", ApprovalType.FOUNDER_APPROVAL, ApprovalStatus.REQUESTED, "Content", "Tom Promise"],
+    ["execution-product-page-demo", "Brand approval for product-page demo", ApprovalType.BRAND_APPROVAL, ApprovalStatus.CHANGES_REQUESTED, "Growth", "Brand"],
+    ["execution-blog-004-internal-links", "SEO approval for internal links", ApprovalType.SEO_APPROVAL, ApprovalStatus.REQUESTED, "SEO Strategy", "SEO Lead"],
+    ["execution-company-linkedin-blog-004", "Publishing approval for LinkedIn company post", ApprovalType.PUBLISHING_APPROVAL, ApprovalStatus.REQUESTED, "Content", "Growth"],
+    ["execution-product-page-demo", "Product approval for URL-to-video proof messaging", ApprovalType.PRODUCT_APPROVAL, ApprovalStatus.REQUESTED, "Growth", "Product"],
+    ["execution-founder-boundaries", "Founder post final approval", ApprovalType.FOUNDER_APPROVAL, ApprovalStatus.REQUESTED, "Content", "Tom Promise"],
+    ["execution-vpi-landing-section", "Brand approval for VPI landing section", ApprovalType.BRAND_APPROVAL, ApprovalStatus.REQUESTED, "Growth", "Brand"],
+    ["execution-purpose-specific-faq", "Content approval for Purpose-Specific AI FAQ", ApprovalType.CONTENT_APPROVAL, ApprovalStatus.APPROVED, "Search Strategy", "Content"]
+  ] as const;
+
+  await Promise.all(
+    approvalSeeds.map(([executionItemId, title, approvalType, status, requestedBy, reviewer], index) =>
+      executionPrisma.approvalRequest.upsert({
+        where: { id: `approval-request-${String(index + 1).padStart(2, "0")}` },
+        update: { executionItemId, title, approvalType, status, requestedBy, reviewer },
+        create: {
+          ...tenant,
+          id: `approval-request-${String(index + 1).padStart(2, "0")}`,
+          executionItemId,
+          title,
+          description: `${title} is required before publication or distribution.`,
+          approvalType,
+          status,
+          requestedBy,
+          reviewer,
+          requestedAt: dateFromNow(-((index % 4) + 1)),
+          reviewedAt: status === ApprovalStatus.APPROVED || status === ApprovalStatus.CHANGES_REQUESTED ? dateFromNow(-(index % 2)) : null,
+          decisionNotes: status === ApprovalStatus.CHANGES_REQUESTED ? "Clarify proof claim before publishing." : null
+        } as any
+      })
+    )
+  );
+
+  const resultSeeds = [
+    ["execution-company-linkedin-blog-004", ExecutionResultType.COMPLETED, "LinkedIn carousel published", "engagement_rate", 0, 0, 72, "LinkedIn proof-led posts should include source-to-output visuals."],
+    ["execution-product-hunt-reply", ExecutionResultType.COMPLETED, "Product Hunt launch announcement published", "comment_replies", 0, 3, 78, "Community replies perform better when linked to a concrete demo."],
+    ["execution-x-thread-blog-004", ExecutionResultType.LEARNING_CAPTURED, "Company X account created", "followers", 0, 12, 55, "X should be used for demo-thread distribution after proof assets are ready."],
+    ["execution-blog-004-internal-links", ExecutionResultType.COMPLETED, "BLOG-003 published and linked into the VPI cluster", "internal_links", 0, 4, 80, "Cluster linking strengthens VPI category ownership."],
+    ["execution-futurepedia-submit", ExecutionResultType.FOLLOW_UP_REQUIRED, "Directory submission wave pending", "submissions", 0, 2, 65, "Directory submissions need review-ready copy bank before batching."]
+  ] as const;
+
+  await Promise.all(
+    resultSeeds.map(([executionItemId, resultType, summary, metricName, metricBefore, metricAfter, impactScore, learning], index) =>
+      executionPrisma.executionResult.upsert({
+        where: { id: `execution-result-${String(index + 1).padStart(2, "0")}` },
+        update: { executionItemId, resultType, summary, metricName, metricBefore, metricAfter, impactScore, learning },
+        create: {
+          ...tenant,
+          id: `execution-result-${String(index + 1).padStart(2, "0")}`,
+          executionItemId,
+          resultType,
+          summary,
+          metricName,
+          metricBefore,
+          metricAfter,
+          impactScore,
+          learning
+        } as any
+      })
+    )
+  );
+
+  const executionEvents = [
+    [ExecutionEventType.EXECUTION_STARTED, "ExecutionItem", "execution-founder-vpi-post", "Founder VPI post execution started.", EventSeverity.HIGH],
+    [ExecutionEventType.EXECUTION_BLOCKED, "ExecutionItem", "execution-product-page-demo", "Product-page demo execution is blocked.", EventSeverity.CRITICAL],
+    [ExecutionEventType.APPROVAL_REQUESTED, "ApprovalRequest", "approval-request-01", "Founder approval requested for BLOG-004.", EventSeverity.HIGH],
+    [ExecutionEventType.EVIDENCE_ADDED, "ExecutionEvidence", "execution-evidence-03", "Product Hunt URL evidence added.", EventSeverity.MEDIUM],
+    [ExecutionEventType.EXECUTION_RESULT_CREATED, "ExecutionResult", "execution-result-01", "Execution result created for LinkedIn carousel.", EventSeverity.MEDIUM]
+  ] as const;
+
+  await Promise.all(
+    executionEvents.map(([eventType, sourceType, sourceId, title, severity], index) =>
+      prisma.event.upsert({
+        where: { id: `execution-event-${String(index + 1).padStart(2, "0")}` },
+        update: { eventType: eventType as any, sourceType, sourceId, title, severity },
+        create: {
+          ...tenant,
+          id: `execution-event-${String(index + 1).padStart(2, "0")}`,
+          eventType: eventType as any,
+          sourceType,
+          sourceId,
+          title,
+          description: title,
+          metadata: { capability: "execution-engine" },
+          severity,
+          status: EventStatus.PROCESSED,
+          processedAt: new Date()
+        }
+      })
+    )
+  );
+}
+
 async function main() {
   await seedFoundation();
   const personas = await seedPersonas();
@@ -2496,6 +2855,7 @@ async function main() {
   await seedPlanningEngine();
   await seedEvents();
   await seedRecommendedActions();
+  await seedExecutionEngine();
 }
 
 main()
