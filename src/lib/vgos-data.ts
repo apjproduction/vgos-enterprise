@@ -109,7 +109,16 @@ export type EventType =
   | "APPROVAL_APPROVED"
   | "APPROVAL_REJECTED"
   | "EVIDENCE_ADDED"
-  | "EXECUTION_RESULT_CREATED";
+  | "EXECUTION_RESULT_CREATED"
+  | "METRIC_CREATED"
+  | "METRIC_UPDATED"
+  | "MEASUREMENT_CREATED"
+  | "LEARNING_CREATED"
+  | "ATTRIBUTION_CREATED"
+  | "STRATEGY_ADJUSTMENT_PROPOSED"
+  | "STRATEGY_ADJUSTMENT_ACCEPTED"
+  | "STRATEGY_ADJUSTMENT_REJECTED"
+  | "STRATEGY_ADJUSTMENT_IMPLEMENTED";
 
 export type EventSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type EventStatus = "PENDING" | "PROCESSED" | "DISMISSED";
@@ -356,6 +365,59 @@ export type ExecutionResultType =
   | "METRIC_IMPROVED"
   | "NO_IMPACT"
   | "FOLLOW_UP_REQUIRED";
+
+export type MetricType =
+  | "TRAFFIC"
+  | "SIGNUPS"
+  | "CONVERSIONS"
+  | "BACKLINKS"
+  | "REFERRING_DOMAINS"
+  | "AI_MENTIONS"
+  | "SEARCH_IMPRESSIONS"
+  | "SEARCH_CLICKS"
+  | "SOCIAL_IMPRESSIONS"
+  | "SOCIAL_ENGAGEMENT"
+  | "COMMUNITY_REPLIES"
+  | "DIRECTORY_APPROVALS"
+  | "CONTENT_PUBLISHED"
+  | "EXPERIMENT_RESULT"
+  | "REVENUE"
+  | "AUTHORITY_SCORE"
+  | "CUSTOM";
+
+export type MetricStatus = "HEALTHY" | "WATCH" | "IMPROVING" | "DECLINING" | "STALLED" | "ARCHIVED";
+
+export type LearningType =
+  | "CONTENT_PERFORMANCE"
+  | "CHANNEL_PERFORMANCE"
+  | "SEO_IMPACT"
+  | "AEO_IMPACT"
+  | "GEO_IMPACT"
+  | "AUTHORITY_IMPACT"
+  | "COMMUNITY_SIGNAL"
+  | "PRODUCT_SIGNAL"
+  | "EXECUTION_FAILURE"
+  | "STRATEGY_UPDATE"
+  | "EXPERIMENT_LEARNING"
+  | "CUSTOMER_LANGUAGE"
+  | "CUSTOM";
+
+export type AttributionType = "INFLUENCED" | "CAUSED" | "CORRELATED" | "SUPPORTED" | "CONTRADICTED" | "UNKNOWN";
+
+export type StrategyAdjustmentType =
+  | "INCREASE_FOCUS"
+  | "DECREASE_FOCUS"
+  | "PAUSE_STRATEGY"
+  | "CREATE_NEW_PLAN"
+  | "UPDATE_POSITIONING"
+  | "UPDATE_CONTENT_CLUSTER"
+  | "UPDATE_KEYWORD_TARGET"
+  | "UPDATE_PERSONA_PRIORITY"
+  | "UPDATE_CHANNEL_PRIORITY"
+  | "CREATE_EXPERIMENT"
+  | "CREATE_FEATURE_REQUEST";
+
+export type StrategyAdjustmentStatus = "PROPOSED" | "ACCEPTED" | "REJECTED" | "IMPLEMENTED" | "ARCHIVED";
 
 export type Organization = {
   id: string;
@@ -950,6 +1012,74 @@ export type ExecutionResult = ScopedRecord & {
   learning: string;
 };
 
+export type Metric = ScopedRecord & {
+  name: string;
+  title: string;
+  description: string;
+  metricType: MetricType;
+  source: string;
+  unit: string;
+  currentValue: number;
+  previousValue: number;
+  targetValue?: number;
+  status: MetricStatus;
+  owner: string;
+};
+
+export type Measurement = ScopedRecord & {
+  metricId: string;
+  sourceType?: string;
+  sourceId?: string;
+  executionItemId?: string;
+  executionResultId?: string;
+  planId?: string;
+  objectiveId?: string;
+  campaignId?: string;
+  measuredAt: string;
+  value: number;
+  previousValue?: number;
+  changeValue?: number;
+  changePercent?: number;
+  notes?: string;
+};
+
+export type Learning = ScopedRecord & {
+  title: string;
+  summary: string;
+  learningType: LearningType;
+  confidenceScore: number;
+  sourceType?: string;
+  sourceId?: string;
+  metricId?: string;
+  executionItemId?: string;
+  planId?: string;
+  objectiveId?: string;
+  recommendationImpact: string;
+  shouldInformFuturePlans: boolean;
+};
+
+export type Attribution = ScopedRecord & {
+  sourceType: string;
+  sourceId: string;
+  targetType: string;
+  targetId: string;
+  attributionType: AttributionType;
+  confidenceScore: number;
+  evidence: string;
+};
+
+export type StrategyAdjustment = ScopedRecord & {
+  title: string;
+  description: string;
+  adjustmentType: StrategyAdjustmentType;
+  sourceLearningId?: string;
+  objectiveId?: string;
+  planId?: string;
+  status: StrategyAdjustmentStatus;
+  priority: Priority;
+  reasoning: string;
+};
+
 export type BriefingSection = {
   id: string;
   title: string;
@@ -1009,6 +1139,11 @@ export type PlatformState = {
   executionBlockers: ExecutionBlocker[];
   approvalRequests: ApprovalRequest[];
   executionResults: ExecutionResult[];
+  metrics: Metric[];
+  measurements: Measurement[];
+  learnings: Learning[];
+  attributions: Attribution[];
+  strategyAdjustments: StrategyAdjustment[];
   events: Event[];
   recommendedActions: RecommendedAction[];
   briefingSections: BriefingSection[];
@@ -1032,6 +1167,11 @@ export type PageId =
   | "blockers"
   | "evidence"
   | "results"
+  | "metrics"
+  | "measurements"
+  | "learnings"
+  | "attributions"
+  | "strategyAdjustments"
   | "capabilities"
   | "opportunityQueue"
   | "recommendedActions"
@@ -1080,6 +1220,11 @@ export type CollectionKey =
   | "executionBlockers"
   | "approvalRequests"
   | "executionResults"
+  | "metrics"
+  | "measurements"
+  | "learnings"
+  | "attributions"
+  | "strategyAdjustments"
   | "recommendedActions"
   | "events"
   | "contentAssets"
@@ -1248,6 +1393,41 @@ export const pageDefinitions: PageDefinition[] = [
     description: "Execution results, impact notes, metric movement, follow-ups, and learning.",
     icon: Sparkles,
     collection: "executionResults"
+  },
+  {
+    id: "metrics",
+    label: "Metrics",
+    description: "Tracked growth, authority, content, community, and revenue metrics.",
+    icon: Database,
+    collection: "metrics"
+  },
+  {
+    id: "measurements",
+    label: "Measurements",
+    description: "Before-and-after metric snapshots linked to executions, plans, objectives, and campaigns.",
+    icon: Activity,
+    collection: "measurements"
+  },
+  {
+    id: "learnings",
+    label: "Learnings",
+    description: "Captured lessons from measurements, execution results, experiments, channels, and customer language.",
+    icon: Lightbulb,
+    collection: "learnings"
+  },
+  {
+    id: "attributions",
+    label: "Attributions",
+    description: "Rule-based source-to-impact relationships across executions, metrics, content, and channels.",
+    icon: Network,
+    collection: "attributions"
+  },
+  {
+    id: "strategyAdjustments",
+    label: "Strategy Adjustments",
+    description: "Proposed and accepted changes to plans, positioning, channels, content clusters, and experiments.",
+    icon: Target,
+    collection: "strategyAdjustments"
   },
   {
     id: "capabilities",
@@ -2523,6 +2703,181 @@ const executionResults: ExecutionResult[] = ([
   ...scoped(index)
 }));
 
+const metrics: Metric[] = ([
+  ["metric-organic-traffic", "Organic traffic", "Sessions from organic search to VidMaker owned pages.", "TRAFFIC", "Search Console", "sessions", 1480, 1325, 2200, "IMPROVING", "SEO Strategy"],
+  ["metric-search-impressions", "Search impressions", "Total search impressions for VidMaker growth and product pages.", "SEARCH_IMPRESSIONS", "Search Console", "impressions", 41200, 36800, 60000, "IMPROVING", "SEO Strategy"],
+  ["metric-search-clicks", "Search clicks", "Search clicks from target queries and entity pages.", "SEARCH_CLICKS", "Search Console", "clicks", 910, 820, 1600, "IMPROVING", "SEO Strategy"],
+  ["metric-product-hunt-referrals", "Product Hunt referrals", "Referral sessions from Product Hunt launch and follow-up work.", "TRAFFIC", "Analytics", "sessions", 264, 98, 500, "IMPROVING", "Community Intelligence"],
+  ["metric-linkedin-impressions", "LinkedIn impressions", "Impressions from founder and company LinkedIn posts.", "SOCIAL_IMPRESSIONS", "LinkedIn", "impressions", 18400, 9100, 25000, "IMPROVING", "Content"],
+  ["metric-x-impressions", "X impressions", "Impressions from X launch announcements and threads.", "SOCIAL_IMPRESSIONS", "X", "impressions", 4200, 900, 12000, "WATCH", "Content"],
+  ["metric-pinterest-impressions", "Pinterest impressions", "Impressions from Pinterest proof pins and article pins.", "SOCIAL_IMPRESSIONS", "Pinterest", "impressions", 1300, 420, 5000, "WATCH", "Design System"],
+  ["metric-backlinks", "Backlinks", "Live backlinks from directories, newsletters, and authority outreach.", "BACKLINKS", "Authority Tracker", "links", 7, 4, 25, "IMPROVING", "Authority"],
+  ["metric-referring-domains", "Referring domains", "Unique referring domains pointing to VidMaker.", "REFERRING_DOMAINS", "Authority Tracker", "domains", 5, 3, 18, "IMPROVING", "Authority"],
+  ["metric-directory-submissions", "Directory submissions", "Submitted directory listings for VidMaker.", "DIRECTORY_APPROVALS", "Directory Tracker", "submissions", 12, 3, 25, "IMPROVING", "Authority"],
+  ["metric-directory-approvals", "Directory approvals", "Approved directory listings that can produce authority signals.", "DIRECTORY_APPROVALS", "Directory Tracker", "approvals", 2, 0, 10, "WATCH", "Authority"],
+  ["metric-blog-posts-published", "Blog posts published", "Published blog and FAQ assets from the content engine.", "CONTENT_PUBLISHED", "Content Engine", "posts", 4, 2, 10, "IMPROVING", "Content"],
+  ["metric-community-replies", "Community replies", "Helpful replies shipped to Product Hunt, Reddit, LinkedIn, X, and forums.", "COMMUNITY_REPLIES", "Community Intelligence", "replies", 18, 6, 40, "IMPROVING", "Community Intelligence"],
+  ["metric-qualified-signups", "Qualified signups", "Signups with commercial or product workflow intent.", "SIGNUPS", "Analytics", "signups", 31, 18, 75, "IMPROVING", "Growth"],
+  ["metric-ai-mentions", "AI mentions", "Answer-engine and AI surface mentions of VidMaker and Video Production Intelligence.", "AI_MENTIONS", "AEO/GEO Tracker", "mentions", 9, 4, 30, "WATCH", "Search Strategy"]
+] as const).map(([id, name, description, metricType, source, unit, currentValue, previousValue, targetValue, status, owner], index) => ({
+  id,
+  name,
+  title: name,
+  description,
+  metricType: metricType as MetricType,
+  source,
+  unit,
+  currentValue,
+  previousValue,
+  targetValue,
+  status: status as MetricStatus,
+  owner,
+  ...scoped(index)
+}));
+
+const measurementSeeds = [
+  ["metric-search-impressions", "ContentAsset", "content-blog-004", "execution-blog-004-publish", "plan-blog-004-010-content", "objective-aeo-geo", "campaign-product-page-to-video-proof", 41200, 36800, "BLOG-004 category definition lifted impressions."],
+  ["metric-search-clicks", "ContentAsset", "content-blog-004", "execution-blog-004-publish", "plan-blog-004-010-content", "objective-aeo-geo", "campaign-product-page-to-video-proof", 910, 820, "Search clicks improved after category article updates."],
+  ["metric-blog-posts-published", "ContentAsset", "content-blog-004", "execution-blog-004-publish", "plan-blog-004-010-content", "objective-aeo-geo", "campaign-product-page-to-video-proof", 4, 3, "BLOG-004 moved content output forward."],
+  ["metric-linkedin-impressions", "Campaign", "campaign-product-page-to-video-proof", "execution-company-linkedin-blog-004", "plan-blog-004-010-content", "objective-aeo-geo", "campaign-product-page-to-video-proof", 18400, 9100, "LinkedIn carousel outperformed plain company post."],
+  ["metric-product-hunt-referrals", "Observation", "observation-product-hunt-comments", "execution-product-hunt-reply", "plan-product-hunt-follow-up", "objective-product-hunt", "campaign-product-page-to-video-proof", 264, 98, "Product Hunt follow-up produced qualified referral traffic."],
+  ["metric-community-replies", "Observation", "observation-url-product-comments", "execution-product-hunt-reply", "plan-product-hunt-follow-up", "objective-product-hunt", "campaign-product-page-to-video-proof", 18, 6, "Community replies increased conversation quality."],
+  ["metric-qualified-signups", "Campaign", "campaign-product-page-to-video-proof", "execution-product-hunt-reply", "plan-product-hunt-follow-up", "objective-product-hunt", "campaign-product-page-to-video-proof", 31, 18, "Demo-linked replies produced higher-intent signups."],
+  ["metric-x-impressions", "ContentAsset", "content-blog-004", "execution-x-thread-blog-004", "plan-product-hunt-follow-up", "objective-product-hunt", "campaign-product-page-to-video-proof", 4200, 900, "X launch announcement created early distribution."],
+  ["metric-pinterest-impressions", "ContentAsset", "content-blog-004", "execution-pinterest-blog-004", "plan-product-hunt-follow-up", "objective-product-hunt", "campaign-product-page-to-video-proof", 1300, 420, "Pinterest pin drafts need stronger proof visuals."],
+  ["metric-directory-submissions", "DirectorySubmission", "directory-ai-video-tools", "execution-futurepedia-submit", "plan-directory-submission", "objective-authority", "", 12, 3, "Directory submission volume increased after copy bank."],
+  ["metric-directory-approvals", "DirectorySubmission", "directory-ai-video-tools", "execution-futurepedia-submit", "plan-directory-submission", "objective-authority", "", 2, 0, "Approvals lag submission volume."],
+  ["metric-backlinks", "Backlink", "backlink-ai-video-tools-directory", "execution-ai-video-tools-backlink", "plan-directory-submission", "objective-authority", "", 7, 4, "Backlink count is improving but slower than predicted."],
+  ["metric-referring-domains", "Backlink", "backlink-ai-video-tools-directory", "execution-ai-video-tools-backlink", "plan-directory-submission", "objective-authority", "", 5, 3, "Directory work added referring-domain diversity."],
+  ["metric-ai-mentions", "Entity", "entity-video-production-intelligence", "execution-vpi-landing-section", "plan-vpi-authority", "objective-own-vpi", "", 9, 4, "Entity clarity improved answer-engine mentions."],
+  ["metric-organic-traffic", "ContentAsset", "content-blog-002", "execution-vpi-newsletter", "plan-vpi-authority", "objective-own-vpi", "", 1480, 1325, "VPI cluster is lifting organic traffic."],
+  ["metric-search-impressions", "Question", "question-video-production-intelligence", "execution-vpi-faq", "plan-aeo-geo-visibility", "objective-aeo-geo", "", 41200, 37100, "FAQ coverage supports answer-ready visibility."],
+  ["metric-ai-mentions", "Question", "question-purpose-specific-ai", "execution-purpose-specific-faq", "plan-aeo-geo-visibility", "objective-aeo-geo", "", 9, 5, "Purpose-Specific AI FAQ improved entity language."],
+  ["metric-linkedin-impressions", "Insight", "insight-url-to-video-trust", "execution-founder-boundaries", "plan-vpi-authority", "objective-own-vpi", "", 18400, 11200, "Founder framing attracts stronger qualitative comments."],
+  ["metric-linkedin-impressions", "Campaign", "campaign-product-page-to-video-proof", "execution-company-linkedin-blog-004", "plan-blog-004-010-content", "objective-aeo-geo", "campaign-product-page-to-video-proof", 18400, 12600, "LinkedIn engagement signal is tracked through launch post reach for now."],
+  ["metric-community-replies", "PainPoint", "painpoint-output-coherence-proof", "execution-4k-proof-asset", "plan-product-hunt-follow-up", "objective-demo-assets", "", 18, 10, "4K proof comments show skepticism needs evidence."],
+  ["metric-qualified-signups", "Question", "question-product-page-to-video", "execution-product-page-demo", "plan-product-hunt-follow-up", "objective-demo-assets", "campaign-product-page-to-video-proof", 31, 20, "Product-page demo intent remains commercial."],
+  ["metric-search-clicks", "Entity", "entity-product-page-to-video", "execution-product-page-entity", "plan-aeo-geo-visibility", "objective-aeo-geo", "", 910, 840, "Product Page to Video entity page improved clicks."],
+  ["metric-blog-posts-published", "Question", "question-purpose-specific-ai", "execution-blog-005-outline", "plan-blog-004-010-content", "objective-aeo-geo", "", 4, 3, "BLOG-005 outline supports the authority cluster."],
+  ["metric-directory-submissions", "DirectorySubmission", "directory-ai-video-tools", "execution-toolify-submit", "plan-directory-submission", "objective-authority", "", 12, 8, "Toolify submission increased directory coverage."],
+  ["metric-backlinks", "DirectorySubmission", "directory-ai-video-tools", "execution-directory-copy-bank", "plan-directory-submission", "objective-authority", "", 7, 4, "Copy bank should improve backlink conversion."],
+  ["metric-x-impressions", "ContentAsset", "content-blog-004", "execution-pinterest-proof-pin-2", "plan-product-hunt-follow-up", "objective-product-hunt", "campaign-product-page-to-video-proof", 4200, 2100, "Cross-channel repurposing is increasing reach."],
+  ["metric-pinterest-impressions", "ContentAsset", "content-blog-004", "execution-pinterest-proof-pin-2", "plan-product-hunt-follow-up", "objective-product-hunt", "campaign-product-page-to-video-proof", 1300, 700, "Second proof pin improved Pinterest visibility."],
+  ["metric-ai-mentions", "Entity", "entity-purpose-engines", "execution-purpose-engines-company-post", "plan-aeo-geo-visibility", "objective-aeo-geo", "", 9, 6, "Purpose Engines language should be reinforced."],
+  ["metric-search-impressions", "Experiment", "experiment-product-page-demo-series", "execution-answer-coverage-experiment", "plan-aeo-geo-visibility", "objective-aeo-geo", "", 41200, 38800, "Answer coverage experiment improved impressions modestly."],
+  ["metric-qualified-signups", "Experiment", "experiment-product-page-demo-series", "execution-answer-coverage-experiment", "plan-product-hunt-follow-up", "objective-product-hunt", "campaign-product-page-to-video-proof", 31, 24, "Demo-led answer coverage improved signup quality."]
+] as const;
+
+const measurements: Measurement[] = measurementSeeds.map(
+  ([metricId, sourceType, sourceId, executionItemId, planId, objectiveId, campaignId, value, previousValue, notes], index) => {
+    const changeValue = Number(value) - Number(previousValue);
+    return {
+      id: `measurement-${String(index + 1).padStart(2, "0")}`,
+      metricId,
+      sourceType,
+      sourceId,
+      executionItemId,
+      executionResultId: index < executionResults.length ? executionResults[index].id : undefined,
+      planId,
+      objectiveId,
+      campaignId: campaignId || undefined,
+      measuredAt: daysAgo(index % 10),
+      value: Number(value),
+      previousValue: Number(previousValue),
+      changeValue,
+      changePercent: Number(previousValue) === 0 ? undefined : Math.round((changeValue / Number(previousValue)) * 10000) / 100,
+      notes,
+      ...scoped(index)
+    };
+  }
+);
+
+const learnings: Learning[] = ([
+  ["Launch carousel beat text-only company post", "Launch carousel generated stronger LinkedIn engagement than a text-only company post.", "CHANNEL_PERFORMANCE", 0.89, "Measurement", "measurement-04", "metric-linkedin-impressions", "execution-company-linkedin-blog-004", "plan-blog-004-010-content", "objective-aeo-geo", "Prioritize proof-led carousel formats for launch and category posts.", true],
+  ["Product-page-to-video is commercial intent", "Product-page-to-video questions indicate high commercial investigation intent.", "CUSTOMER_LANGUAGE", 0.93, "Question", "question-product-page-to-video", "metric-qualified-signups", "execution-product-page-demo", "plan-product-hunt-follow-up", "objective-demo-assets", "Future recommendations should treat product-page-to-video as BOFU proof demand.", true],
+  ["Directory approvals lag submissions", "Directory submissions require longer approval windows than the plan predicted.", "AUTHORITY_IMPACT", 0.82, "Measurement", "measurement-11", "metric-directory-approvals", "execution-futurepedia-submit", "plan-directory-submission", "objective-authority", "Authority plans should extend timelines and increase follow-up volume.", true],
+  ["Category definition supports AEO/GEO", "Category-definition content supports answer-engine and generative-engine positioning.", "AEO_IMPACT", 0.86, "ContentAsset", "content-blog-004", "metric-ai-mentions", "execution-vpi-landing-section", "plan-vpi-authority", "objective-own-vpi", "Keep building answer-ready sections around Video Production Intelligence.", true],
+  ["Founder posts create better comments", "Founder posts generate better qualitative comments than company posts.", "CHANNEL_PERFORMANCE", 0.81, "Insight", "insight-url-to-video-trust", "metric-linkedin-impressions", "execution-founder-boundaries", "plan-vpi-authority", "objective-own-vpi", "Increase founder-led narrative posts around proof, trust, and workflow intelligence.", true],
+  ["Demo proof needed before BOFU push", "Demo proof is needed before pushing BOFU conversion posts harder.", "PRODUCT_SIGNAL", 0.9, "PainPoint", "painpoint-output-coherence-proof", "metric-qualified-signups", "execution-product-page-demo", "plan-product-hunt-follow-up", "objective-demo-assets", "Require proof assets before aggressive conversion messaging.", true],
+  ["Community replies work with concrete demos", "Community replies perform best when paired with a concrete source-to-output demo.", "COMMUNITY_SIGNAL", 0.88, "Observation", "observation-product-hunt-comments", "metric-community-replies", "execution-product-hunt-reply", "plan-product-hunt-follow-up", "objective-product-hunt", "Recommend reply-to-community actions only when proof links are ready.", true],
+  ["AEO FAQ blocks improve coverage", "Answer-ready FAQ sections improved search impressions and AI mentions.", "AEO_IMPACT", 0.84, "Measurement", "measurement-16", "metric-search-impressions", "execution-vpi-faq", "plan-aeo-geo-visibility", "objective-aeo-geo", "Create more FAQ sections around Purpose-Specific AI, VPI, and product-page workflows.", true],
+  ["Pinterest needs stronger visuals", "Pinterest visibility improves only when pins carry concrete workflow proof.", "CONTENT_PERFORMANCE", 0.73, "Measurement", "measurement-27", "metric-pinterest-impressions", "execution-pinterest-proof-pin-2", "plan-product-hunt-follow-up", "objective-product-hunt", "Delay Pinterest pushes until proof visuals are ready.", true],
+  ["Backlink work needs copy bank", "Directory and backlink outreach performed better after reusable copy was prepared.", "AUTHORITY_IMPACT", 0.8, "ExecutionResult", "execution-result-05", "metric-backlinks", "execution-directory-copy-bank", "plan-directory-submission", "objective-authority", "Create copy banks before scaling authority submissions.", true],
+  ["X is useful after proof assets", "X distribution should follow proof asset readiness, not precede it.", "CHANNEL_PERFORMANCE", 0.76, "ExecutionResult", "execution-result-03", "metric-x-impressions", "execution-x-thread-blog-004", "plan-product-hunt-follow-up", "objective-product-hunt", "Sequence X threads after demos and screenshots are ready.", true],
+  ["Entity pages need proof sections", "Entity pages earn better search clicks when proof sections are explicit.", "SEO_IMPACT", 0.79, "Measurement", "measurement-22", "metric-search-clicks", "execution-product-page-entity", "plan-aeo-geo-visibility", "objective-aeo-geo", "Update entity landing pages with proof-first examples.", true],
+  ["4K quality claims require evidence", "4K quality comments show that claims without proof create skepticism.", "PRODUCT_SIGNAL", 0.77, "Observation", "observation-hn-skepticism", "metric-community-replies", "execution-4k-proof-asset", "plan-product-hunt-follow-up", "objective-demo-assets", "Avoid quality claims until demo evidence is visible.", true],
+  ["Purpose-Specific AI needs repetition", "Purpose-Specific AI language is promising but needs repeated answer-ready reinforcement.", "GEO_IMPACT", 0.74, "Question", "question-purpose-specific-ai", "metric-ai-mentions", "execution-purpose-specific-faq", "plan-aeo-geo-visibility", "objective-aeo-geo", "Recommend more cluster content around purpose-specific AI.", true],
+  ["Internal links strengthen VPI cluster", "Cluster linking between BLOG-002, BLOG-003, and BLOG-004 strengthened category ownership.", "SEO_IMPACT", 0.83, "ExecutionResult", "execution-result-04", "metric-organic-traffic", "execution-blog-004-internal-links", "plan-vpi-authority", "objective-own-vpi", "Future content recommendations should include internal-link actions by default.", true]
+] as const).map(([title, summary, learningType, confidenceScore, sourceType, sourceId, metricId, executionItemId, planId, objectiveId, recommendationImpact, shouldInformFuturePlans], index) => ({
+  id: `learning-${String(index + 1).padStart(2, "0")}`,
+  title,
+  summary,
+  learningType: learningType as LearningType,
+  confidenceScore,
+  sourceType,
+  sourceId,
+  metricId,
+  executionItemId,
+  planId,
+  objectiveId,
+  recommendationImpact,
+  shouldInformFuturePlans,
+  ...scoped(index)
+}));
+
+const attributions: Attribution[] = ([
+  ["ExecutionItem", "execution-product-hunt-reply", "Metric", "metric-product-hunt-referrals", "INFLUENCED", 0.82, "Product Hunt launch replies influenced referral traffic."],
+  ["ExecutionItem", "execution-company-linkedin-blog-004", "Metric", "metric-linkedin-impressions", "INFLUENCED", 0.86, "LinkedIn carousel influenced profile visits and post impressions."],
+  ["ContentAsset", "content-blog-004", "Metric", "metric-ai-mentions", "SUPPORTED", 0.78, "BLOG-004 supported category authority and AI mentions."],
+  ["DirectorySubmission", "directory-ai-video-tools", "Metric", "metric-backlinks", "SUPPORTED", 0.74, "Directory submissions supported backlink acquisition."],
+  ["ExecutionItem", "execution-product-hunt-reply", "Metric", "metric-community-replies", "CAUSED", 0.88, "Community replies directly increased conversation quality."],
+  ["ExecutionItem", "execution-product-page-demo", "Metric", "metric-qualified-signups", "INFLUENCED", 0.81, "Product-page demo reduced skepticism and influenced qualified signups."],
+  ["ExecutionItem", "execution-blog-004-internal-links", "Metric", "metric-organic-traffic", "SUPPORTED", 0.79, "Internal links supported organic traffic growth."],
+  ["ExecutionItem", "execution-vpi-faq", "Metric", "metric-search-impressions", "SUPPORTED", 0.76, "VPI FAQ supported answer-ready search visibility."],
+  ["ExecutionItem", "execution-founder-boundaries", "Metric", "metric-linkedin-impressions", "CORRELATED", 0.69, "Founder post timing correlated with higher LinkedIn engagement."],
+  ["ExecutionItem", "execution-futurepedia-submit", "Metric", "metric-directory-approvals", "INFLUENCED", 0.72, "Futurepedia submission influenced approval volume but with lag."],
+  ["ExecutionItem", "execution-ai-video-tools-backlink", "Metric", "metric-referring-domains", "SUPPORTED", 0.74, "Backlink follow-up supported referring-domain growth."],
+  ["ExecutionItem", "execution-pinterest-proof-pin-2", "Metric", "metric-pinterest-impressions", "INFLUENCED", 0.7, "Proof pin influenced Pinterest impressions."],
+  ["Question", "question-product-page-to-video", "Metric", "metric-qualified-signups", "CORRELATED", 0.67, "Commercial question demand correlates with qualified signup lift."],
+  ["Entity", "entity-video-production-intelligence", "Metric", "metric-ai-mentions", "SUPPORTED", 0.75, "VPI entity clarity supported answer-engine mentions."],
+  ["ExecutionItem", "execution-directory-copy-bank", "Metric", "metric-backlinks", "INFLUENCED", 0.73, "Directory copy bank influenced backlink conversion readiness."]
+] as const).map(([sourceType, sourceId, targetType, targetId, attributionType, confidenceScore, evidence], index) => ({
+  id: `attribution-${String(index + 1).padStart(2, "0")}`,
+  sourceType,
+  sourceId,
+  targetType,
+  targetId,
+  attributionType: attributionType as AttributionType,
+  confidenceScore,
+  evidence,
+  ...scoped(index)
+}));
+
+const strategyAdjustments: StrategyAdjustment[] = ([
+  ["Increase product-page-to-video demo content", "Increase focus on product-page-to-video demo content across launch and BOFU assets.", "INCREASE_FOCUS", "learning-02", "objective-demo-assets", "plan-product-hunt-follow-up", "PROPOSED", "CRITICAL", "Commercial-intent questions and signup movement point to demo-led demand."],
+  ["Increase founder-led posts", "Increase founder-led posts around proof, quality, and workflow intelligence.", "INCREASE_FOCUS", "learning-05", "objective-own-vpi", "plan-vpi-authority", "PROPOSED", "HIGH", "Founder posts generated better qualitative comments than company-only posts."],
+  ["Create more answer-ready FAQ sections", "Create more FAQ sections for Purpose-Specific AI, VPI, and Product Page to Video.", "UPDATE_CONTENT_CLUSTER", "learning-08", "objective-aeo-geo", "plan-aeo-geo-visibility", "PROPOSED", "HIGH", "FAQ coverage improved search visibility and AI mentions."],
+  ["Slow low-quality directory submissions", "Slow low-quality directory submissions and prioritize higher-authority listings.", "DECREASE_FOCUS", "learning-03", "objective-authority", "plan-directory-submission", "PROPOSED", "MEDIUM", "Directory approvals lag submission volume."],
+  ["Increase AEO content around Purpose-Specific AI", "Increase AEO content around Purpose-Specific AI definitions and use cases.", "INCREASE_FOCUS", "learning-14", "objective-aeo-geo", "plan-aeo-geo-visibility", "ACCEPTED", "HIGH", "Purpose-Specific AI language needs repeated answer-ready reinforcement."],
+  ["Create proof-first landing page sections", "Create proof-first landing page sections before heavier BOFU conversion pushes.", "UPDATE_POSITIONING", "learning-06", "objective-demo-assets", "plan-product-hunt-follow-up", "PROPOSED", "CRITICAL", "Demo proof is needed before pushing conversion messaging harder."],
+  ["Prioritize evidence before BOFU posts", "Prioritize demo evidence before BOFU conversion posts and community replies.", "UPDATE_CHANNEL_PRIORITY", "learning-06", "objective-demo-assets", "plan-product-hunt-follow-up", "PROPOSED", "CRITICAL", "Conversion recommendations should wait for visible proof assets."],
+  ["Extend authority timeline", "Extend authority plan timeline and add follow-up volume.", "CREATE_NEW_PLAN", "learning-03", "objective-authority", "plan-directory-submission", "PROPOSED", "HIGH", "Actual directory approvals are lower than predicted backlinks."],
+  ["Add internal links by default", "Add internal-link tasks to every new authority article plan.", "UPDATE_CONTENT_CLUSTER", "learning-15", "objective-own-vpi", "plan-vpi-authority", "IMPLEMENTED", "HIGH", "Internal links strengthened the VPI cluster."],
+  ["Create proof-quality experiment", "Create an experiment testing proof-first versus claim-first demo sections.", "CREATE_EXPERIMENT", "learning-13", "objective-demo-assets", "plan-product-hunt-follow-up", "PROPOSED", "HIGH", "Quality claims require evidence to reduce skepticism."]
+] as const).map(([title, description, adjustmentType, sourceLearningId, objectiveId, planId, status, priority, reasoning], index) => ({
+  id: `strategy-adjustment-${String(index + 1).padStart(2, "0")}`,
+  title,
+  description,
+  adjustmentType: adjustmentType as StrategyAdjustmentType,
+  sourceLearningId,
+  objectiveId,
+  planId,
+  status: status as StrategyAdjustmentStatus,
+  priority: priority as Priority,
+  reasoning,
+  ...scoped(index)
+}));
+
 const recommendedActions: RecommendedAction[] = [
   ["CREATE_DEMO", "Pattern", "pattern-01", "Create product-page-to-video demo from a real ecommerce page.", "CRITICAL", "objective-demo-assets", "pattern-01"],
   ["WRITE_BLOG", "Pattern", "pattern-03", "Publish Video Production Intelligence category article.", "CRITICAL", "objective-own-vpi", "pattern-03"],
@@ -2909,6 +3264,11 @@ export const initialPlatformState: PlatformState = {
   executionBlockers,
   approvalRequests,
   executionResults,
+  metrics,
+  measurements,
+  learnings,
+  attributions,
+  strategyAdjustments,
   events,
   recommendedActions,
   briefingSections
@@ -2965,6 +3325,11 @@ export function getExecutiveMetrics(state: PlatformState, activeWorkspaceId: str
   const executionBlockers = state.executionBlockers.filter((item) => item.workspaceId === activeWorkspaceId);
   const approvalRequests = state.approvalRequests.filter((item) => item.workspaceId === activeWorkspaceId);
   const executionResults = state.executionResults.filter((item) => item.workspaceId === activeWorkspaceId);
+  const metricRecords = state.metrics.filter((item) => item.workspaceId === activeWorkspaceId);
+  const measurements = state.measurements.filter((item) => item.workspaceId === activeWorkspaceId);
+  const learnings = state.learnings.filter((item) => item.workspaceId === activeWorkspaceId);
+  const attributions = state.attributions.filter((item) => item.workspaceId === activeWorkspaceId);
+  const strategyAdjustments = state.strategyAdjustments.filter((item) => item.workspaceId === activeWorkspaceId);
   const highImpactActions = state.recommendedActions.filter(
     (item) => item.workspaceId === activeWorkspaceId && ["HIGH", "CRITICAL"].includes(item.priority)
   );
@@ -2985,6 +3350,28 @@ export function getExecutiveMetrics(state: PlatformState, activeWorkspaceId: str
   const averageConfidence =
     confidenceValues.reduce((total, value) => total + value, 0) /
     Math.max(confidenceValues.length, 1);
+  const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const predictionComparisons = predictedOutcomes
+    .map((prediction) => {
+      const normalizedPredictionMetric = prediction.metricName.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const measurement = measurements.find(
+        (item) =>
+          item.planId === prediction.planId &&
+          state.metrics
+            .find((metric) => metric.id === item.metricId)
+            ?.name.toLowerCase()
+            .replace(/[^a-z0-9]/g, "")
+            .includes(normalizedPredictionMetric.slice(0, 12))
+      );
+      if (!measurement) return null;
+      const actual = measurement.changeValue ?? measurement.value - (measurement.previousValue ?? 0);
+      const predicted = prediction.predictedValue;
+      return Math.max(0, Math.min(1, 1 - Math.abs(actual - predicted) / Math.max(Math.abs(predicted), 1)));
+    })
+    .filter((item): item is number => item !== null);
+  const predictionAccuracy =
+    predictionComparisons.reduce((total, value) => total + value, 0) /
+    Math.max(predictionComparisons.length, 1);
 
   return {
     totalObservations: observations.length,
@@ -3034,6 +3421,16 @@ export function getExecutiveMetrics(state: PlatformState, activeWorkspaceId: str
     evidenceAdded: executionEvidence.length,
     executionResults: executionResults.length,
     openExecutionBlockers: executionBlockers.filter((item) => item.status === "OPEN" || item.status === "IN_REVIEW").length,
+    metricsTracked: metricRecords.length,
+    measurementsThisWeek: measurements.filter((item) => new Date(item.measuredAt).getTime() >= oneWeekAgo).length,
+    highConfidenceLearnings: learnings.filter((item) => item.confidenceScore >= 0.8).length,
+    pendingStrategyAdjustments: strategyAdjustments.filter((item) => item.status === "PROPOSED").length,
+    objectiveMetricsImproved: new Set(
+      measurements.filter((item) => item.objectiveId && (item.changeValue ?? 0) > 0).map((item) => item.objectiveId)
+    ).size,
+    predictionAccuracy,
+    metricsNeedingAttention: metricRecords.filter((item) => item.status === "WATCH" || item.status === "DECLINING" || item.status === "STALLED").length,
+    attributionsCreated: attributions.length,
     planHealthScore: Math.round(
       Math.max(
         0,
@@ -3633,6 +4030,89 @@ export function createDefaultRecord(collection: CollectionKey, activeWorkspaceId
       metricAfter: 0,
       impactScore: 50,
       learning: ""
+    };
+  }
+
+  if (collection === "metrics") {
+    return {
+      ...base,
+      name: "New metric",
+      title: "New metric",
+      description: "",
+      metricType: "CUSTOM",
+      source: "Manual",
+      unit: "count",
+      currentValue: 0,
+      previousValue: 0,
+      targetValue: undefined,
+      status: "WATCH",
+      owner: "Growth"
+    };
+  }
+
+  if (collection === "measurements") {
+    return {
+      ...base,
+      metricId: "",
+      sourceType: "Manual",
+      sourceId: "",
+      executionItemId: "",
+      executionResultId: "",
+      planId: "",
+      objectiveId: "",
+      campaignId: "",
+      measuredAt: date,
+      value: 0,
+      previousValue: 0,
+      changeValue: 0,
+      changePercent: 0,
+      notes: ""
+    };
+  }
+
+  if (collection === "learnings") {
+    return {
+      ...base,
+      title: "New learning",
+      summary: "",
+      learningType: "CUSTOM",
+      confidenceScore: 0.7,
+      sourceType: "Manual",
+      sourceId: "",
+      metricId: "",
+      executionItemId: "",
+      planId: "",
+      objectiveId: "",
+      recommendationImpact: "",
+      shouldInformFuturePlans: true
+    };
+  }
+
+  if (collection === "attributions") {
+    return {
+      ...base,
+      sourceType: "ExecutionItem",
+      sourceId: "",
+      targetType: "Metric",
+      targetId: "",
+      attributionType: "INFLUENCED",
+      confidenceScore: 0.7,
+      evidence: ""
+    };
+  }
+
+  if (collection === "strategyAdjustments") {
+    return {
+      ...base,
+      title: "New strategy adjustment",
+      description: "",
+      adjustmentType: "INCREASE_FOCUS",
+      sourceLearningId: "",
+      objectiveId: "",
+      planId: "",
+      status: "PROPOSED",
+      priority: "HIGH",
+      reasoning: ""
     };
   }
 

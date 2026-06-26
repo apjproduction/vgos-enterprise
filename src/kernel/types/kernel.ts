@@ -30,6 +30,11 @@ export type KernelArtifactType =
   | "ExecutionBlocker"
   | "ApprovalRequest"
   | "ExecutionResult"
+  | "Metric"
+  | "Measurement"
+  | "Learning"
+  | "Attribution"
+  | "StrategyAdjustment"
   | "AIRecommendation"
   | "RecommendedAction"
   | "Event";

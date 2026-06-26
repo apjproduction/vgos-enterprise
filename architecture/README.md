@@ -1,6 +1,6 @@
 # VGOS v5.0 Enterprise Architecture
 
-VGOS is moving from a domain-driven tracking app into an Autonomous Intelligence Foundation for VidMaker. The latest capability release adds the Execution Engine on top of Planning Engine orchestration.
+VGOS is moving from a domain-driven tracking app into an Autonomous Intelligence Foundation for VidMaker. The latest capability release adds the Measurement & Learning Engine on top of Planning and Execution orchestration.
 
 Phase Beta added three durable layers:
 
@@ -14,11 +14,13 @@ The Planning Engine turns objectives, patterns, recommended actions, constraints
 
 The Execution Engine turns plans, plan items, recommended actions, workflow outputs, and mission-control priorities into trackable execution items with owners, statuses, evidence, blockers, approvals, results, and captured learning.
 
+The Measurement & Learning Engine turns execution results and metric movement into measurements, learnings, attributions, and proposed strategy adjustments, closing the loop between shipped work and better future recommendations.
+
 ## Current Layers
 
-- Data foundation: Prisma models for domain entities, intelligence objects, knowledge objects, relationships, memory snapshots, workflows, workflow runs, handoffs, plans, milestones, plan items, dependencies, constraints, predicted outcomes, resource capacity, execution items, execution evidence, blockers, approvals, and results.
-- Kernel services: knowledge service, semantic search foundation, memory trend service, workflow engine, agent coordinator, decision engine, planning engine, execution engine, scheduling, dependency analysis, prediction, resource planning, and scoring utilities.
-- Product UI: Mission Control, Knowledge, Workflows, Intelligence Pipeline, Memory, Patterns, Objectives, Agents, Reasoning, Decisions, Plans, Executions, Approvals, Blockers, Evidence, Results, Capabilities, and operational engine pages.
+- Data foundation: Prisma models for domain entities, intelligence objects, knowledge objects, relationships, memory snapshots, workflows, workflow runs, handoffs, plans, milestones, plan items, dependencies, constraints, predicted outcomes, resource capacity, execution items, execution evidence, blockers, approvals, results, metrics, measurements, learnings, attributions, and strategy adjustments.
+- Kernel services: knowledge service, semantic search foundation, memory trend service, workflow engine, agent coordinator, decision engine, planning engine, execution engine, measurement engine, learning engine, attribution engine, strategy feedback engine, scheduling, dependency analysis, prediction, resource planning, and scoring utilities.
+- Product UI: Mission Control, Knowledge, Workflows, Intelligence Pipeline, Memory, Patterns, Objectives, Agents, Reasoning, Decisions, Plans, Executions, Approvals, Blockers, Evidence, Results, Metrics, Measurements, Learnings, Attributions, Strategy Adjustments, Capabilities, and operational engine pages.
 - Tenant boundary: all major records remain scoped by organization and workspace.
 
 ## Operating Principle

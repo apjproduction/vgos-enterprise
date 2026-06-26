@@ -19,11 +19,13 @@ flowchart LR
   N --> O["ExecutionItem"]
   O --> P["ExecutionEvidence"]
   P --> Q["ExecutionResult"]
-  Q --> R["Outcome"]
+  Q --> R["Measurement"]
   R --> S["Learning"]
-  S --> T["Memory"]
-  T --> U["Future Recommendation"]
-  U --> V["Mission Control"]
+  S --> T["Attribution"]
+  T --> U["Strategy Adjustment"]
+  U --> V["Updated Plan"]
+  V --> W["Better Recommendation"]
+  W --> X["Mission Control"]
 ```
 
 ```mermaid
@@ -36,19 +38,21 @@ flowchart LR
   F --> G["ExecutionItem"]
   G --> H["Evidence"]
   H --> I["Result"]
-  I --> J["Outcome"]
+  I --> J["Measurement"]
   J --> K["Learning"]
-  K --> L["Memory"]
-  L --> M["Future Recommendation"]
+  K --> L["Attribution"]
+  L --> M["Strategy Adjustment"]
+  M --> N["Updated Plan"]
+  N --> O["Better Recommendation"]
 ```
 
 ## Context
 
-Phase Alpha gave VGOS memory, patterns, reasoning traces, objectives, agents, events, and decision ranking. Phase Beta makes those artifacts reusable through canonical knowledge objects, relationships, workflows, and handoffs. The Planning Engine adds structured execution planning on top of recommendations and constraints. The Execution Engine turns plans into owned execution items, proof, approvals, blockers, results, and learning.
+Phase Alpha gave VGOS memory, patterns, reasoning traces, objectives, agents, events, and decision ranking. Phase Beta makes those artifacts reusable through canonical knowledge objects, relationships, workflows, and handoffs. The Planning Engine adds structured execution planning on top of recommendations and constraints. The Execution Engine turns plans into owned execution items, proof, approvals, blockers, and results. The Measurement & Learning Engine turns those results into measurable evidence, learning, attribution, strategy adjustment, and better future recommendations.
 
 ## Decision
 
-All significant market and growth artifacts can be represented as workspace-scoped knowledge objects. Relationships explain how those artifacts connect. Workflows and agents operate on the same knowledge layer rather than each module owning isolated logic. Plans translate objectives, patterns, and recommendations into milestones, plan items, dependencies, constraints, and predicted outcomes. Execution items translate planned work into shipped proof and measurable results.
+All significant market and growth artifacts can be represented as workspace-scoped knowledge objects. Relationships explain how those artifacts connect. Workflows and agents operate on the same knowledge layer rather than each module owning isolated logic. Plans translate objectives, patterns, and recommendations into milestones, plan items, dependencies, constraints, and predicted outcomes. Execution items translate planned work into shipped proof and measurable results. Measurements compare actual outcomes against expectations, then produce learnings, attributions, and strategy adjustments.
 
 ## Consequences
 
@@ -56,7 +60,8 @@ All significant market and growth artifacts can be represented as workspace-scop
 - Semantic search can start with mock keyword similarity and later switch to embeddings without changing the product pages.
 - Workflows can begin as deterministic runs and later call external AI services or background job queues.
 - Planning connects strategic decisions to sequenced execution and expected outcomes.
-- Execution connects plan items and recommendations to evidence, blockers, approvals, results, outcomes, memory, and future recommendations.
+- Execution connects plan items and recommendations to evidence, blockers, approvals, and results.
+- Measurement connects execution results to metrics, learnings, attributions, strategy adjustments, updated plans, and better recommendations.
 
 ## Future Considerations
 

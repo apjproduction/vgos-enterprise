@@ -146,6 +146,23 @@ export const capabilityRegistry: CapabilityDefinition[] = [
     status: "ACTIVE"
   },
   {
+    id: "measurement-learning-engine",
+    name: "Measurement & Learning Engine",
+    description: "Turns execution results and metric movement into measurements, learnings, attributions, and strategy adjustments.",
+    version: "1.0.0",
+    inputs: ["ExecutionResult", "Measurement", "Metric", "PredictedOutcome", "Objective"],
+    outputs: ["Learning", "Attribution", "StrategyAdjustment", "Events"],
+    dependencies: ["Execution Engine", "Planning Engine", "Goal Engine", "Event System", "Reasoning Engine"],
+    eventsConsumed: ["EXECUTION_COMPLETED", "EXECUTION_RESULT_CREATED", "OUTCOME_PREDICTED", "PLAN_COMPLETED"],
+    eventsProduced: [
+      "MEASUREMENT_CREATED",
+      "LEARNING_CREATED",
+      "ATTRIBUTION_CREATED",
+      "STRATEGY_ADJUSTMENT_PROPOSED"
+    ],
+    status: "BETA"
+  },
+  {
     id: "event-system",
     name: "Event System",
     description: "Records workspace-scoped events that trigger workflows and kernel updates.",

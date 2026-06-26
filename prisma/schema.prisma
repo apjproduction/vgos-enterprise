@@ -118,6 +118,15 @@ enum EventType {
   APPROVAL_REJECTED
   EVIDENCE_ADDED
   EXECUTION_RESULT_CREATED
+  METRIC_CREATED
+  METRIC_UPDATED
+  MEASUREMENT_CREATED
+  LEARNING_CREATED
+  ATTRIBUTION_CREATED
+  STRATEGY_ADJUSTMENT_PROPOSED
+  STRATEGY_ADJUSTMENT_ACCEPTED
+  STRATEGY_ADJUSTMENT_REJECTED
+  STRATEGY_ADJUSTMENT_IMPLEMENTED
 }
 
 enum EventSeverity {
@@ -445,6 +454,82 @@ enum ExecutionResultType {
   FOLLOW_UP_REQUIRED
 }
 
+enum MetricType {
+  TRAFFIC
+  SIGNUPS
+  CONVERSIONS
+  BACKLINKS
+  REFERRING_DOMAINS
+  AI_MENTIONS
+  SEARCH_IMPRESSIONS
+  SEARCH_CLICKS
+  SOCIAL_IMPRESSIONS
+  SOCIAL_ENGAGEMENT
+  COMMUNITY_REPLIES
+  DIRECTORY_APPROVALS
+  CONTENT_PUBLISHED
+  EXPERIMENT_RESULT
+  REVENUE
+  AUTHORITY_SCORE
+  CUSTOM
+}
+
+enum MetricStatus {
+  HEALTHY
+  WATCH
+  IMPROVING
+  DECLINING
+  STALLED
+  ARCHIVED
+}
+
+enum LearningType {
+  CONTENT_PERFORMANCE
+  CHANNEL_PERFORMANCE
+  SEO_IMPACT
+  AEO_IMPACT
+  GEO_IMPACT
+  AUTHORITY_IMPACT
+  COMMUNITY_SIGNAL
+  PRODUCT_SIGNAL
+  EXECUTION_FAILURE
+  STRATEGY_UPDATE
+  EXPERIMENT_LEARNING
+  CUSTOMER_LANGUAGE
+  CUSTOM
+}
+
+enum AttributionType {
+  INFLUENCED
+  CAUSED
+  CORRELATED
+  SUPPORTED
+  CONTRADICTED
+  UNKNOWN
+}
+
+enum StrategyAdjustmentType {
+  INCREASE_FOCUS
+  DECREASE_FOCUS
+  PAUSE_STRATEGY
+  CREATE_NEW_PLAN
+  UPDATE_POSITIONING
+  UPDATE_CONTENT_CLUSTER
+  UPDATE_KEYWORD_TARGET
+  UPDATE_PERSONA_PRIORITY
+  UPDATE_CHANNEL_PRIORITY
+  CREATE_EXPERIMENT
+  CREATE_FEATURE_REQUEST
+}
+
+enum StrategyAdjustmentStatus {
+  PROPOSED
+  ACCEPTED
+  REJECTED
+  IMPLEMENTED
+  ARCHIVED
+}
+
 model Organization {
   id                   String                @id @default(cuid())
   name                 String
@@ -499,6 +584,11 @@ model Organization {
   executionBlockers    ExecutionBlocker[]
   approvalRequests     ApprovalRequest[]
   executionResults     ExecutionResult[]
+  metrics              Metric[]
+  measurements         Measurement[]
+  learnings            Learning[]
+  attributions         Attribution[]
+  strategyAdjustments  StrategyAdjustment[]
   events               Event[]
   recommendedActions   RecommendedAction[]
   createdAt            DateTime              @default(now())
@@ -558,6 +648,11 @@ model Workspace {
   executionBlockers    ExecutionBlocker[]
   approvalRequests     ApprovalRequest[]
   executionResults     ExecutionResult[]
+  metrics              Metric[]
+  measurements         Measurement[]
+  learnings            Learning[]
+  attributions         Attribution[]
+  strategyAdjustments  StrategyAdjustment[]
   events               Event[]
   recommendedActions   RecommendedAction[]
   createdAt            DateTime              @default(now())
@@ -918,6 +1013,7 @@ model Campaign {
   contentAssets  CampaignContentAsset[]
   tasks          Task[]
   executionItems ExecutionItem[]
+  measurements   Measurement[]
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
 
@@ -1321,6 +1417,9 @@ model Objective {
   recommendedActions RecommendedAction[]
   plans              Plan[]
   executionItems     ExecutionItem[]
+  measurements       Measurement[]
+  learnings          Learning[]
+  strategyAdjustments StrategyAdjustment[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -1609,6 +1708,9 @@ model Plan {
   constraints       PlanConstraint[]
   predictedOutcomes PredictedOutcome[]
   executionItems    ExecutionItem[]
+  measurements      Measurement[]
+  learnings         Learning[]
+  strategyAdjustments StrategyAdjustment[]
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
@@ -1814,6 +1916,8 @@ model ExecutionItem {
   blockers            ExecutionBlocker[]
   approvals           ApprovalRequest[]
   results             ExecutionResult[]
+  measurements         Measurement[]
+  learnings            Learning[]
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 
@@ -1928,6 +2032,7 @@ model ExecutionResult {
   organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   workspace       Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   executionItem   ExecutionItem       @relation(fields: [executionItemId], references: [id], onDelete: Cascade)
+  measurements    Measurement[]
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
@@ -1936,6 +2041,169 @@ model ExecutionResult {
   @@index([executionItemId])
   @@index([resultType])
   @@index([metricName])
+}
+
+model Metric {
+  id              String        @id @default(cuid())
+  organizationId  String
+  workspaceId     String
+  name            String
+  description     String        @db.Text
+  metricType      MetricType
+  source          String
+  unit            String
+  currentValue    Float         @default(0)
+  previousValue   Float         @default(0)
+  targetValue     Float?
+  status          MetricStatus  @default(WATCH)
+  owner           String
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  measurements    Measurement[]
+  learnings       Learning[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([metricType])
+  @@index([status])
+  @@index([owner])
+  @@index([source])
+}
+
+model Measurement {
+  id                String           @id @default(cuid())
+  organizationId    String
+  workspaceId       String
+  metricId          String
+  sourceType        String?
+  sourceId          String?
+  executionItemId   String?
+  executionResultId String?
+  planId            String?
+  objectiveId       String?
+  campaignId        String?
+  measuredAt        DateTime
+  value             Float
+  previousValue     Float?
+  changeValue       Float?
+  changePercent     Float?
+  notes             String?          @db.Text
+  organization      Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  metric            Metric           @relation(fields: [metricId], references: [id], onDelete: Cascade)
+  executionItem     ExecutionItem?    @relation(fields: [executionItemId], references: [id], onDelete: SetNull)
+  executionResult   ExecutionResult?  @relation(fields: [executionResultId], references: [id], onDelete: SetNull)
+  plan              Plan?            @relation(fields: [planId], references: [id], onDelete: SetNull)
+  objective         Objective?       @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
+  campaign          Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([metricId])
+  @@index([sourceType, sourceId])
+  @@index([executionItemId])
+  @@index([executionResultId])
+  @@index([planId])
+  @@index([objectiveId])
+  @@index([campaignId])
+  @@index([measuredAt])
+}
+
+model Learning {
+  id                    String        @id @default(cuid())
+  organizationId        String
+  workspaceId           String
+  title                 String
+  summary               String        @db.Text
+  learningType          LearningType
+  confidenceScore       Float         @default(0)
+  sourceType            String?
+  sourceId              String?
+  metricId              String?
+  executionItemId       String?
+  planId                String?
+  objectiveId           String?
+  recommendationImpact  String        @db.Text
+  shouldInformFuturePlans Boolean     @default(true)
+  organization          Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace             Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  metric                Metric?       @relation(fields: [metricId], references: [id], onDelete: SetNull)
+  executionItem         ExecutionItem? @relation(fields: [executionItemId], references: [id], onDelete: SetNull)
+  plan                  Plan?         @relation(fields: [planId], references: [id], onDelete: SetNull)
+  objective             Objective?    @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
+  strategyAdjustments   StrategyAdjustment[]
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([learningType])
+  @@index([confidenceScore])
+  @@index([sourceType, sourceId])
+  @@index([metricId])
+  @@index([executionItemId])
+  @@index([planId])
+  @@index([objectiveId])
+  @@index([shouldInformFuturePlans])
+}
+
+model Attribution {
+  id                String          @id @default(cuid())
+  organizationId    String
+  workspaceId       String
+  sourceType        String
+  sourceId          String
+  targetType        String
+  targetId          String
+  attributionType   AttributionType
+  confidenceScore   Float           @default(0)
+  evidence          String          @db.Text
+  organization      Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([sourceType, sourceId])
+  @@index([targetType, targetId])
+  @@index([attributionType])
+  @@index([confidenceScore])
+}
+
+model StrategyAdjustment {
+  id                 String                   @id @default(cuid())
+  organizationId     String
+  workspaceId        String
+  title              String
+  description        String                   @db.Text
+  adjustmentType     StrategyAdjustmentType
+  sourceLearningId   String?
+  objectiveId        String?
+  planId             String?
+  status             StrategyAdjustmentStatus @default(PROPOSED)
+  priority           Priority                 @default(MEDIUM)
+  reasoning          String                   @db.Text
+  organization       Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace          Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sourceLearning     Learning?                @relation(fields: [sourceLearningId], references: [id], onDelete: SetNull)
+  objective          Objective?               @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
+  plan               Plan?                    @relation(fields: [planId], references: [id], onDelete: SetNull)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([adjustmentType])
+  @@index([sourceLearningId])
+  @@index([objectiveId])
+  @@index([planId])
+  @@index([status])
+  @@index([priority])
 }
 
 model Event {

@@ -54,6 +54,22 @@ import {
   createExecutionFromRecommendedAction,
   createExecutionFromWorkflowRun
 } from "@/kernel/execution/execution-builder";
+import { inferAttribution } from "@/kernel/measurement/attribution-engine";
+import {
+  compareMeasurementToPrediction,
+  createMeasurementFromExecutionResult
+} from "@/kernel/measurement/measurement-engine";
+import { getMetricTrend, updateMetricValue } from "@/kernel/measurement/metric-engine";
+import {
+  generateLearningFromExecutionResult,
+  generateLearningFromMeasurement
+} from "@/kernel/measurement/learning-engine";
+import {
+  acceptStrategyAdjustment,
+  applyStrategyAdjustment,
+  suggestStrategyAdjustments,
+  rejectStrategyAdjustment
+} from "@/kernel/measurement/strategy-feedback-engine";
 import {
   calculateOpportunityScore,
   createDefaultRecord,
@@ -73,6 +89,11 @@ import {
   type EventStatus,
   type ExecutionItem,
   type ExecutionStatus,
+  type ExecutionResult,
+  type Learning,
+  type Measurement,
+  type Metric,
+  type MetricStatus,
   type Objective,
   type PageDefinition,
   type PageId,
@@ -82,6 +103,7 @@ import {
   type Priority,
   type RecommendationType,
   type RelationshipType,
+  type StrategyAdjustment,
   type Status
 } from "@/lib/vgos-data";
 
@@ -119,7 +141,16 @@ const statusOptions = [
   "PENDING",
   "PROCESSED",
   "COMPLETED",
-  "DISMISSED"
+  "DISMISSED",
+  "HEALTHY",
+  "WATCH",
+  "IMPROVING",
+  "DECLINING",
+  "STALLED",
+  "PROPOSED",
+  "ACCEPTED",
+  "REJECTED",
+  "IMPLEMENTED"
 ];
 
 const priorityOptions: Priority[] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
@@ -354,6 +385,62 @@ const executionResultTypeOptions = [
   "FOLLOW_UP_REQUIRED"
 ];
 
+const metricTypeOptions = [
+  "TRAFFIC",
+  "SIGNUPS",
+  "CONVERSIONS",
+  "BACKLINKS",
+  "REFERRING_DOMAINS",
+  "AI_MENTIONS",
+  "SEARCH_IMPRESSIONS",
+  "SEARCH_CLICKS",
+  "SOCIAL_IMPRESSIONS",
+  "SOCIAL_ENGAGEMENT",
+  "COMMUNITY_REPLIES",
+  "DIRECTORY_APPROVALS",
+  "CONTENT_PUBLISHED",
+  "EXPERIMENT_RESULT",
+  "REVENUE",
+  "AUTHORITY_SCORE",
+  "CUSTOM"
+];
+
+const metricStatusOptions: MetricStatus[] = ["HEALTHY", "WATCH", "IMPROVING", "DECLINING", "STALLED", "ARCHIVED"];
+
+const learningTypeOptions = [
+  "CONTENT_PERFORMANCE",
+  "CHANNEL_PERFORMANCE",
+  "SEO_IMPACT",
+  "AEO_IMPACT",
+  "GEO_IMPACT",
+  "AUTHORITY_IMPACT",
+  "COMMUNITY_SIGNAL",
+  "PRODUCT_SIGNAL",
+  "EXECUTION_FAILURE",
+  "STRATEGY_UPDATE",
+  "EXPERIMENT_LEARNING",
+  "CUSTOMER_LANGUAGE",
+  "CUSTOM"
+];
+
+const attributionTypeOptions = ["INFLUENCED", "CAUSED", "CORRELATED", "SUPPORTED", "CONTRADICTED", "UNKNOWN"];
+
+const strategyAdjustmentTypeOptions = [
+  "INCREASE_FOCUS",
+  "DECREASE_FOCUS",
+  "PAUSE_STRATEGY",
+  "CREATE_NEW_PLAN",
+  "UPDATE_POSITIONING",
+  "UPDATE_CONTENT_CLUSTER",
+  "UPDATE_KEYWORD_TARGET",
+  "UPDATE_PERSONA_PRIORITY",
+  "UPDATE_CHANNEL_PRIORITY",
+  "CREATE_EXPERIMENT",
+  "CREATE_FEATURE_REQUEST"
+];
+
+const strategyAdjustmentStatusOptions = ["PROPOSED", "ACCEPTED", "REJECTED", "IMPLEMENTED", "ARCHIVED"];
+
 function priorityTone(priority?: Priority) {
   if (priority === "CRITICAL") return "red";
   if (priority === "HIGH") return "amber";
@@ -362,11 +449,11 @@ function priorityTone(priority?: Priority) {
 }
 
 function statusTone(status?: string) {
-  if (status === "LIVE" || status === "PUBLISHED" || status === "ACTIVE" || status === "COMPLETED" || status === "APPROVED" || status === "RESOLVED") return "green";
+  if (status === "LIVE" || status === "PUBLISHED" || status === "ACTIVE" || status === "COMPLETED" || status === "APPROVED" || status === "RESOLVED" || status === "HEALTHY" || status === "IMPROVING" || status === "ACCEPTED" || status === "IMPLEMENTED") return "green";
   if (status === "IN_PROGRESS" || status === "RESEARCHING" || status === "DRAFT" || status === "READY" || status === "IN_REVIEW") return "blue";
-  if (status === "BLOCKED" || status === "FAILED" || status === "REJECTED") return "red";
+  if (status === "BLOCKED" || status === "FAILED" || status === "REJECTED" || status === "DECLINING") return "red";
   if (status === "SUBMITTED" || status === "QUEUED") return "teal";
-  if (status === "ARCHIVED" || status === "PAUSED" || status === "CANCELLED" || status === "IGNORED") return "slate";
+  if (status === "ARCHIVED" || status === "PAUSED" || status === "CANCELLED" || status === "IGNORED" || status === "STALLED") return "slate";
   return "amber";
 }
 
@@ -411,6 +498,11 @@ function sourceTypeToCollection(sourceType: string): EditableCollection {
     ExecutionBlocker: "executionBlockers",
     ApprovalRequest: "approvalRequests",
     ExecutionResult: "executionResults",
+    Metric: "metrics",
+    Measurement: "measurements",
+    Learning: "learnings",
+    Attribution: "attributions",
+    StrategyAdjustment: "strategyAdjustments",
     Experiment: "experiments",
     Observation: "observations",
     Insight: "insights",
@@ -457,6 +549,11 @@ function collectionToSourceType(collection: EditableCollection) {
     executionBlockers: "ExecutionBlocker",
     approvalRequests: "ApprovalRequest",
     executionResults: "ExecutionResult",
+    metrics: "Metric",
+    measurements: "Measurement",
+    learnings: "Learning",
+    attributions: "Attribution",
+    strategyAdjustments: "StrategyAdjustment",
     experiments: "Experiment",
     insights: "Insight",
     hypotheses: "Hypothesis"
@@ -492,7 +589,12 @@ function eventTypeForCollection(collection: EditableCollection) {
     executionEvidence: "EVIDENCE_ADDED",
     executionBlockers: "EXECUTION_BLOCKED",
     approvalRequests: "APPROVAL_REQUESTED",
-    executionResults: "EXECUTION_RESULT_CREATED"
+    executionResults: "EXECUTION_RESULT_CREATED",
+    metrics: "METRIC_CREATED",
+    measurements: "MEASUREMENT_CREATED",
+    learnings: "LEARNING_CREATED",
+    attributions: "ATTRIBUTION_CREATED",
+    strategyAdjustments: "STRATEGY_ADJUSTMENT_PROPOSED"
   };
   return map[collection] ?? null;
 }
@@ -1160,6 +1262,253 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
     });
   }
 
+  function findMetricForResult(result: AnyRecord) {
+    const metricName = String(result.metricName ?? result.summary ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    return (
+      state.metrics.find((metric) => {
+        const normalizedName = `${metric.name} ${metric.metricType}`.toLowerCase().replace(/[^a-z0-9]/g, "");
+        return normalizedName.includes(metricName) || metricName.includes(normalizedName.slice(0, 10));
+      }) ?? state.metrics[0]
+    );
+  }
+
+  function addMeasurementFromExecutionResultRecord(result: AnyRecord) {
+    const metric = findMetricForResult(result);
+    if (!metric) return;
+    const now = new Date().toISOString();
+    const executionItem = state.executionItems.find((item) => item.id === result.executionItemId);
+    const measurement = createMeasurementFromExecutionResult(result as ExecutionResult, metric as Metric, {
+      workspaceId: activeWorkspaceId,
+      organizationId: orgId,
+      now,
+      planId: executionItem?.planId,
+      objectiveId: executionItem?.objectiveId,
+      campaignId: executionItem?.campaignId
+    });
+    const nextMetric = updateMetricValue(metric as Metric, measurement.value, { now });
+
+    setState((currentState) => ({
+      ...currentState,
+      metrics: currentState.metrics.map((item) => (item.id === nextMetric.id ? nextMetric : item)),
+      measurements: [
+        measurement,
+        ...currentState.measurements.filter((item) => item.executionResultId !== measurement.executionResultId)
+      ],
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "MEASUREMENT_CREATED" as any,
+          sourceType: "Measurement",
+          sourceId: measurement.id,
+          title: `${metric.name} measured`,
+          description: measurement.notes ?? result.summary ?? "",
+          metadata: { generatedBy: "measurement-learning-engine", executionResultId: result.id },
+          severity: "HIGH" as EventSeverity,
+          status: "PROCESSED" as EventStatus,
+          createdAt: now,
+          processedAt: now
+        },
+        ...currentState.events
+      ]
+    }));
+    setActivePage("measurements");
+    setDraft(null);
+  }
+
+  function addLearningFromExecutionResultRecord(result: AnyRecord) {
+    const metric = findMetricForResult(result);
+    const now = new Date().toISOString();
+    const executionItem = state.executionItems.find((item) => item.id === result.executionItemId);
+    const learning = generateLearningFromExecutionResult(result as ExecutionResult, metric as Metric | undefined, {
+      workspaceId: activeWorkspaceId,
+      organizationId: orgId,
+      now,
+      planId: executionItem?.planId,
+      objectiveId: executionItem?.objectiveId
+    });
+    setState((currentState) => ({
+      ...currentState,
+      learnings: [learning, ...currentState.learnings.filter((item) => item.sourceId !== result.id)],
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "LEARNING_CREATED" as any,
+          sourceType: "Learning",
+          sourceId: learning.id,
+          title: `${learning.title} created`,
+          description: learning.summary,
+          metadata: { generatedBy: "measurement-learning-engine", executionResultId: result.id },
+          severity: learning.confidenceScore >= 0.85 ? "CRITICAL" as EventSeverity : "HIGH" as EventSeverity,
+          status: "PROCESSED" as EventStatus,
+          createdAt: now,
+          processedAt: now
+        },
+        ...currentState.events
+      ]
+    }));
+    setActivePage("learnings");
+    setDraft(null);
+  }
+
+  function addLearningFromMeasurementRecord(measurement: AnyRecord) {
+    const metric = state.metrics.find((item) => item.id === measurement.metricId);
+    if (!metric) return;
+    const now = new Date().toISOString();
+    const learning = generateLearningFromMeasurement(measurement as Measurement, metric, {
+      workspaceId: activeWorkspaceId,
+      organizationId: orgId,
+      now,
+      planId: measurement.planId,
+      objectiveId: measurement.objectiveId,
+      executionItemId: measurement.executionItemId
+    });
+    setState((currentState) => ({
+      ...currentState,
+      learnings: [learning, ...currentState.learnings.filter((item) => item.sourceId !== measurement.id)],
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "LEARNING_CREATED" as any,
+          sourceType: "Learning",
+          sourceId: learning.id,
+          title: `${learning.title} created`,
+          description: learning.summary,
+          metadata: { generatedBy: "measurement-learning-engine", measurementId: measurement.id },
+          severity: learning.confidenceScore >= 0.85 ? "CRITICAL" as EventSeverity : "HIGH" as EventSeverity,
+          status: "PROCESSED" as EventStatus,
+          createdAt: now,
+          processedAt: now
+        },
+        ...currentState.events
+      ]
+    }));
+    setActivePage("learnings");
+    setDraft(null);
+  }
+
+  function addAttributionFromMeasurementRecord(measurement: AnyRecord) {
+    const metric = state.metrics.find((item) => item.id === measurement.metricId);
+    if (!metric) return;
+    const now = new Date().toISOString();
+    const attribution = inferAttribution(measurement as Measurement, metric, {
+      workspaceId: activeWorkspaceId,
+      organizationId: orgId,
+      now
+    });
+    setState((currentState) => ({
+      ...currentState,
+      attributions: [attribution, ...currentState.attributions.filter((item) => item.id !== attribution.id)],
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "ATTRIBUTION_CREATED" as any,
+          sourceType: "Attribution",
+          sourceId: attribution.id,
+          title: `${formatEnum(attribution.attributionType)} attribution created`,
+          description: attribution.evidence,
+          metadata: { generatedBy: "measurement-learning-engine", measurementId: measurement.id },
+          severity: "HIGH" as EventSeverity,
+          status: "PROCESSED" as EventStatus,
+          createdAt: now,
+          processedAt: now
+        },
+        ...currentState.events
+      ]
+    }));
+    setActivePage("attributions");
+    setDraft(null);
+  }
+
+  function suggestAdjustmentFromLearningRecord(learning: AnyRecord) {
+    const now = new Date().toISOString();
+    const [adjustment] = suggestStrategyAdjustments([learning as Learning], {
+      workspaceId: activeWorkspaceId,
+      organizationId: orgId,
+      now,
+      planId: learning.planId,
+      objectiveId: learning.objectiveId
+    });
+    if (!adjustment) return;
+    setState((currentState) => ({
+      ...currentState,
+      strategyAdjustments: [
+        adjustment,
+        ...currentState.strategyAdjustments.filter((item) => item.sourceLearningId !== learning.id)
+      ],
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "STRATEGY_ADJUSTMENT_PROPOSED" as any,
+          sourceType: "StrategyAdjustment",
+          sourceId: adjustment.id,
+          title: `${adjustment.title} proposed`,
+          description: adjustment.reasoning,
+          metadata: { generatedBy: "measurement-learning-engine", learningId: learning.id },
+          severity: adjustment.priority === "CRITICAL" ? "CRITICAL" as EventSeverity : "HIGH" as EventSeverity,
+          status: "PENDING" as EventStatus,
+          createdAt: now
+        },
+        ...currentState.events
+      ]
+    }));
+    setActivePage("strategyAdjustments");
+    setDraft(null);
+  }
+
+  function updateStrategyAdjustmentStatusRecord(
+    adjustment: AnyRecord,
+    nextStatus: "ACCEPTED" | "REJECTED" | "IMPLEMENTED"
+  ) {
+    const now = new Date().toISOString();
+    const updater =
+      nextStatus === "IMPLEMENTED"
+        ? applyStrategyAdjustment
+        : nextStatus === "ACCEPTED"
+          ? acceptStrategyAdjustment
+          : rejectStrategyAdjustment;
+    const nextAdjustment = updater(adjustment as StrategyAdjustment, { now });
+    const eventType =
+      nextStatus === "IMPLEMENTED"
+        ? "STRATEGY_ADJUSTMENT_IMPLEMENTED"
+        : nextStatus === "ACCEPTED"
+          ? "STRATEGY_ADJUSTMENT_ACCEPTED"
+          : "STRATEGY_ADJUSTMENT_REJECTED";
+    setState((currentState) => ({
+      ...currentState,
+      strategyAdjustments: currentState.strategyAdjustments.map((item) =>
+        item.id === adjustment.id ? nextAdjustment : item
+      ),
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: eventType as any,
+          sourceType: "StrategyAdjustment",
+          sourceId: adjustment.id,
+          title: `${adjustment.title} ${formatEnum(nextStatus).toLowerCase()}`,
+          description: adjustment.reasoning ?? adjustment.description ?? "",
+          metadata: { generatedBy: "measurement-learning-engine" },
+          severity: nextStatus === "IMPLEMENTED" ? "HIGH" as EventSeverity : "MEDIUM" as EventSeverity,
+          status: "PROCESSED" as EventStatus,
+          createdAt: now,
+          processedAt: now
+        },
+        ...currentState.events
+      ]
+    }));
+  }
+
   function markActionCompleted(actionId: string) {
     const completedAt = new Date().toISOString();
     setState((currentState) => ({
@@ -1226,6 +1575,38 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
       setActivePage("intelligencePipeline");
       setDraft(null);
       resetFilters();
+      return;
+    }
+    if (conversion === "ExecutionResultToMeasurement") {
+      addMeasurementFromExecutionResultRecord(item);
+      return;
+    }
+    if (conversion === "ExecutionResultToLearning") {
+      addLearningFromExecutionResultRecord(item);
+      return;
+    }
+    if (conversion === "MeasurementToLearning") {
+      addLearningFromMeasurementRecord(item);
+      return;
+    }
+    if (conversion === "MeasurementToAttribution") {
+      addAttributionFromMeasurementRecord(item);
+      return;
+    }
+    if (conversion === "LearningToStrategyAdjustment") {
+      suggestAdjustmentFromLearningRecord(item);
+      return;
+    }
+    if (conversion === "AcceptStrategyAdjustment") {
+      updateStrategyAdjustmentStatusRecord(item, "ACCEPTED");
+      return;
+    }
+    if (conversion === "RejectStrategyAdjustment") {
+      updateStrategyAdjustmentStatusRecord(item, "REJECTED");
+      return;
+    }
+    if (conversion === "ImplementStrategyAdjustment") {
+      updateStrategyAdjustmentStatusRecord(item, "IMPLEMENTED");
       return;
     }
     if (conversion === "ObjectiveToPlan") {
@@ -1694,6 +2075,22 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
               onAddEvidence={addEvidenceForExecution}
               onAddBlocker={addBlockerForExecution}
               onRequestApproval={requestApprovalForExecution}
+              onConvertResult={(conversion, item) => handleConversion(conversion, item, "executionResults")}
+            />
+          ) : activePage === "measurements" ? (
+            <MeasurementLearningPage
+              state={state}
+              page={page}
+              activeWorkspaceId={activeWorkspaceId}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              priorityFilter={priorityFilter}
+              setPriorityFilter={setPriorityFilter}
+              onCreate={openCreate}
+              onEdit={openEdit}
+              onConvert={(conversion, item, collection) => handleConversion(conversion, item, collection)}
             />
           ) : activePage === "capabilities" ? (
             <CapabilitiesPage page={page} />
@@ -1832,6 +2229,26 @@ function MissionControl({
     .filter((item) => item.status === "COMPLETED")
     .sort((a, b) => new Date(b.completedAt ?? b.updatedAt).getTime() - new Date(a.completedAt ?? a.updatedAt).getTime())
     .slice(0, 5);
+  const workspaceMetrics = state.metrics.filter((item) => item.workspaceId === activeWorkspaceId);
+  const workspaceMeasurements = state.measurements
+    .filter((item) => item.workspaceId === activeWorkspaceId)
+    .sort((a, b) => new Date(b.measuredAt).getTime() - new Date(a.measuredAt).getTime());
+  const topMeasurementTrends = workspaceMetrics
+    .map((metric) => ({ metric, trend: getMetricTrend(metric, workspaceMeasurements) }))
+    .sort((a, b) => Math.abs(b.trend.changePercent) - Math.abs(a.trend.changePercent))
+    .slice(0, 5);
+  const highConfidenceLearnings = state.learnings
+    .filter((item) => item.workspaceId === activeWorkspaceId && item.confidenceScore >= 0.8)
+    .sort((a, b) => b.confidenceScore - a.confidenceScore)
+    .slice(0, 5);
+  const proposedAdjustments = state.strategyAdjustments
+    .filter((item) => item.workspaceId === activeWorkspaceId && item.status === "PROPOSED")
+    .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))
+    .slice(0, 5);
+  const recentAttributions = state.attributions
+    .filter((item) => item.workspaceId === activeWorkspaceId)
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, 5);
 
   return (
     <div className="space-y-4">
@@ -1867,6 +2284,15 @@ function MissionControl({
         <MetricCard label="Pending Approvals" value={metrics.pendingApprovals} />
         <MetricCard label="Completed This Week" value={metrics.completedExecutionsThisWeek} />
         <MetricCard label="Evidence Added" value={metrics.evidenceAdded} />
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <MetricCard label="Metrics Tracked" value={metrics.metricsTracked} />
+        <MetricCard label="Measurements This Week" value={metrics.measurementsThisWeek} />
+        <MetricCard label="High-Confidence Learnings" value={metrics.highConfidenceLearnings} />
+        <MetricCard label="Pending Adjustments" value={metrics.pendingStrategyAdjustments} />
+        <MetricCard label="Objectives Improved" value={metrics.objectiveMetricsImproved} />
+        <MetricCard label="Prediction Accuracy" value={`${Math.round(metrics.predictionAccuracy * 100)}%`} />
       </section>
 
       <section className="space-y-3">
@@ -2056,6 +2482,77 @@ function MissionControl({
             <Button onClick={() => onNavigate("executions")}>
               <ArrowRight className="h-4 w-4" />
               View Execution Queue
+            </Button>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <CardTitle>Measurement & Learning Engine</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Converts execution results into metric movement, learnings, attribution, and strategy feedback.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => onNavigate("measurements")}>
+              <ArrowRight className="h-4 w-4" />
+              Open measurements
+            </Button>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2">
+            <InlineList
+              title="Metric Movement"
+              items={topMeasurementTrends.map(
+                ({ metric, trend }) =>
+                  `${metric.name}: ${trend.direction} ${trend.changePercent}% (${trend.currentValue} ${metric.unit})`
+              )}
+            />
+            <InlineList
+              title="Recent Measurements"
+              items={workspaceMeasurements
+                .slice(0, 5)
+                .map((item) => `${state.metrics.find((metric) => metric.id === item.metricId)?.name ?? item.metricId}: ${item.notes ?? item.value}`)}
+            />
+            <InlineList
+              title="High-Confidence Learnings"
+              items={highConfidenceLearnings.map((item) => `${item.title} (${Math.round(item.confidenceScore * 100)}%)`)}
+            />
+            <InlineList
+              title="Attribution Signals"
+              items={recentAttributions.map((item) => `${formatEnum(item.attributionType)}: ${item.sourceType} to ${item.targetType}`)}
+            />
+            <InlineList title="Proposed Adjustments" items={proposedAdjustments.map((item) => item.title)} />
+            <InlineList
+              title="Metrics Needing Attention"
+              items={workspaceMetrics
+                .filter((item) => ["WATCH", "DECLINING", "STALLED"].includes(item.status))
+                .map((item) => `${item.name} - ${formatEnum(item.status)}`)}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Measurement Actions</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            <Button variant="outline" onClick={() => onCreate("metrics")}>
+              <Plus className="h-4 w-4" />
+              Add Metric
+            </Button>
+            <Button variant="outline" onClick={() => onCreate("measurements")}>
+              <Plus className="h-4 w-4" />
+              Add Measurement
+            </Button>
+            <Button variant="outline" onClick={() => onCreate("learnings")}>
+              <Plus className="h-4 w-4" />
+              Add Learning
+            </Button>
+            <Button onClick={() => onNavigate("strategyAdjustments")}>
+              <ArrowRight className="h-4 w-4" />
+              Review Strategy Feedback
             </Button>
           </CardContent>
         </Card>
@@ -2942,6 +3439,20 @@ function getConversionOptions(collection: EditableCollection) {
       { label: "Start execution", value: "StartExecution" },
       { label: "Complete execution", value: "CompleteExecution" },
       { label: "Add evidence", value: "AddExecutionEvidence" }
+    ],
+    executionResults: [
+      { label: "Create measurement", value: "ExecutionResultToMeasurement" },
+      { label: "Create learning", value: "ExecutionResultToLearning" }
+    ],
+    measurements: [
+      { label: "Create learning", value: "MeasurementToLearning" },
+      { label: "Create attribution", value: "MeasurementToAttribution" }
+    ],
+    learnings: [{ label: "Suggest adjustment", value: "LearningToStrategyAdjustment" }],
+    strategyAdjustments: [
+      { label: "Accept", value: "AcceptStrategyAdjustment" },
+      { label: "Implement", value: "ImplementStrategyAdjustment" },
+      { label: "Reject", value: "RejectStrategyAdjustment" }
     ]
   };
   return options[collection] ?? [];
@@ -3029,6 +3540,10 @@ function Dashboard({
         <MetricCard label="AI Recommendations Pending" value={metrics.aiRecommendationsPending} />
         <MetricCard label="Knowledge Graph Nodes" value={metrics.knowledgeGraphNodes} />
         <MetricCard label="Knowledge Graph Edges" value={metrics.knowledgeGraphEdges} />
+        <MetricCard label="Metrics Tracked" value={metrics.metricsTracked} />
+        <MetricCard label="Measurements This Week" value={metrics.measurementsThisWeek} />
+        <MetricCard label="High-Confidence Learnings" value={metrics.highConfidenceLearnings} />
+        <MetricCard label="Pending Adjustments" value={metrics.pendingStrategyAdjustments} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
@@ -3528,7 +4043,8 @@ function ExecutionsPage({
   onCompleteExecution,
   onAddEvidence,
   onAddBlocker,
-  onRequestApproval
+  onRequestApproval,
+  onConvertResult
 }: {
   state: PlatformState;
   page: PageDefinition;
@@ -3546,6 +4062,7 @@ function ExecutionsPage({
   onAddEvidence: (item: AnyRecord) => void;
   onAddBlocker: (item: AnyRecord) => void;
   onRequestApproval: (item: AnyRecord) => void;
+  onConvertResult: (conversion: string, item: AnyRecord) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<FilterValue<string>>("ALL");
@@ -3916,10 +4433,46 @@ function ExecutionsPage({
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
-                <InlineList
-                  title="Results"
-                  items={executionResults.map((item) => `${formatEnum(item.resultType)}: ${item.summary}`)}
-                />
+                <div className="rounded-md border border-border bg-background p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase text-muted-foreground">Results</p>
+                    <Button variant="outline" size="sm" onClick={() => onCreate("executionResults")}>
+                      <Plus className="h-4 w-4" />
+                      Result
+                    </Button>
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {(executionResults.length ? executionResults : []).slice(0, 5).map((item) => (
+                      <div key={item.id} className="rounded-md border border-border p-2">
+                        <div className="flex flex-wrap gap-2">
+                          <Badge tone={statusTone(item.resultType)}>{formatEnum(item.resultType)}</Badge>
+                          {item.impactScore !== undefined ? <Badge tone="blue">{item.impactScore}/100</Badge> : null}
+                        </div>
+                        <p className="mt-2 text-sm font-semibold">{item.summary}</p>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.learning}</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onConvertResult("ExecutionResultToMeasurement", item)}
+                          >
+                            Measurement
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onConvertResult("ExecutionResultToLearning", item)}
+                          >
+                            Learning
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    {executionResults.length === 0 ? (
+                      <p className="text-xs leading-5 text-muted-foreground">No execution results captured yet.</p>
+                    ) : null}
+                  </div>
+                </div>
                 <InlineList
                   title="Timeline"
                   items={timeline.slice(0, 8).map((item) => `${formatDate(item.at)} - ${item.label}: ${item.description}`)}
@@ -3929,6 +4482,304 @@ function ExecutionsPage({
           ) : null}
         </Card>
       </section>
+    </div>
+  );
+}
+
+function MeasurementLearningPage({
+  state,
+  page,
+  activeWorkspaceId,
+  searchQuery,
+  setSearchQuery,
+  statusFilter,
+  setStatusFilter,
+  priorityFilter,
+  setPriorityFilter,
+  onCreate,
+  onEdit,
+  onConvert
+}: {
+  state: PlatformState;
+  page: PageDefinition;
+  activeWorkspaceId: string;
+  searchQuery: string;
+  setSearchQuery: (value: string) => void;
+  statusFilter: FilterValue<string>;
+  setStatusFilter: (value: FilterValue<string>) => void;
+  priorityFilter: FilterValue<Priority>;
+  setPriorityFilter: (value: FilterValue<Priority>) => void;
+  onCreate: (collection: EditableCollection) => void;
+  onEdit: (collection: EditableCollection, item: AnyRecord) => void;
+  onConvert: (conversion: string, item: AnyRecord, collection: EditableCollection) => void;
+}) {
+  const metrics = state.metrics.filter((item) => item.workspaceId === activeWorkspaceId);
+  const measurements = state.measurements
+    .filter((item) => item.workspaceId === activeWorkspaceId)
+    .filter((item) => JSON.stringify(item).toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => new Date(b.measuredAt).getTime() - new Date(a.measuredAt).getTime());
+  const learnings = state.learnings
+    .filter((item) => item.workspaceId === activeWorkspaceId)
+    .sort((a, b) => b.confidenceScore - a.confidenceScore);
+  const attributions = state.attributions.filter((item) => item.workspaceId === activeWorkspaceId);
+  const adjustments = state.strategyAdjustments
+    .filter((item) => item.workspaceId === activeWorkspaceId)
+    .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority));
+  const metricTrends = metrics
+    .map((metric) => ({ metric, trend: getMetricTrend(metric, measurements) }))
+    .sort((a, b) => Math.abs(b.trend.changePercent) - Math.abs(a.trend.changePercent));
+  const predictionComparisons = state.predictedOutcomes
+    .filter((item) => item.workspaceId === activeWorkspaceId)
+    .map((prediction) => {
+      const normalizedPredictionMetric = prediction.metricName.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const measurement = measurements.find((item) => {
+        const metric = metrics.find((candidate) => candidate.id === item.metricId);
+        const normalizedMetric = metric?.name.toLowerCase().replace(/[^a-z0-9]/g, "") ?? "";
+        return item.planId === prediction.planId && normalizedMetric.includes(normalizedPredictionMetric.slice(0, 10));
+      });
+      return measurement ? compareMeasurementToPrediction(measurement, prediction) : null;
+    })
+    .filter(Boolean);
+  const averagePredictionAccuracy =
+    predictionComparisons.reduce((total, item) => total + (item?.accuracyScore ?? 0), 0) /
+    Math.max(predictionComparisons.length, 1);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <CardTitle>{page.label}</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">{page.description}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => onCreate("metrics")}>
+              <Plus className="h-4 w-4" />
+              Metric
+            </Button>
+            <Button variant="outline" onClick={() => onCreate("learnings")}>
+              <Plus className="h-4 w-4" />
+              Learning
+            </Button>
+            <Button onClick={() => onCreate("measurements")}>
+              <Plus className="h-4 w-4" />
+              Measurement
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <FocusRow label="Metrics" value={String(metrics.length)} />
+            <FocusRow label="Measurements" value={String(measurements.length)} />
+            <FocusRow label="Learnings" value={String(learnings.length)} />
+            <FocusRow label="Attributions" value={String(attributions.length)} />
+            <FocusRow label="Adjustments" value={String(adjustments.filter((item) => item.status === "PROPOSED").length)} />
+            <FocusRow label="Prediction Accuracy" value={`${Math.round(averagePredictionAccuracy * 100)}%`} />
+          </div>
+          <TableFilters
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            priorityFilter={priorityFilter}
+            setPriorityFilter={setPriorityFilter}
+            hasStatus={false}
+            hasPriority={false}
+          />
+        </CardContent>
+      </Card>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Metric Movement</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {metricTrends.slice(0, 8).map(({ metric, trend }) => (
+              <button
+                key={metric.id}
+                className="w-full rounded-md border border-border bg-background p-3 text-left hover:bg-muted/45"
+                onClick={() => onEdit("metrics", metric)}
+              >
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone={statusTone(trend.status)}>{formatEnum(trend.status)}</Badge>
+                  <Badge tone={trend.direction === "UP" ? "green" : trend.direction === "DOWN" ? "red" : "slate"}>
+                    {trend.direction}
+                  </Badge>
+                  <Badge tone="blue">{formatEnum(metric.metricType)}</Badge>
+                </div>
+                <div className="mt-2 flex items-end justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{metric.name}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{metric.source}</p>
+                  </div>
+                  <p className="text-right text-sm font-semibold">
+                    {trend.currentValue} {metric.unit}
+                    <span className="block text-xs text-muted-foreground">{trend.changePercent}%</span>
+                  </p>
+                </div>
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Measurement Evidence</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-2 md:grid-cols-2">
+            {measurements.slice(0, 8).map((measurement) => {
+              const metric = metrics.find((item) => item.id === measurement.metricId);
+              const execution = state.executionItems.find((item) => item.id === measurement.executionItemId);
+              return (
+                <div key={measurement.id} className="rounded-md border border-border bg-background p-3">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge tone={(measurement.changeValue ?? 0) >= 0 ? "green" : "red"}>
+                      {(measurement.changeValue ?? 0) >= 0 ? "+" : ""}
+                      {measurement.changeValue ?? 0}
+                    </Badge>
+                    {measurement.changePercent !== undefined ? <Badge tone="blue">{measurement.changePercent}%</Badge> : null}
+                  </div>
+                  <p className="mt-2 text-sm font-semibold">{metric?.name ?? measurement.metricId}</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    {measurement.notes ?? execution?.title ?? "Measurement captured."}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={() => onEdit("measurements", measurement)}>
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onConvert("MeasurementToLearning", measurement, "measurements")}
+                    >
+                      Learning
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onConvert("MeasurementToAttribution", measurement, "measurements")}
+                    >
+                      Attribution
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+            {measurements.length === 0 ? (
+              <div className="flex min-h-40 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
+                No measurements match this view.
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Learnings</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {learnings.slice(0, 6).map((learning) => (
+              <div key={learning.id} className="rounded-md border border-border bg-background p-3">
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone="violet">{formatEnum(learning.learningType)}</Badge>
+                  <Badge tone={learning.confidenceScore >= 0.85 ? "green" : "blue"}>
+                    {Math.round(learning.confidenceScore * 100)}%
+                  </Badge>
+                </div>
+                <p className="mt-2 text-sm font-semibold">{learning.title}</p>
+                <p className="mt-1 line-clamp-3 text-xs leading-5 text-muted-foreground">{learning.summary}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => onEdit("learnings", learning)}>
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onConvert("LearningToStrategyAdjustment", learning, "learnings")}
+                  >
+                    Adjustment
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Attribution Graph</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {attributions.slice(0, 6).map((attribution) => (
+              <button
+                key={attribution.id}
+                className="w-full rounded-md border border-border bg-background p-3 text-left hover:bg-muted/45"
+                onClick={() => onEdit("attributions", attribution)}
+              >
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone="teal">{formatEnum(attribution.attributionType)}</Badge>
+                  <Badge tone="blue">{Math.round(attribution.confidenceScore * 100)}%</Badge>
+                </div>
+                <p className="mt-2 text-sm font-semibold">
+                  {attribution.sourceType} to {attribution.targetType}
+                </p>
+                <p className="mt-1 line-clamp-3 text-xs leading-5 text-muted-foreground">{attribution.evidence}</p>
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Strategy Feedback</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {adjustments.slice(0, 6).map((adjustment) => (
+              <div key={adjustment.id} className="rounded-md border border-border bg-background p-3">
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone={statusTone(adjustment.status)}>{formatEnum(adjustment.status)}</Badge>
+                  <Badge tone={priorityTone(adjustment.priority)}>{formatEnum(adjustment.priority)}</Badge>
+                </div>
+                <p className="mt-2 text-sm font-semibold">{adjustment.title}</p>
+                <p className="mt-1 line-clamp-3 text-xs leading-5 text-muted-foreground">{adjustment.reasoning}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => onEdit("strategyAdjustments", adjustment)}>
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onConvert("AcceptStrategyAdjustment", adjustment, "strategyAdjustments")}
+                    disabled={adjustment.status === "ACCEPTED" || adjustment.status === "IMPLEMENTED"}
+                  >
+                    Accept
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onConvert("ImplementStrategyAdjustment", adjustment, "strategyAdjustments")}
+                    disabled={adjustment.status === "IMPLEMENTED"}
+                  >
+                    Implement
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>All Measurements</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RecordTable items={measurements} collection="measurements" onEdit={onEdit} showOpportunity={false} />
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -4709,6 +5560,10 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
   const milestoneOptions = state.milestones.map((milestone) => milestone.id);
   const planItemOptions = state.planItems.map((item) => item.id);
   const executionItemOptions = state.executionItems.map((item) => item.id);
+  const executionResultOptions = state.executionResults.map((item) => item.id);
+  const metricOptions = state.metrics.map((metric) => metric.id);
+  const learningOptions = state.learnings.map((learning) => learning.id);
+  const campaignOptions = state.campaigns.map((campaign) => campaign.id);
   const objectiveOptions = state.objectives.map((objective) => objective.id);
   const commonCore: FieldConfig[] = [
     { key: "title", label: "Title" },
@@ -5162,6 +6017,84 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
     ];
   }
 
+  if (collection === "metrics") {
+    return [
+      { key: "name", label: "Name" },
+      { key: "title", label: "Title" },
+      { key: "description", label: "Description", kind: "textarea" },
+      { key: "metricType", label: "Metric Type", kind: "select", options: metricTypeOptions },
+      { key: "source", label: "Source" },
+      { key: "unit", label: "Unit" },
+      { key: "currentValue", label: "Current Value", kind: "number" },
+      { key: "previousValue", label: "Previous Value", kind: "number" },
+      { key: "targetValue", label: "Target Value", kind: "number" },
+      { key: "status", label: "Status", kind: "select", options: metricStatusOptions },
+      { key: "owner", label: "Owner" }
+    ];
+  }
+
+  if (collection === "measurements") {
+    return [
+      { key: "metricId", label: "Metric", kind: "select", options: ["", ...metricOptions] },
+      { key: "sourceType", label: "Source Type" },
+      { key: "sourceId", label: "Source ID" },
+      { key: "executionItemId", label: "Execution Item", kind: "select", options: ["", ...executionItemOptions] },
+      { key: "executionResultId", label: "Execution Result", kind: "select", options: ["", ...executionResultOptions] },
+      { key: "planId", label: "Plan", kind: "select", options: ["", ...planOptions] },
+      { key: "objectiveId", label: "Objective", kind: "select", options: ["", ...objectiveOptions] },
+      { key: "campaignId", label: "Campaign", kind: "select", options: ["", ...campaignOptions] },
+      { key: "measuredAt", label: "Measured At" },
+      { key: "value", label: "Value", kind: "number" },
+      { key: "previousValue", label: "Previous Value", kind: "number" },
+      { key: "changeValue", label: "Change Value", kind: "number" },
+      { key: "changePercent", label: "Change Percent", kind: "number" },
+      { key: "notes", label: "Notes", kind: "textarea" }
+    ];
+  }
+
+  if (collection === "learnings") {
+    return [
+      { key: "title", label: "Title" },
+      { key: "summary", label: "Summary", kind: "textarea" },
+      { key: "learningType", label: "Learning Type", kind: "select", options: learningTypeOptions },
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" },
+      { key: "sourceType", label: "Source Type" },
+      { key: "sourceId", label: "Source ID" },
+      { key: "metricId", label: "Metric", kind: "select", options: ["", ...metricOptions] },
+      { key: "executionItemId", label: "Execution Item", kind: "select", options: ["", ...executionItemOptions] },
+      { key: "planId", label: "Plan", kind: "select", options: ["", ...planOptions] },
+      { key: "objectiveId", label: "Objective", kind: "select", options: ["", ...objectiveOptions] },
+      { key: "recommendationImpact", label: "Recommendation Impact", kind: "textarea" },
+      { key: "shouldInformFuturePlans", label: "Inform Future Plans" }
+    ];
+  }
+
+  if (collection === "attributions") {
+    return [
+      { key: "sourceType", label: "Source Type" },
+      { key: "sourceId", label: "Source ID" },
+      { key: "targetType", label: "Target Type" },
+      { key: "targetId", label: "Target ID" },
+      { key: "attributionType", label: "Attribution Type", kind: "select", options: attributionTypeOptions },
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" },
+      { key: "evidence", label: "Evidence", kind: "textarea" }
+    ];
+  }
+
+  if (collection === "strategyAdjustments") {
+    return [
+      { key: "title", label: "Title" },
+      { key: "description", label: "Description", kind: "textarea" },
+      { key: "adjustmentType", label: "Adjustment Type", kind: "select", options: strategyAdjustmentTypeOptions },
+      { key: "sourceLearningId", label: "Source Learning", kind: "select", options: ["", ...learningOptions] },
+      { key: "objectiveId", label: "Objective", kind: "select", options: ["", ...objectiveOptions] },
+      { key: "planId", label: "Plan", kind: "select", options: ["", ...planOptions] },
+      { key: "status", label: "Status", kind: "select", options: strategyAdjustmentStatusOptions },
+      { key: "priority", label: "Priority", kind: "select", options: priorityOptions },
+      { key: "reasoning", label: "Reasoning", kind: "textarea" }
+    ];
+  }
+
   if (collection === "planConstraints") {
     return [
       { key: "planId", label: "Plan", kind: "select", options: planOptions },
@@ -5330,6 +6263,11 @@ function ContextBadges({ item }: { item: AnyRecord }) {
     item.workflowType ? ["Workflow", formatEnum(item.workflowType), "violet"] : null,
     item.triggerType ? ["Trigger", formatEnum(item.triggerType), "blue"] : null,
     item.stepType ? ["Step", formatEnum(item.stepType), "teal"] : null,
+    item.metricType ? ["Metric", formatEnum(item.metricType), "blue"] : null,
+    item.unit && item.currentValue !== undefined ? ["Current", `${item.currentValue} ${item.unit}`, "green"] : null,
+    item.learningType ? ["Learning", formatEnum(item.learningType), "violet"] : null,
+    item.attributionType ? ["Attribution", formatEnum(item.attributionType), "teal"] : null,
+    item.adjustmentType ? ["Adjustment", formatEnum(item.adjustmentType), "amber"] : null,
     item.planType ? ["Plan", formatEnum(item.planType), "violet"] : null,
     item.itemType ? ["Item", formatEnum(item.itemType), "teal"] : null,
     item.dependencyType ? ["Dependency", formatEnum(item.dependencyType), "violet"] : null,
