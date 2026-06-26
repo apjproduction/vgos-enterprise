@@ -25,6 +25,92 @@ import {
 
 const prisma = new PrismaClient();
 
+const PlanType = {
+  SEO_PLAN: "SEO_PLAN",
+  AEO_PLAN: "AEO_PLAN",
+  GEO_PLAN: "GEO_PLAN",
+  AUTHORITY_PLAN: "AUTHORITY_PLAN",
+  CONTENT_PLAN: "CONTENT_PLAN",
+  PRODUCT_PLAN: "PRODUCT_PLAN",
+  LAUNCH_PLAN: "LAUNCH_PLAN",
+  COMMUNITY_PLAN: "COMMUNITY_PLAN",
+  REVENUE_PLAN: "REVENUE_PLAN",
+  EXPERIMENT_PLAN: "EXPERIMENT_PLAN"
+} as const;
+
+const PlanStatus = {
+  DRAFT: "DRAFT",
+  ACTIVE: "ACTIVE",
+  PAUSED: "PAUSED",
+  COMPLETED: "COMPLETED",
+  ARCHIVED: "ARCHIVED"
+} as const;
+
+const PlanItemType = {
+  BLOG: "BLOG",
+  FOUNDER_POST: "FOUNDER_POST",
+  COMPANY_POST: "COMPANY_POST",
+  X_THREAD: "X_THREAD",
+  PINTEREST_PIN: "PINTEREST_PIN",
+  DIRECTORY_SUBMISSION: "DIRECTORY_SUBMISSION",
+  BACKLINK_OUTREACH: "BACKLINK_OUTREACH",
+  COMMUNITY_REPLY: "COMMUNITY_REPLY",
+  DEMO: "DEMO",
+  FAQ: "FAQ",
+  LANDING_PAGE_UPDATE: "LANDING_PAGE_UPDATE",
+  EXPERIMENT: "EXPERIMENT",
+  PRODUCT_TASK: "PRODUCT_TASK",
+  INTERNAL_LINK: "INTERNAL_LINK",
+  NEWSLETTER: "NEWSLETTER",
+  YOUTUBE_SCRIPT: "YOUTUBE_SCRIPT"
+} as const;
+
+const PlanItemStatus = {
+  NOT_STARTED: "NOT_STARTED",
+  IN_PROGRESS: "IN_PROGRESS",
+  BLOCKED: "BLOCKED",
+  COMPLETED: "COMPLETED",
+  ARCHIVED: "ARCHIVED"
+} as const;
+
+const PlanDependencyType = {
+  BLOCKS: "BLOCKS",
+  REQUIRES: "REQUIRES",
+  SUPPORTS: "SUPPORTS",
+  SEQUENCED_BEFORE: "SEQUENCED_BEFORE",
+  SHOULD_FOLLOW: "SHOULD_FOLLOW"
+} as const;
+
+const PlanConstraintType = {
+  TIME: "TIME",
+  BUDGET: "BUDGET",
+  CONTENT_NOT_READY: "CONTENT_NOT_READY",
+  DESIGN_NOT_READY: "DESIGN_NOT_READY",
+  PRODUCT_NOT_READY: "PRODUCT_NOT_READY",
+  DATA_NOT_AVAILABLE: "DATA_NOT_AVAILABLE",
+  RESOURCE_LIMITED: "RESOURCE_LIMITED",
+  APPROVAL_REQUIRED: "APPROVAL_REQUIRED"
+} as const;
+
+const ConstraintSeverity = {
+  LOW: "LOW",
+  MEDIUM: "MEDIUM",
+  HIGH: "HIGH",
+  CRITICAL: "CRITICAL"
+} as const;
+
+const PlanningEventType = {
+  PLAN_CREATED: "PLAN_CREATED",
+  PLAN_ACTIVATED: "PLAN_ACTIVATED",
+  PLAN_COMPLETED: "PLAN_COMPLETED",
+  PLAN_ITEM_COMPLETED: "PLAN_ITEM_COMPLETED",
+  PLAN_ITEM_BLOCKED: "PLAN_ITEM_BLOCKED",
+  MILESTONE_COMPLETED: "MILESTONE_COMPLETED",
+  CONSTRAINT_ADDED: "CONSTRAINT_ADDED",
+  OUTCOME_PREDICTED: "OUTCOME_PREDICTED",
+  CAPABILITY_REGISTERED: "CAPABILITY_REGISTERED"
+} as const;
+
 const orgId = "org-apj-labs";
 const workspaceId = "workspace-vidmaker-growth-os";
 
@@ -341,6 +427,7 @@ async function seedMarketObjects(personas: Awaited<ReturnType<typeof seedPersona
   const ecommerce = personas.find((persona) => persona.name === "Ecommerce Brand");
   const saas = personas.find((persona) => persona.name === "SaaS Team");
   const agency = personas.find((persona) => persona.name === "Agency");
+  const educator = personas.find((persona) => persona.name === "Educator");
 
   const conversation = await prisma.conversation.upsert({
     where: { id: "conversation-url-to-video-demand" },
@@ -425,6 +512,38 @@ async function seedMarketObjects(personas: Awaited<ReturnType<typeof seedPersona
       conversationId: conversation.id,
       personas: {
         connect: [saas, agency].filter(Boolean).map((persona) => ({ id: persona!.id }))
+      }
+    }
+  });
+
+  const questionC = await prisma.question.upsert({
+    where: { id: "question-purpose-specific-ai" },
+    update: {
+      opportunityScore: score(8, 7, 8, 9, 4)
+    },
+    create: {
+      ...tenant,
+      id: "question-purpose-specific-ai",
+      title: "What is Purpose-Specific AI?",
+      description:
+        "Category-definition question that explains how VidMaker differs from generic AI video generators.",
+      source: "AEO Question Bank",
+      url: "https://vidmaker.com/purpose-specific-ai",
+      status: Status.RESEARCHING,
+      priority: Priority.HIGH,
+      owner: "AEO Strategy",
+      intent: Intent.INFORMATIONAL,
+      funnelStage: FunnelStage.TOFU,
+      searchVolumeEstimate: 320,
+      businessValueScore: 8,
+      painSeverityScore: 7,
+      competitionScore: 4,
+      trendScore: 8,
+      authorityGapScore: 9,
+      opportunityScore: score(8, 7, 8, 9, 4),
+      conversationId: conversation.id,
+      personas: {
+        connect: [saas, agency, educator].filter(Boolean).map((persona) => ({ id: persona!.id }))
       }
     }
   });
@@ -729,7 +848,7 @@ async function seedMarketObjects(personas: Awaited<ReturnType<typeof seedPersona
     competitors,
     keywords,
     conversation,
-    questions: [questionA, questionB],
+    questions: [questionA, questionB, questionC],
     painPoints: [painPointA, painPointB],
     featureRequest,
     campaign,
@@ -1630,7 +1749,7 @@ async function seedBetaFoundation() {
           searchableText: `${title} ${summary} ${aliases.join(" ")} ${tags.join(" ")}`,
           embeddingProvider: index < 10 ? "mock" : null,
           embeddingModel: index < 10 ? "keyword-similarity-v0" : null,
-          embeddingVector: index < 10 ? [importanceScore / 100, confidenceScore, index / 25] : null,
+          embeddingVector: index < 10 ? [importanceScore / 100, confidenceScore, index / 25] : undefined,
           embeddingUpdatedAt: index < 10 ? dateFromNow(0) : null,
           importanceScore,
           confidenceScore,
@@ -1896,6 +2015,328 @@ async function seedBetaFoundation() {
   );
 }
 
+async function seedPlanningEngine() {
+  const planningPrisma = prisma as PrismaClient & Record<
+    | "plan"
+    | "milestone"
+    | "planItem"
+    | "planDependency"
+    | "planConstraint"
+    | "predictedOutcome"
+    | "resourceCapacity",
+    { upsert: (args: any) => Promise<unknown> }
+  >;
+
+  const planSeeds = [
+    ["plan-vpi-authority", "30-Day Video Production Intelligence Authority Plan", "Build authority around Video Production Intelligence with proof-led content, internal links, and distribution.", PlanType.AUTHORITY_PLAN, PlanStatus.ACTIVE, "objective-own-vpi", 0, 30, "Growth", "VidMaker becomes more visible as the Video Production Intelligence category owner.", 0.84],
+    ["plan-product-hunt-follow-up", "Product Hunt Follow-Up Plan", "Convert launch attention into demos, replies, founder posts, and learning loops.", PlanType.LAUNCH_PLAN, PlanStatus.ACTIVE, "objective-product-hunt", 0, 14, "Community Intelligence", "Launch demand turns into qualified product-page-to-video proof and signups.", 0.82],
+    ["plan-directory-submission", "Directory Submission Plan", "Submit and monitor VidMaker across priority AI video and workflow directories.", PlanType.AUTHORITY_PLAN, PlanStatus.DRAFT, "objective-authority", 1, 21, "Authority", "VidMaker earns directory approvals, backlinks, and AI visibility signals.", 0.78],
+    ["plan-blog-004-010-content", "BLOG-004 to BLOG-010 Content Plan", "Publish the next content cluster around product-page-to-video, Purpose-Specific AI, and workflow automation.", PlanType.CONTENT_PLAN, PlanStatus.ACTIVE, "objective-aeo-geo", 0, 35, "Content", "VidMaker publishes a connected authority cluster with answer-ready assets.", 0.8],
+    ["plan-aeo-geo-visibility", "AEO/GEO Visibility Plan", "Create answer coverage and entity relationships for AEO and GEO visibility.", PlanType.AEO_PLAN, PlanStatus.DRAFT, "objective-aeo-geo", 2, 28, "Search Strategy", "VidMaker answers more AEO questions and strengthens entity association.", 0.76]
+  ] as const;
+
+  await Promise.all(
+    planSeeds.map(([id, title, description, planType, status, objectiveId, startOffset, endOffset, owner, expectedOutcome, confidenceScore]) =>
+      planningPrisma.plan.upsert({
+        where: { id },
+        update: {
+          title,
+          description,
+          planType,
+          status,
+          objectiveId,
+          startDate: dateFromNow(startOffset),
+          endDate: dateFromNow(endOffset),
+          owner,
+          expectedOutcome,
+          confidenceScore
+        },
+        create: {
+          ...tenant,
+          id,
+          title,
+          description,
+          planType,
+          status,
+          objectiveId,
+          startDate: dateFromNow(startOffset),
+          endDate: dateFromNow(endOffset),
+          owner,
+          expectedOutcome,
+          confidenceScore
+        }
+      })
+    )
+  );
+
+  const milestoneSeeds = [
+    ["milestone-publish-blog-004", "plan-blog-004-010-content", "Publish BLOG-004", "Publish product-page-to-video proof article.", 4, PlanItemStatus.IN_PROGRESS, Priority.CRITICAL, "Content", "Creates the core proof asset.", 1],
+    ["milestone-publish-blog-005", "plan-blog-004-010-content", "Publish BLOG-005", "Publish comparison article on generic AI video cleanup.", 9, PlanItemStatus.NOT_STARTED, Priority.HIGH, "Content", "Captures competitor dissatisfaction.", 2],
+    ["milestone-submit-10-directories", "plan-directory-submission", "Submit 10 directories", "Submit VidMaker to priority AI tool directories.", 12, PlanItemStatus.NOT_STARTED, Priority.HIGH, "Authority", "Builds referring domain and AI visibility momentum.", 1],
+    ["milestone-create-product-demo", "plan-product-hunt-follow-up", "Create product-page-to-video demo", "Create demo showing product page URL to ready-to-post video.", 3, PlanItemStatus.IN_PROGRESS, Priority.CRITICAL, "Growth", "Provides proof for launch follow-up.", 1],
+    ["milestone-add-internal-links", "plan-vpi-authority", "Add internal links between BLOG-002, BLOG-003, BLOG-004", "Connect the Video Production Intelligence content cluster.", 7, PlanItemStatus.NOT_STARTED, Priority.HIGH, "SEO Strategy", "Strengthens authority cluster.", 2],
+    ["milestone-publish-10-pins", "plan-product-hunt-follow-up", "Publish 10 Pinterest pins", "Turn proof snippets into Pinterest assets.", 11, PlanItemStatus.NOT_STARTED, Priority.MEDIUM, "Content", "Expands visual distribution.", 3],
+    ["milestone-founder-authority", "plan-vpi-authority", "Create founder authority post", "Publish founder post on Purpose-Specific AI and Video Production Intelligence.", 5, PlanItemStatus.NOT_STARTED, Priority.HIGH, "Tom Promise", "Builds category narrative.", 1],
+    ["milestone-aeo-faq", "plan-aeo-geo-visibility", "Create AEO FAQ set", "Publish FAQ answers for product-page-to-video and VPI questions.", 10, PlanItemStatus.NOT_STARTED, Priority.HIGH, "Search Strategy", "Improves answer engine readiness.", 1],
+    ["milestone-geo-entities", "plan-aeo-geo-visibility", "Strengthen GEO entity coverage", "Connect VidMaker, Purpose-Specific AI, and Product Page to Video entities.", 16, PlanItemStatus.NOT_STARTED, Priority.HIGH, "Search Strategy", "Improves entity confidence.", 2],
+    ["milestone-blog-010", "plan-blog-004-010-content", "Publish BLOG-010", "Complete the BLOG-004 to BLOG-010 cluster.", 32, PlanItemStatus.NOT_STARTED, Priority.MEDIUM, "Content", "Completes the authority cluster.", 5]
+  ] as const;
+
+  await Promise.all(
+    milestoneSeeds.map(([id, planId, title, description, dueOffset, status, priority, owner, expectedImpact, order]) =>
+      planningPrisma.milestone.upsert({
+        where: { id },
+        update: {
+          planId,
+          title,
+          description,
+          dueDate: dateFromNow(dueOffset),
+          status,
+          priority,
+          owner,
+          expectedImpact,
+          order
+        },
+        create: {
+          ...tenant,
+          id,
+          planId,
+          title,
+          description,
+          dueDate: dateFromNow(dueOffset),
+          status,
+          priority,
+          owner,
+          expectedImpact,
+          order
+        }
+      })
+    )
+  );
+
+  const planItemSeeds = [
+    ["plan-vpi-authority", "milestone-founder-authority", "Draft founder authority post", PlanItemType.FOUNDER_POST, "RecommendedAction", "action-24", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Tom Promise", 88, 4, 2],
+    ["plan-vpi-authority", "milestone-founder-authority", "Publish founder authority post", PlanItemType.FOUNDER_POST, "RecommendedAction", "kernel-action-11", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Tom Promise", 92, 3, 5],
+    ["plan-vpi-authority", "milestone-add-internal-links", "Audit BLOG-002 internal links", PlanItemType.INTERNAL_LINK, "ContentAsset", "content-blog-002", Priority.HIGH, PlanItemStatus.NOT_STARTED, "SEO Strategy", 78, 2, 6],
+    ["plan-vpi-authority", "milestone-add-internal-links", "Audit BLOG-003 internal links", PlanItemType.INTERNAL_LINK, "ContentAsset", "content-blog-003", Priority.HIGH, PlanItemStatus.NOT_STARTED, "SEO Strategy", 76, 2, 6],
+    ["plan-vpi-authority", "milestone-add-internal-links", "Add links into BLOG-004", PlanItemType.INTERNAL_LINK, "ContentAsset", "content-blog-004", Priority.HIGH, PlanItemStatus.BLOCKED, "SEO Strategy", 86, 2, 8],
+    ["plan-vpi-authority", "milestone-add-internal-links", "Update VPI landing page references", PlanItemType.LANDING_PAGE_UPDATE, "Entity", "entity-video-production-intelligence", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Growth", 84, 4, 10],
+    ["plan-vpi-authority", "milestone-founder-authority", "Create category definition FAQ", PlanItemType.FAQ, "Question", "question-video-production-intelligence", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Search Strategy", 82, 3, 11],
+    ["plan-vpi-authority", "milestone-add-internal-links", "Publish VPI newsletter section", PlanItemType.NEWSLETTER, "ContentAsset", "content-blog-002", Priority.MEDIUM, PlanItemStatus.NOT_STARTED, "Content", 68, 3, 14],
+    ["plan-product-hunt-follow-up", "milestone-create-product-demo", "Script product-page-to-video demo", PlanItemType.DEMO, "Question", "question-product-page-to-video", Priority.CRITICAL, PlanItemStatus.IN_PROGRESS, "Growth", 96, 5, 1],
+    ["plan-product-hunt-follow-up", "milestone-create-product-demo", "Record product-page-to-video demo", PlanItemType.DEMO, "RecommendedAction", "action-01", Priority.CRITICAL, PlanItemStatus.BLOCKED, "Growth", 98, 6, 3],
+    ["plan-product-hunt-follow-up", "milestone-create-product-demo", "Create demo landing page section", PlanItemType.LANDING_PAGE_UPDATE, "Entity", "entity-product-page-to-video", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Growth", 86, 4, 5],
+    ["plan-product-hunt-follow-up", "milestone-publish-10-pins", "Create Pinterest proof pin 1", PlanItemType.PINTEREST_PIN, "ContentAsset", "content-blog-004", Priority.MEDIUM, PlanItemStatus.NOT_STARTED, "Design System", 55, 1, 6],
+    ["plan-product-hunt-follow-up", "milestone-publish-10-pins", "Create Pinterest proof pin 2", PlanItemType.PINTEREST_PIN, "ContentAsset", "content-blog-004", Priority.MEDIUM, PlanItemStatus.NOT_STARTED, "Design System", 55, 1, 7],
+    ["plan-product-hunt-follow-up", "milestone-publish-10-pins", "Create Pinterest proof pin 3", PlanItemType.PINTEREST_PIN, "ContentAsset", "content-blog-004", Priority.MEDIUM, PlanItemStatus.NOT_STARTED, "Design System", 55, 1, 8],
+    ["plan-product-hunt-follow-up", "milestone-publish-10-pins", "Reply to top Product Hunt comments", PlanItemType.COMMUNITY_REPLY, "Observation", "observation-01", Priority.CRITICAL, PlanItemStatus.NOT_STARTED, "Community Intelligence", 92, 3, 4],
+    ["plan-product-hunt-follow-up", "milestone-create-product-demo", "Publish X thread from demo", PlanItemType.X_THREAD, "RecommendedAction", "action-07", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Content", 78, 3, 6],
+    ["plan-directory-submission", "milestone-submit-10-directories", "Finalize directory category copy", PlanItemType.DIRECTORY_SUBMISSION, "DirectorySubmission", "directory-ai-video-tools", Priority.HIGH, PlanItemStatus.IN_PROGRESS, "Authority", 82, 3, 2],
+    ["plan-directory-submission", "milestone-submit-10-directories", "Submit Futurepedia listing", PlanItemType.DIRECTORY_SUBMISSION, "DirectorySubmission", "directory-ai-video-tools", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Authority", 84, 2, 5],
+    ["plan-directory-submission", "milestone-submit-10-directories", "Submit Toolify listing", PlanItemType.DIRECTORY_SUBMISSION, "DirectorySubmission", "directory-ai-video-tools", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Authority", 84, 2, 6],
+    ["plan-directory-submission", "milestone-submit-10-directories", "Submit There's An AI For That listing", PlanItemType.DIRECTORY_SUBMISSION, "DirectorySubmission", "directory-ai-video-tools", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Authority", 80, 2, 7],
+    ["plan-directory-submission", "milestone-submit-10-directories", "Follow up on AI Video Tools backlink", PlanItemType.BACKLINK_OUTREACH, "Backlink", "backlink-ai-video-tools-directory", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Authority", 76, 2, 9],
+    ["plan-directory-submission", "milestone-submit-10-directories", "Track directory approvals", PlanItemType.BACKLINK_OUTREACH, "DirectorySubmission", "directory-ai-video-tools", Priority.MEDIUM, PlanItemStatus.NOT_STARTED, "Authority", 66, 2, 13],
+    ["plan-blog-004-010-content", "milestone-publish-blog-004", "Finish BLOG-004 draft", PlanItemType.BLOG, "ContentAsset", "content-blog-004", Priority.CRITICAL, PlanItemStatus.IN_PROGRESS, "Content", 96, 5, 2],
+    ["plan-blog-004-010-content", "milestone-publish-blog-004", "Add BLOG-004 proof examples", PlanItemType.BLOG, "AIRecommendation", "ai-rec-01", Priority.CRITICAL, PlanItemStatus.BLOCKED, "Content", 94, 4, 3],
+    ["plan-blog-004-010-content", "milestone-publish-blog-004", "Publish BLOG-004", PlanItemType.BLOG, "RecommendedAction", "action-03", Priority.CRITICAL, PlanItemStatus.NOT_STARTED, "Content", 98, 2, 4],
+    ["plan-blog-004-010-content", "milestone-publish-blog-005", "Outline BLOG-005", PlanItemType.BLOG, "Pattern", "pattern-02", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Content", 84, 3, 7],
+    ["plan-blog-004-010-content", "milestone-publish-blog-005", "Publish BLOG-005", PlanItemType.BLOG, "ContentAsset", "content-blog-005", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Content", 88, 4, 9],
+    ["plan-blog-004-010-content", "milestone-blog-010", "Create BLOG-006 brief", PlanItemType.BLOG, "Keyword", "keyword-ai-video-production", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Content", 74, 3, 12],
+    ["plan-blog-004-010-content", "milestone-blog-010", "Create BLOG-007 brief", PlanItemType.BLOG, "Keyword", "keyword-video-workflow-automation", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Content", 74, 3, 15],
+    ["plan-blog-004-010-content", "milestone-blog-010", "Create BLOG-008 brief", PlanItemType.BLOG, "Entity", "entity-purpose-specific-ai", Priority.MEDIUM, PlanItemStatus.NOT_STARTED, "Content", 70, 3, 18],
+    ["plan-blog-004-010-content", "milestone-blog-010", "Create BLOG-009 brief", PlanItemType.BLOG, "Entity", "entity-purpose-engines", Priority.MEDIUM, PlanItemStatus.NOT_STARTED, "Content", 68, 3, 22],
+    ["plan-blog-004-010-content", "milestone-blog-010", "Create BLOG-010 brief", PlanItemType.BLOG, "Question", "question-purpose-specific-ai", Priority.MEDIUM, PlanItemStatus.NOT_STARTED, "Content", 66, 3, 28],
+    ["plan-aeo-geo-visibility", "milestone-aeo-faq", "Answer product-page-to-video FAQ", PlanItemType.FAQ, "Question", "question-product-page-to-video", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Search Strategy", 86, 2, 5],
+    ["plan-aeo-geo-visibility", "milestone-aeo-faq", "Answer VPI FAQ", PlanItemType.FAQ, "Question", "question-video-production-intelligence", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Search Strategy", 88, 2, 6],
+    ["plan-aeo-geo-visibility", "milestone-aeo-faq", "Answer Purpose-Specific AI FAQ", PlanItemType.FAQ, "Question", "question-purpose-specific-ai", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Search Strategy", 82, 2, 8],
+    ["plan-aeo-geo-visibility", "milestone-geo-entities", "Update VidMaker entity page", PlanItemType.LANDING_PAGE_UPDATE, "Entity", "entity-vidmaker", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Search Strategy", 78, 3, 12],
+    ["plan-aeo-geo-visibility", "milestone-geo-entities", "Update Product Page to Video entity page", PlanItemType.LANDING_PAGE_UPDATE, "Entity", "entity-product-page-to-video", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Search Strategy", 80, 3, 14],
+    ["plan-aeo-geo-visibility", "milestone-geo-entities", "Create company post on Purpose Engines", PlanItemType.COMPANY_POST, "Entity", "entity-purpose-engines", Priority.MEDIUM, PlanItemStatus.NOT_STARTED, "Content", 64, 2, 15],
+    ["plan-aeo-geo-visibility", "milestone-aeo-faq", "Create YouTube script from FAQ set", PlanItemType.YOUTUBE_SCRIPT, "Question", "question-video-production-intelligence", Priority.MEDIUM, PlanItemStatus.NOT_STARTED, "Content", 62, 4, 19],
+    ["plan-aeo-geo-visibility", "milestone-geo-entities", "Run answer coverage experiment", PlanItemType.EXPERIMENT, "Objective", "objective-aeo-geo", Priority.HIGH, PlanItemStatus.NOT_STARTED, "Search Strategy", 82, 5, 22]
+  ] as const;
+
+  await Promise.all(
+    planItemSeeds.map(([planId, milestoneId, title, itemType, sourceType, sourceId, priority, status, owner, estimatedImpactScore, estimatedEffortScore, dueOffset], index) =>
+      planningPrisma.planItem.upsert({
+        where: { id: `plan-item-${String(index + 1).padStart(2, "0")}` },
+        update: {
+          planId,
+          milestoneId,
+          title,
+          description: title,
+          itemType,
+          sourceType,
+          sourceId,
+          priority,
+          status,
+          owner,
+          dueDate: dateFromNow(dueOffset),
+          estimatedImpactScore,
+          estimatedEffortScore
+        },
+        create: {
+          ...tenant,
+          id: `plan-item-${String(index + 1).padStart(2, "0")}`,
+          planId,
+          milestoneId,
+          title,
+          description: title,
+          itemType,
+          sourceType,
+          sourceId,
+          priority,
+          status,
+          owner,
+          dueDate: dateFromNow(dueOffset),
+          estimatedImpactScore,
+          estimatedEffortScore
+        }
+      })
+    )
+  );
+
+  const dependencySeeds = [
+    ["plan-vpi-authority", "plan-item-25", "plan-item-05", PlanDependencyType.SEQUENCED_BEFORE, "BLOG-004 should be published before internal links point to it."],
+    ["plan-product-hunt-follow-up", "plan-item-10", "plan-item-16", PlanDependencyType.BLOCKS, "Product page demo should be created before demo promotion."],
+    ["plan-directory-submission", "plan-item-17", "plan-item-18", PlanDependencyType.REQUIRES, "Directory copy should be finalized before directory submissions."],
+    ["plan-directory-submission", "plan-item-17", "plan-item-19", PlanDependencyType.REQUIRES, "Directory copy should be finalized before Toolify submission."],
+    ["plan-blog-004-010-content", "plan-item-24", "plan-item-25", PlanDependencyType.BLOCKS, "Proof examples are required before BLOG-004 publishing."],
+    ["plan-blog-004-010-content", "plan-item-25", "plan-item-27", PlanDependencyType.SHOULD_FOLLOW, "BLOG-005 should follow the product-page-to-video proof article."],
+    ["plan-aeo-geo-visibility", "plan-item-34", "plan-item-40", PlanDependencyType.SUPPORTS, "VPI FAQ coverage supports the answer coverage experiment."],
+    ["plan-product-hunt-follow-up", "plan-item-10", "plan-item-15", PlanDependencyType.BLOCKS, "Community replies should include the demo proof link."]
+  ] as const;
+
+  await Promise.all(
+    dependencySeeds.map(([planId, fromItemId, toItemId, dependencyType, reason], index) =>
+      planningPrisma.planDependency.upsert({
+        where: { id: `plan-dependency-${String(index + 1).padStart(2, "0")}` },
+        update: { planId, fromItemId, toItemId, dependencyType, reason },
+        create: {
+          ...tenant,
+          id: `plan-dependency-${String(index + 1).padStart(2, "0")}`,
+          planId,
+          fromItemId,
+          toItemId,
+          dependencyType,
+          reason
+        }
+      })
+    )
+  );
+
+  const constraintSeeds = [
+    ["plan-product-hunt-follow-up", "Product demo not ready", "Product-page-to-video demo needs final proof assets before promotion.", PlanConstraintType.PRODUCT_NOT_READY, ConstraintSeverity.CRITICAL],
+    ["plan-vpi-authority", "Limited founder time", "Founder publishing capacity is capped this week.", PlanConstraintType.RESOURCE_LIMITED, ConstraintSeverity.HIGH],
+    ["plan-blog-004-010-content", "Need graphics for BLOG-004", "BLOG-004 requires diagrams and proof visuals.", PlanConstraintType.DESIGN_NOT_READY, ConstraintSeverity.HIGH],
+    ["plan-blog-004-010-content", "Need proof examples for product-page-to-video", "Article requires source-to-output proof examples.", PlanConstraintType.CONTENT_NOT_READY, ConstraintSeverity.CRITICAL],
+    ["plan-directory-submission", "Directory approvals may lag", "Submission review time may delay backlink outcomes.", PlanConstraintType.APPROVAL_REQUIRED, ConstraintSeverity.MEDIUM]
+  ] as const;
+
+  await Promise.all(
+    constraintSeeds.map(([planId, title, description, constraintType, severity], index) =>
+      planningPrisma.planConstraint.upsert({
+        where: { id: `plan-constraint-${String(index + 1).padStart(2, "0")}` },
+        update: { planId, title, description, constraintType, severity },
+        create: {
+          ...tenant,
+          id: `plan-constraint-${String(index + 1).padStart(2, "0")}`,
+          planId,
+          title,
+          description,
+          constraintType,
+          severity
+        }
+      })
+    )
+  );
+
+  const predictedOutcomeSeeds = [
+    ["plan-directory-submission", "directory approvals", 10, 0.78, "+10 directory submissions are likely if copy is finalized this week."],
+    ["plan-directory-submission", "potential backlinks", 5, 0.7, "+5 potential backlinks from approved listings and follow-ups."],
+    ["plan-blog-004-010-content", "authority articles", 4, 0.74, "+4 authority articles from the BLOG-004 to BLOG-010 cluster."],
+    ["plan-product-hunt-follow-up", "social content assets", 20, 0.72, "+20 social content assets from demo clips, Pinterest pins, and X threads."],
+    ["plan-product-hunt-follow-up", "product demo assets", 3, 0.8, "+3 product demo assets from product-page-to-video proof work."],
+    ["plan-aeo-geo-visibility", "AEO questions answered", 10, 0.76, "+10 AEO questions answered through FAQ and landing page updates."],
+    ["plan-vpi-authority", "AI mentions", 6, 0.64, "Improved entity clarity should lift AI mentions over time."],
+    ["plan-product-hunt-follow-up", "signups", 25, 0.58, "Demo-led follow-up should create a modest signup lift."]
+  ] as const;
+
+  await Promise.all(
+    predictedOutcomeSeeds.map(([planId, metricName, predictedValue, confidenceScore, rationale], index) =>
+      planningPrisma.predictedOutcome.upsert({
+        where: { id: `predicted-outcome-${String(index + 1).padStart(2, "0")}` },
+        update: { planId, metricName, predictedValue, confidenceScore, rationale },
+        create: {
+          ...tenant,
+          id: `predicted-outcome-${String(index + 1).padStart(2, "0")}`,
+          planId,
+          metricName,
+          predictedValue,
+          confidenceScore,
+          rationale
+        }
+      })
+    )
+  );
+
+  const resourceSeeds = [
+    ["Tom Promise", "Founder", 20, "Strategy and publishing", "Protect founder time for authority posts, launch follow-up, and final approvals."],
+    ["Content System", "AI-assisted", 40, "Content production", "Drafts, outlines, FAQs, newsletters, scripts, and social repurposing."],
+    ["Design System", "AI-assisted", 15, "Graphics and carousel assets", "Pinterest pins, article graphics, proof visuals, and social carousels."]
+  ] as const;
+
+  await Promise.all(
+    resourceSeeds.map(([owner, role, weeklyHours, focusArea, notes], index) =>
+      planningPrisma.resourceCapacity.upsert({
+        where: { id: `resource-capacity-${String(index + 1).padStart(2, "0")}` },
+        update: { owner, role, weeklyHours, focusArea, notes },
+        create: {
+          ...tenant,
+          id: `resource-capacity-${String(index + 1).padStart(2, "0")}`,
+          owner,
+          role,
+          weeklyHours,
+          focusArea,
+          notes
+        }
+      })
+    )
+  );
+
+  const planEvents = [
+    [PlanningEventType.PLAN_CREATED, "Plan", "plan-vpi-authority", "Planning Engine created the VPI authority plan.", EventSeverity.HIGH],
+    [PlanningEventType.PLAN_ACTIVATED, "Plan", "plan-vpi-authority", "VPI authority plan activated.", EventSeverity.HIGH],
+    [PlanningEventType.PLAN_ITEM_BLOCKED, "PlanItem", "plan-item-10", "Product-page-to-video demo recording is blocked.", EventSeverity.CRITICAL],
+    [PlanningEventType.CONSTRAINT_ADDED, "PlanConstraint", "plan-constraint-01", "Product demo readiness constraint added.", EventSeverity.CRITICAL],
+    [PlanningEventType.OUTCOME_PREDICTED, "PredictedOutcome", "predicted-outcome-01", "Directory approval outcome predicted.", EventSeverity.MEDIUM],
+    [PlanningEventType.CAPABILITY_REGISTERED, "Capability", "planning-engine", "Planning Engine capability registered.", EventSeverity.MEDIUM]
+  ] as const;
+
+  await Promise.all(
+    planEvents.map(([eventType, sourceType, sourceId, title, severity], index) =>
+      prisma.event.upsert({
+        where: { id: `planning-event-${String(index + 1).padStart(2, "0")}` },
+        update: { eventType: eventType as any, sourceType, sourceId, title, severity },
+        create: {
+          ...tenant,
+          id: `planning-event-${String(index + 1).padStart(2, "0")}`,
+          eventType: eventType as any,
+          sourceType,
+          sourceId,
+          title,
+          description: title,
+          metadata: { capability: "planning-engine" },
+          severity,
+          status: EventStatus.PROCESSED,
+          processedAt: new Date()
+        }
+      })
+    )
+  );
+}
+
 async function seedEvents() {
   const events = [
     [EventType.OBSERVATION_CREATED, "Observation", "observation-url-product-comments", "Product Hunt comment asked whether VidMaker can turn product pages into ready-to-post videos.", EventSeverity.CRITICAL],
@@ -1926,7 +2367,7 @@ async function seedEvents() {
         where: { id: `event-${String(index + 1).padStart(2, "0")}` },
         update: {
           title,
-          eventType,
+          eventType: eventType as any,
           severity
         },
         create: {
@@ -1954,6 +2395,18 @@ async function seedEvents() {
 }
 
 async function seedRecommendedActions() {
+  const synthesia = await prisma.competitor.findUnique({
+    where: {
+      workspaceId_name: {
+        workspaceId,
+        name: "Synthesia"
+      }
+    },
+    select: {
+      id: true
+    }
+  });
+
   const actions = [
     [
       ActionType.CREATE_DEMO,
@@ -1988,16 +2441,18 @@ async function seedRecommendedActions() {
   await Promise.all(
     actions.map(
       ([actionType, sourceType, sourceId, title, priority, relationField], index) => {
+        const relationSourceId = relationField === "competitorId" ? synthesia?.id : sourceId;
         const relation =
-          relationField.length > 0
+          relationField.length > 0 && relationSourceId
             ? {
-                [relationField]: sourceId
+                [relationField]: relationSourceId
               }
             : {};
 
         return prisma.recommendedAction.upsert({
           where: { id: `action-${String(index + 1).padStart(2, "0")}` },
           update: {
+            ...relation,
             title,
             actionType,
             priority
@@ -2038,6 +2493,7 @@ async function main() {
   await seedIntelligenceObjects();
   await seedKernel();
   await seedBetaFoundation();
+  await seedPlanningEngine();
   await seedEvents();
   await seedRecommendedActions();
 }

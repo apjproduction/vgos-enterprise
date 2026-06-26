@@ -18,6 +18,13 @@ export type KernelArtifactType =
   | "Workflow"
   | "WorkflowRun"
   | "AgentHandoff"
+  | "Plan"
+  | "Milestone"
+  | "PlanItem"
+  | "PlanDependency"
+  | "PlanConstraint"
+  | "PredictedOutcome"
+  | "ResourceCapacity"
   | "AIRecommendation"
   | "RecommendedAction"
   | "Event";

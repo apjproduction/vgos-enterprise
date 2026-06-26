@@ -90,7 +90,16 @@ export type EventType =
   | "KEY_RESULT_UPDATED"
   | "AGENT_RUN_STARTED"
   | "AGENT_RUN_COMPLETED"
-  | "HIGH_IMPACT_ACTION_SELECTED";
+  | "HIGH_IMPACT_ACTION_SELECTED"
+  | "PLAN_CREATED"
+  | "PLAN_ACTIVATED"
+  | "PLAN_COMPLETED"
+  | "PLAN_ITEM_COMPLETED"
+  | "PLAN_ITEM_BLOCKED"
+  | "MILESTONE_COMPLETED"
+  | "CONSTRAINT_ADDED"
+  | "OUTCOME_PREDICTED"
+  | "CAPABILITY_REGISTERED";
 
 export type EventSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type EventStatus = "PENDING" | "PROCESSED" | "DISMISSED";
@@ -206,6 +215,59 @@ export type WorkflowStepType =
   | "CREATE_TASK"
   | "LINK_KNOWLEDGE_OBJECTS"
   | "NOTIFY_MISSION_CONTROL";
+
+export type PlanType =
+  | "SEO_PLAN"
+  | "AEO_PLAN"
+  | "GEO_PLAN"
+  | "AUTHORITY_PLAN"
+  | "CONTENT_PLAN"
+  | "PRODUCT_PLAN"
+  | "LAUNCH_PLAN"
+  | "COMMUNITY_PLAN"
+  | "REVENUE_PLAN"
+  | "EXPERIMENT_PLAN";
+
+export type PlanStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "COMPLETED" | "ARCHIVED";
+
+export type PlanItemType =
+  | "BLOG"
+  | "FOUNDER_POST"
+  | "COMPANY_POST"
+  | "X_THREAD"
+  | "PINTEREST_PIN"
+  | "DIRECTORY_SUBMISSION"
+  | "BACKLINK_OUTREACH"
+  | "COMMUNITY_REPLY"
+  | "DEMO"
+  | "FAQ"
+  | "LANDING_PAGE_UPDATE"
+  | "EXPERIMENT"
+  | "PRODUCT_TASK"
+  | "INTERNAL_LINK"
+  | "NEWSLETTER"
+  | "YOUTUBE_SCRIPT";
+
+export type PlanItemStatus = "NOT_STARTED" | "IN_PROGRESS" | "BLOCKED" | "COMPLETED" | "ARCHIVED";
+
+export type PlanDependencyType =
+  | "BLOCKS"
+  | "REQUIRES"
+  | "SUPPORTS"
+  | "SEQUENCED_BEFORE"
+  | "SHOULD_FOLLOW";
+
+export type PlanConstraintType =
+  | "TIME"
+  | "BUDGET"
+  | "CONTENT_NOT_READY"
+  | "DESIGN_NOT_READY"
+  | "PRODUCT_NOT_READY"
+  | "DATA_NOT_AVAILABLE"
+  | "RESOURCE_LIMITED"
+  | "APPROVAL_REQUIRED";
+
+export type ConstraintSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
 export type Organization = {
   id: string;
@@ -659,6 +721,79 @@ export type AgentHandoff = {
   completedAt?: string;
 };
 
+export type Plan = ScopedRecord & {
+  title: string;
+  description: string;
+  planType: PlanType;
+  status: PlanStatus;
+  objectiveId?: string;
+  startDate: string;
+  endDate: string;
+  owner: string;
+  expectedOutcome: string;
+  confidenceScore: number;
+};
+
+export type Milestone = ScopedRecord & {
+  planId: string;
+  title: string;
+  description: string;
+  dueDate: string;
+  status: PlanItemStatus;
+  priority: Priority;
+  owner: string;
+  expectedImpact: string;
+  order: number;
+};
+
+export type PlanItem = ScopedRecord & {
+  planId: string;
+  milestoneId?: string;
+  title: string;
+  description: string;
+  itemType: PlanItemType;
+  sourceType?: string;
+  sourceId?: string;
+  priority: Priority;
+  status: PlanItemStatus;
+  owner: string;
+  dueDate: string;
+  estimatedImpactScore: number;
+  estimatedEffortScore: number;
+};
+
+export type PlanDependency = ScopedRecord & {
+  planId: string;
+  fromItemId: string;
+  toItemId: string;
+  dependencyType: PlanDependencyType;
+  reason: string;
+};
+
+export type PlanConstraint = ScopedRecord & {
+  planId: string;
+  title: string;
+  description: string;
+  constraintType: PlanConstraintType;
+  severity: ConstraintSeverity;
+};
+
+export type PredictedOutcome = ScopedRecord & {
+  planId: string;
+  metricName: string;
+  predictedValue: number;
+  confidenceScore: number;
+  rationale: string;
+};
+
+export type ResourceCapacity = ScopedRecord & {
+  owner: string;
+  role: string;
+  weeklyHours: number;
+  focusArea: string;
+  notes: string;
+};
+
 export type BriefingSection = {
   id: string;
   title: string;
@@ -706,6 +841,13 @@ export type PlatformState = {
   workflowSteps: WorkflowStep[];
   workflowRuns: WorkflowRun[];
   agentHandoffs: AgentHandoff[];
+  plans: Plan[];
+  milestones: Milestone[];
+  planItems: PlanItem[];
+  planDependencies: PlanDependency[];
+  planConstraints: PlanConstraint[];
+  predictedOutcomes: PredictedOutcome[];
+  resourceCapacities: ResourceCapacity[];
   events: Event[];
   recommendedActions: RecommendedAction[];
   briefingSections: BriefingSection[];
@@ -723,6 +865,8 @@ export type PageId =
   | "decisions"
   | "knowledge"
   | "workflows"
+  | "plans"
+  | "capabilities"
   | "opportunityQueue"
   | "recommendedActions"
   | "intelligenceEngine"
@@ -758,6 +902,13 @@ export type CollectionKey =
   | "workflowSteps"
   | "workflowRuns"
   | "agentHandoffs"
+  | "plans"
+  | "milestones"
+  | "planItems"
+  | "planDependencies"
+  | "planConstraints"
+  | "predictedOutcomes"
+  | "resourceCapacities"
   | "recommendedActions"
   | "events"
   | "contentAssets"
@@ -884,6 +1035,19 @@ export const pageDefinitions: PageDefinition[] = [
     description: "Workflow orchestration across signals, memory, patterns, recommendations, and actions.",
     icon: FlaskConical,
     collection: "workflows"
+  },
+  {
+    id: "plans",
+    label: "Plans",
+    description: "Execution plans that sequence objectives, recommendations, constraints, and expected outcomes.",
+    icon: Target,
+    collection: "plans"
+  },
+  {
+    id: "capabilities",
+    label: "Capabilities",
+    description: "Registered VGOS kernel capabilities, dependencies, inputs, outputs, and operating status.",
+    icon: Sparkles
   },
   {
     id: "opportunityQueue",
@@ -1832,6 +1996,183 @@ const agentHandoffs: AgentHandoff[] = Array.from({ length: 10 }, (_, index) => (
   completedAt: index < 4 ? undefined : daysAgo(index - 1)
 }));
 
+const plans: Plan[] = ([
+  ["plan-vpi-authority", "30-Day Video Production Intelligence Authority Plan", "Build authority around Video Production Intelligence with proof-led content, internal links, and distribution.", "AUTHORITY_PLAN", "ACTIVE", "objective-own-vpi", 0, 30, "Growth", "VidMaker becomes more visible as the Video Production Intelligence category owner.", 0.84],
+  ["plan-product-hunt-follow-up", "Product Hunt Follow-Up Plan", "Convert launch attention into demos, replies, founder posts, and learning loops.", "LAUNCH_PLAN", "ACTIVE", "objective-product-hunt", 0, 14, "Community Intelligence", "Launch demand turns into qualified product-page-to-video proof and signups.", 0.82],
+  ["plan-directory-submission", "Directory Submission Plan", "Submit and monitor VidMaker across priority AI video and workflow directories.", "AUTHORITY_PLAN", "DRAFT", "objective-authority", 1, 21, "Authority", "VidMaker earns directory approvals, backlinks, and AI visibility signals.", 0.78],
+  ["plan-blog-004-010-content", "BLOG-004 to BLOG-010 Content Plan", "Publish the next content cluster around product-page-to-video, Purpose-Specific AI, and workflow automation.", "CONTENT_PLAN", "ACTIVE", "objective-aeo-geo", 0, 35, "Content", "VidMaker publishes a connected authority cluster with answer-ready assets.", 0.8],
+  ["plan-aeo-geo-visibility", "AEO/GEO Visibility Plan", "Create answer coverage and entity relationships for AEO and GEO visibility.", "AEO_PLAN", "DRAFT", "objective-aeo-geo", 2, 28, "Search Strategy", "VidMaker answers more AEO questions and strengthens entity association.", 0.76]
+] as const).map(([id, title, description, planType, status, objectiveId, startOffset, endOffset, owner, expectedOutcome, confidenceScore], index) => ({
+  id,
+  title,
+  description,
+  planType: planType as PlanType,
+  status: status as PlanStatus,
+  objectiveId,
+  startDate: daysFromNow(startOffset),
+  endDate: daysFromNow(endOffset),
+  owner,
+  expectedOutcome,
+  confidenceScore,
+  ...scoped(index)
+}));
+
+const milestones: Milestone[] = ([
+  ["milestone-publish-blog-004", "plan-blog-004-010-content", "Publish BLOG-004", "Publish product-page-to-video proof article.", 4, "IN_PROGRESS", "CRITICAL", "Content", "Creates the core proof asset.", 1],
+  ["milestone-publish-blog-005", "plan-blog-004-010-content", "Publish BLOG-005", "Publish comparison article on generic AI video cleanup.", 9, "NOT_STARTED", "HIGH", "Content", "Captures competitor dissatisfaction.", 2],
+  ["milestone-submit-10-directories", "plan-directory-submission", "Submit 10 directories", "Submit VidMaker to priority AI tool directories.", 12, "NOT_STARTED", "HIGH", "Authority", "Builds referring domain and AI visibility momentum.", 1],
+  ["milestone-create-product-demo", "plan-product-hunt-follow-up", "Create product-page-to-video demo", "Create demo showing product page URL to ready-to-post video.", 3, "IN_PROGRESS", "CRITICAL", "Growth", "Provides proof for launch follow-up.", 1],
+  ["milestone-add-internal-links", "plan-vpi-authority", "Add internal links between BLOG-002, BLOG-003, BLOG-004", "Connect the Video Production Intelligence content cluster.", 7, "NOT_STARTED", "HIGH", "SEO Strategy", "Strengthens authority cluster.", 2],
+  ["milestone-publish-10-pins", "plan-product-hunt-follow-up", "Publish 10 Pinterest pins", "Turn proof snippets into Pinterest assets.", 11, "NOT_STARTED", "MEDIUM", "Content", "Expands visual distribution.", 3],
+  ["milestone-founder-authority", "plan-vpi-authority", "Create founder authority post", "Publish founder post on Purpose-Specific AI and Video Production Intelligence.", 5, "NOT_STARTED", "HIGH", "Tom Promise", "Builds category narrative.", 1],
+  ["milestone-aeo-faq", "plan-aeo-geo-visibility", "Create AEO FAQ set", "Publish FAQ answers for product-page-to-video and VPI questions.", 10, "NOT_STARTED", "HIGH", "Search Strategy", "Improves answer engine readiness.", 1],
+  ["milestone-geo-entities", "plan-aeo-geo-visibility", "Strengthen GEO entity coverage", "Connect VidMaker, Purpose-Specific AI, and Product Page to Video entities.", 16, "NOT_STARTED", "HIGH", "Search Strategy", "Improves entity confidence.", 2],
+  ["milestone-blog-010", "plan-blog-004-010-content", "Publish BLOG-010", "Complete the BLOG-004 to BLOG-010 cluster.", 32, "NOT_STARTED", "MEDIUM", "Content", "Completes the authority cluster.", 5]
+] as const).map(([id, planId, title, description, dueOffset, status, priority, owner, expectedImpact, order], index) => ({
+  id,
+  planId,
+  title,
+  description,
+  dueDate: daysFromNow(dueOffset),
+  status: status as PlanItemStatus,
+  priority: priority as Priority,
+  owner,
+  expectedImpact,
+  order,
+  ...scoped(index)
+}));
+
+const planItemSeeds = [
+  ["plan-vpi-authority", "milestone-founder-authority", "Draft founder authority post", "FOUNDER_POST", "RecommendedAction", "action-24", "HIGH", "NOT_STARTED", "Tom Promise", 88, 4, 2],
+  ["plan-vpi-authority", "milestone-founder-authority", "Publish founder authority post", "FOUNDER_POST", "RecommendedAction", "kernel-action-11", "HIGH", "NOT_STARTED", "Tom Promise", 92, 3, 5],
+  ["plan-vpi-authority", "milestone-add-internal-links", "Audit BLOG-002 internal links", "INTERNAL_LINK", "ContentAsset", "content-blog-002", "HIGH", "NOT_STARTED", "SEO Strategy", 78, 2, 6],
+  ["plan-vpi-authority", "milestone-add-internal-links", "Audit BLOG-003 internal links", "INTERNAL_LINK", "ContentAsset", "content-blog-003", "HIGH", "NOT_STARTED", "SEO Strategy", 76, 2, 6],
+  ["plan-vpi-authority", "milestone-add-internal-links", "Add links into BLOG-004", "INTERNAL_LINK", "ContentAsset", "content-blog-004", "HIGH", "BLOCKED", "SEO Strategy", 86, 2, 8],
+  ["plan-vpi-authority", "milestone-add-internal-links", "Update VPI landing page references", "LANDING_PAGE_UPDATE", "Entity", "entity-video-production-intelligence", "HIGH", "NOT_STARTED", "Growth", 84, 4, 10],
+  ["plan-vpi-authority", "milestone-founder-authority", "Create category definition FAQ", "FAQ", "Question", "question-video-production-intelligence", "HIGH", "NOT_STARTED", "Search Strategy", 82, 3, 11],
+  ["plan-vpi-authority", "milestone-add-internal-links", "Publish VPI newsletter section", "NEWSLETTER", "ContentAsset", "content-blog-002", "MEDIUM", "NOT_STARTED", "Content", 68, 3, 14],
+  ["plan-product-hunt-follow-up", "milestone-create-product-demo", "Script product-page-to-video demo", "DEMO", "Question", "question-product-page-to-video", "CRITICAL", "IN_PROGRESS", "Growth", 96, 5, 1],
+  ["plan-product-hunt-follow-up", "milestone-create-product-demo", "Record product-page-to-video demo", "DEMO", "RecommendedAction", "action-01", "CRITICAL", "BLOCKED", "Growth", 98, 6, 3],
+  ["plan-product-hunt-follow-up", "milestone-create-product-demo", "Create demo landing page section", "LANDING_PAGE_UPDATE", "Entity", "entity-product-page-to-video", "HIGH", "NOT_STARTED", "Growth", 86, 4, 5],
+  ["plan-product-hunt-follow-up", "milestone-publish-10-pins", "Create Pinterest proof pin 1", "PINTEREST_PIN", "ContentAsset", "content-blog-004", "MEDIUM", "NOT_STARTED", "Design System", 55, 1, 6],
+  ["plan-product-hunt-follow-up", "milestone-publish-10-pins", "Create Pinterest proof pin 2", "PINTEREST_PIN", "ContentAsset", "content-blog-004", "MEDIUM", "NOT_STARTED", "Design System", 55, 1, 7],
+  ["plan-product-hunt-follow-up", "milestone-publish-10-pins", "Create Pinterest proof pin 3", "PINTEREST_PIN", "ContentAsset", "content-blog-004", "MEDIUM", "NOT_STARTED", "Design System", 55, 1, 8],
+  ["plan-product-hunt-follow-up", "milestone-publish-10-pins", "Reply to top Product Hunt comments", "COMMUNITY_REPLY", "Observation", "observation-01", "CRITICAL", "NOT_STARTED", "Community Intelligence", 92, 3, 4],
+  ["plan-product-hunt-follow-up", "milestone-create-product-demo", "Publish X thread from demo", "X_THREAD", "RecommendedAction", "action-07", "HIGH", "NOT_STARTED", "Content", 78, 3, 6],
+  ["plan-directory-submission", "milestone-submit-10-directories", "Finalize directory category copy", "DIRECTORY_SUBMISSION", "DirectorySubmission", "directory-ai-video-tools", "HIGH", "IN_PROGRESS", "Authority", 82, 3, 2],
+  ["plan-directory-submission", "milestone-submit-10-directories", "Submit Futurepedia listing", "DIRECTORY_SUBMISSION", "DirectorySubmission", "directory-ai-video-tools", "HIGH", "NOT_STARTED", "Authority", 84, 2, 5],
+  ["plan-directory-submission", "milestone-submit-10-directories", "Submit Toolify listing", "DIRECTORY_SUBMISSION", "DirectorySubmission", "directory-ai-video-tools", "HIGH", "NOT_STARTED", "Authority", 84, 2, 6],
+  ["plan-directory-submission", "milestone-submit-10-directories", "Submit There's An AI For That listing", "DIRECTORY_SUBMISSION", "DirectorySubmission", "directory-ai-video-tools", "HIGH", "NOT_STARTED", "Authority", 80, 2, 7],
+  ["plan-directory-submission", "milestone-submit-10-directories", "Follow up on AI Video Tools backlink", "BACKLINK_OUTREACH", "Backlink", "backlink-ai-video-tools-directory", "HIGH", "NOT_STARTED", "Authority", 76, 2, 9],
+  ["plan-directory-submission", "milestone-submit-10-directories", "Track directory approvals", "BACKLINK_OUTREACH", "DirectorySubmission", "directory-ai-video-tools", "MEDIUM", "NOT_STARTED", "Authority", 66, 2, 13],
+  ["plan-blog-004-010-content", "milestone-publish-blog-004", "Finish BLOG-004 draft", "BLOG", "ContentAsset", "content-blog-004", "CRITICAL", "IN_PROGRESS", "Content", 96, 5, 2],
+  ["plan-blog-004-010-content", "milestone-publish-blog-004", "Add BLOG-004 proof examples", "BLOG", "AIRecommendation", "ai-rec-01", "CRITICAL", "BLOCKED", "Content", 94, 4, 3],
+  ["plan-blog-004-010-content", "milestone-publish-blog-004", "Publish BLOG-004", "BLOG", "RecommendedAction", "action-03", "CRITICAL", "NOT_STARTED", "Content", 98, 2, 4],
+  ["plan-blog-004-010-content", "milestone-publish-blog-005", "Outline BLOG-005", "BLOG", "Pattern", "pattern-02", "HIGH", "NOT_STARTED", "Content", 84, 3, 7],
+  ["plan-blog-004-010-content", "milestone-publish-blog-005", "Publish BLOG-005", "BLOG", "ContentAsset", "content-blog-005", "HIGH", "NOT_STARTED", "Content", 88, 4, 9],
+  ["plan-blog-004-010-content", "milestone-blog-010", "Create BLOG-006 brief", "BLOG", "Keyword", "keyword-ai-video-production", "HIGH", "NOT_STARTED", "Content", 74, 3, 12],
+  ["plan-blog-004-010-content", "milestone-blog-010", "Create BLOG-007 brief", "BLOG", "Keyword", "keyword-video-workflow-automation", "HIGH", "NOT_STARTED", "Content", 74, 3, 15],
+  ["plan-blog-004-010-content", "milestone-blog-010", "Create BLOG-008 brief", "BLOG", "Entity", "entity-purpose-specific-ai", "MEDIUM", "NOT_STARTED", "Content", 70, 3, 18],
+  ["plan-blog-004-010-content", "milestone-blog-010", "Create BLOG-009 brief", "BLOG", "Entity", "entity-purpose-engines", "MEDIUM", "NOT_STARTED", "Content", 68, 3, 22],
+  ["plan-blog-004-010-content", "milestone-blog-010", "Create BLOG-010 brief", "BLOG", "Question", "question-purpose-specific-ai", "MEDIUM", "NOT_STARTED", "Content", 66, 3, 28],
+  ["plan-aeo-geo-visibility", "milestone-aeo-faq", "Answer product-page-to-video FAQ", "FAQ", "Question", "question-product-page-to-video", "HIGH", "NOT_STARTED", "Search Strategy", 86, 2, 5],
+  ["plan-aeo-geo-visibility", "milestone-aeo-faq", "Answer VPI FAQ", "FAQ", "Question", "question-video-production-intelligence", "HIGH", "NOT_STARTED", "Search Strategy", 88, 2, 6],
+  ["plan-aeo-geo-visibility", "milestone-aeo-faq", "Answer Purpose-Specific AI FAQ", "FAQ", "Question", "question-purpose-specific-ai", "HIGH", "NOT_STARTED", "Search Strategy", 82, 2, 8],
+  ["plan-aeo-geo-visibility", "milestone-geo-entities", "Update VidMaker entity page", "LANDING_PAGE_UPDATE", "Entity", "entity-vidmaker", "HIGH", "NOT_STARTED", "Search Strategy", 78, 3, 12],
+  ["plan-aeo-geo-visibility", "milestone-geo-entities", "Update Product Page to Video entity page", "LANDING_PAGE_UPDATE", "Entity", "entity-product-page-to-video", "HIGH", "NOT_STARTED", "Search Strategy", 80, 3, 14],
+  ["plan-aeo-geo-visibility", "milestone-geo-entities", "Create company post on Purpose Engines", "COMPANY_POST", "Entity", "entity-purpose-engines", "MEDIUM", "NOT_STARTED", "Content", 64, 2, 15],
+  ["plan-aeo-geo-visibility", "milestone-aeo-faq", "Create YouTube script from FAQ set", "YOUTUBE_SCRIPT", "Question", "question-video-production-intelligence", "MEDIUM", "NOT_STARTED", "Content", 62, 4, 19],
+  ["plan-aeo-geo-visibility", "milestone-geo-entities", "Run answer coverage experiment", "EXPERIMENT", "Objective", "objective-aeo-geo", "HIGH", "NOT_STARTED", "Search Strategy", 82, 5, 22]
+] as const;
+
+const planItems: PlanItem[] = planItemSeeds.map(
+  ([planId, milestoneId, title, itemType, sourceType, sourceId, priority, status, owner, estimatedImpactScore, estimatedEffortScore, dueOffset], index) => ({
+    id: `plan-item-${String(index + 1).padStart(2, "0")}`,
+    planId,
+    milestoneId,
+    title,
+    description: title,
+    itemType: itemType as PlanItemType,
+    sourceType,
+    sourceId,
+    priority: priority as Priority,
+    status: status as PlanItemStatus,
+    owner,
+    dueDate: daysFromNow(dueOffset),
+    estimatedImpactScore,
+    estimatedEffortScore,
+    ...scoped(index)
+  })
+);
+
+const planDependencies: PlanDependency[] = ([
+  ["plan-vpi-authority", "plan-item-25", "plan-item-05", "SEQUENCED_BEFORE", "BLOG-004 should be published before internal links point to it."],
+  ["plan-product-hunt-follow-up", "plan-item-10", "plan-item-16", "BLOCKS", "Product page demo should be created before demo promotion."],
+  ["plan-directory-submission", "plan-item-17", "plan-item-18", "REQUIRES", "Directory copy should be finalized before directory submissions."],
+  ["plan-directory-submission", "plan-item-17", "plan-item-19", "REQUIRES", "Directory copy should be finalized before Toolify submission."],
+  ["plan-blog-004-010-content", "plan-item-24", "plan-item-25", "BLOCKS", "Proof examples are required before BLOG-004 publishing."],
+  ["plan-blog-004-010-content", "plan-item-25", "plan-item-27", "SHOULD_FOLLOW", "BLOG-005 should follow the product-page-to-video proof article."],
+  ["plan-aeo-geo-visibility", "plan-item-34", "plan-item-40", "SUPPORTS", "VPI FAQ coverage supports the answer coverage experiment."],
+  ["plan-product-hunt-follow-up", "plan-item-10", "plan-item-15", "BLOCKS", "Community replies should include the demo proof link."]
+] as const).map(([planId, fromItemId, toItemId, dependencyType, reason], index) => ({
+  id: `plan-dependency-${String(index + 1).padStart(2, "0")}`,
+  planId,
+  fromItemId,
+  toItemId,
+  dependencyType: dependencyType as PlanDependencyType,
+  reason,
+  ...scoped(index)
+}));
+
+const planConstraints: PlanConstraint[] = ([
+  ["plan-product-hunt-follow-up", "Product demo not ready", "Product-page-to-video demo needs final proof assets before promotion.", "PRODUCT_NOT_READY", "CRITICAL"],
+  ["plan-vpi-authority", "Limited founder time", "Founder publishing capacity is capped this week.", "RESOURCE_LIMITED", "HIGH"],
+  ["plan-blog-004-010-content", "Need graphics for BLOG-004", "BLOG-004 requires diagrams and proof visuals.", "DESIGN_NOT_READY", "HIGH"],
+  ["plan-blog-004-010-content", "Need proof examples for product-page-to-video", "Article requires source-to-output proof examples.", "CONTENT_NOT_READY", "CRITICAL"],
+  ["plan-directory-submission", "Directory approvals may lag", "Submission review time may delay backlink outcomes.", "APPROVAL_REQUIRED", "MEDIUM"]
+] as const).map(([planId, title, description, constraintType, severity], index) => ({
+  id: `plan-constraint-${String(index + 1).padStart(2, "0")}`,
+  planId,
+  title,
+  description,
+  constraintType: constraintType as PlanConstraintType,
+  severity: severity as ConstraintSeverity,
+  ...scoped(index)
+}));
+
+const predictedOutcomes: PredictedOutcome[] = ([
+  ["plan-directory-submission", "directory approvals", 10, 0.78, "+10 directory submissions are likely if copy is finalized this week."],
+  ["plan-directory-submission", "potential backlinks", 5, 0.7, "+5 potential backlinks from approved listings and follow-ups."],
+  ["plan-blog-004-010-content", "authority articles", 4, 0.74, "+4 authority articles from the BLOG-004 to BLOG-010 cluster."],
+  ["plan-product-hunt-follow-up", "social content assets", 20, 0.72, "+20 social content assets from demo clips, Pinterest pins, and X threads."],
+  ["plan-product-hunt-follow-up", "product demo assets", 3, 0.8, "+3 product demo assets from product-page-to-video proof work."],
+  ["plan-aeo-geo-visibility", "AEO questions answered", 10, 0.76, "+10 AEO questions answered through FAQ and landing page updates."],
+  ["plan-vpi-authority", "AI mentions", 6, 0.64, "Improved entity clarity should lift AI mentions over time."],
+  ["plan-product-hunt-follow-up", "signups", 25, 0.58, "Demo-led follow-up should create a modest signup lift."]
+] as const).map(([planId, metricName, predictedValue, confidenceScore, rationale], index) => ({
+  id: `predicted-outcome-${String(index + 1).padStart(2, "0")}`,
+  planId,
+  metricName,
+  predictedValue,
+  confidenceScore,
+  rationale,
+  ...scoped(index)
+}));
+
+const resourceCapacities: ResourceCapacity[] = ([
+  ["Tom Promise", "Founder", 20, "Strategy and publishing", "Protect founder time for authority posts, launch follow-up, and final approvals."],
+  ["Content System", "AI-assisted", 40, "Content production", "Drafts, outlines, FAQs, newsletters, scripts, and social repurposing."],
+  ["Design System", "AI-assisted", 15, "Graphics and carousel assets", "Pinterest pins, article graphics, proof visuals, and social carousels."]
+] as const).map(([owner, role, weeklyHours, focusArea, notes], index) => ({
+  id: `resource-capacity-${String(index + 1).padStart(2, "0")}`,
+  owner,
+  role,
+  weeklyHours,
+  focusArea,
+  notes,
+  ...scoped(index)
+}));
+
 const recommendedActions: RecommendedAction[] = [
   ["CREATE_DEMO", "Pattern", "pattern-01", "Create product-page-to-video demo from a real ecommerce page.", "CRITICAL", "objective-demo-assets", "pattern-01"],
   ["WRITE_BLOG", "Pattern", "pattern-03", "Publish Video Production Intelligence category article.", "CRITICAL", "objective-own-vpi", "pattern-03"],
@@ -2206,6 +2547,13 @@ export const initialPlatformState: PlatformState = {
   workflowSteps,
   workflowRuns,
   agentHandoffs,
+  plans,
+  milestones,
+  planItems,
+  planDependencies,
+  planConstraints,
+  predictedOutcomes,
+  resourceCapacities,
   events,
   recommendedActions,
   briefingSections
@@ -2253,6 +2601,10 @@ export function getExecutiveMetrics(state: PlatformState, activeWorkspaceId: str
   const workflows = state.workflows.filter((item) => item.workspaceId === activeWorkspaceId);
   const workflowRuns = state.workflowRuns.filter((item) => item.workspaceId === activeWorkspaceId);
   const agentHandoffs = state.agentHandoffs.filter((item) => item.workspaceId === activeWorkspaceId);
+  const plans = state.plans.filter((item) => item.workspaceId === activeWorkspaceId);
+  const planItems = state.planItems.filter((item) => item.workspaceId === activeWorkspaceId);
+  const predictedOutcomes = state.predictedOutcomes.filter((item) => item.workspaceId === activeWorkspaceId);
+  const resourceCapacities = state.resourceCapacities.filter((item) => item.workspaceId === activeWorkspaceId);
   const highImpactActions = state.recommendedActions.filter(
     (item) => item.workspaceId === activeWorkspaceId && ["HIGH", "CRITICAL"].includes(item.priority)
   );
@@ -2304,6 +2656,25 @@ export function getExecutiveMetrics(state: PlatformState, activeWorkspaceId: str
     workflowsWaitingForApproval: workflowRuns.filter((item) => item.status === "PENDING").length,
     activeAgents: state.agents.filter((item) => item.workspaceId === activeWorkspaceId && item.status === "LIVE").length,
     pendingHandoffs: agentHandoffs.filter((item) => item.status === "PENDING").length,
+    activePlans: plans.filter((item) => item.status === "ACTIVE").length,
+    draftPlans: plans.filter((item) => item.status === "DRAFT").length,
+    overduePlanItems: planItems.filter(
+      (item) => item.status !== "COMPLETED" && item.status !== "ARCHIVED" && new Date(item.dueDate).getTime() < Date.now()
+    ).length,
+    blockedPlanItems: planItems.filter((item) => item.status === "BLOCKED").length,
+    predictedOutcomes: predictedOutcomes.length,
+    resourceCapacityHours: resourceCapacities.reduce((total, item) => total + item.weeklyHours, 0),
+    planHealthScore: Math.round(
+      Math.max(
+        0,
+        100 -
+          planItems.filter((item) => item.status === "BLOCKED").length * 8 -
+          planItems.filter(
+            (item) => item.status !== "COMPLETED" && item.status !== "ARCHIVED" && new Date(item.dueDate).getTime() < Date.now()
+          ).length *
+            5
+      )
+    ),
     activeExperiments: experiments.filter((item) => item.status === "IN_PROGRESS").length,
     completedExperiments: experiments.filter((item) => item.status === "LIVE" || item.status === "PUBLISHED").length,
     averageConfidence,
@@ -2715,6 +3086,100 @@ export function createDefaultRecord(collection: CollectionKey, activeWorkspaceId
       opportunityScore: 0,
       confidenceScore: 0.7,
       reasoning: ""
+    };
+  }
+
+  if (collection === "plans") {
+    return {
+      ...base,
+      title: "New execution plan",
+      description: "",
+      planType: "CONTENT_PLAN",
+      status: "DRAFT",
+      objectiveId: "",
+      startDate: date,
+      endDate: daysFromNow(30),
+      owner: "Growth",
+      expectedOutcome: "",
+      confidenceScore: 0.7
+    };
+  }
+
+  if (collection === "milestones") {
+    return {
+      ...base,
+      planId: "",
+      title: "New milestone",
+      description: "",
+      dueDate: daysFromNow(7),
+      status: "NOT_STARTED",
+      priority: "HIGH",
+      owner: "Growth",
+      expectedImpact: "",
+      order: 1
+    };
+  }
+
+  if (collection === "planItems") {
+    return {
+      ...base,
+      planId: "",
+      milestoneId: "",
+      title: "New plan item",
+      description: "",
+      itemType: "BLOG",
+      sourceType: "Manual",
+      sourceId: "",
+      priority: "HIGH",
+      status: "NOT_STARTED",
+      owner: "Growth",
+      dueDate: daysFromNow(7),
+      estimatedImpactScore: 70,
+      estimatedEffortScore: 3
+    };
+  }
+
+  if (collection === "planDependencies") {
+    return {
+      ...base,
+      planId: "",
+      fromItemId: "",
+      toItemId: "",
+      dependencyType: "SEQUENCED_BEFORE",
+      reason: ""
+    };
+  }
+
+  if (collection === "planConstraints") {
+    return {
+      ...base,
+      planId: "",
+      title: "New constraint",
+      description: "",
+      constraintType: "RESOURCE_LIMITED",
+      severity: "MEDIUM"
+    };
+  }
+
+  if (collection === "predictedOutcomes") {
+    return {
+      ...base,
+      planId: "",
+      metricName: "signups",
+      predictedValue: 0,
+      confidenceScore: 0.7,
+      rationale: ""
+    };
+  }
+
+  if (collection === "resourceCapacities") {
+    return {
+      ...base,
+      owner: "New owner",
+      role: "Contributor",
+      weeklyHours: 10,
+      focusArea: "Planning",
+      notes: ""
     };
   }
 

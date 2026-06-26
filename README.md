@@ -22,6 +22,26 @@ The Phase Beta services live under `src/kernel/knowledge/`, `src/kernel/workflow
 
 Seed data now includes 25 knowledge objects, 40 knowledge relationships, 5 memory snapshots, 5 workflows, 20 workflow steps, 10 workflow runs, and 10 agent handoffs.
 
+## Capability Release: Planning Engine
+
+VGOS now includes a Planning Engine that turns objectives, patterns, recommended actions, constraints, and capacity into execution plans.
+
+Planning adds:
+
+- `Plan`
+- `Milestone`
+- `PlanItem`
+- `PlanDependency`
+- `PlanConstraint`
+- `PredictedOutcome`
+- `ResourceCapacity`
+- Planning kernel services in `src/kernel/planning/`
+- Capability registry in `src/kernel/capabilities/`
+- New pages at `/plans`, `/plans/[id]`, and `/capabilities`
+- Mission Control planning cards for active plans, drafts, blocked items, predicted outcomes, capacity, and plan health
+
+The first version is rule-based and does not require external AI APIs.
+
 Phase Alpha adds:
 
 - `Memory`
@@ -160,16 +180,17 @@ actions where relevant.
    npm install
    ```
 
-2. Add a database connection:
+2. Add a database connection and fill `DATABASE_URL` with your Postgres or Supabase connection string:
 
    ```bash
    cp .env.example .env
    ```
 
-3. Create the database tables:
+3. Create the database tables and regenerate Prisma Client:
 
    ```bash
-   npx prisma migrate dev --name phase-alpha-intelligence-kernel
+   npx prisma migrate dev --name planning-engine
+   npx prisma generate
    ```
 
 4. Seed VidMaker intelligence data:

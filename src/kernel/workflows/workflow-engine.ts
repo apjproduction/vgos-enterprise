@@ -24,7 +24,13 @@ export type CreateWorkflowInput = {
   description: string;
   workflowType: WorkflowType;
   triggerType?: TriggerType;
-  steps?: Array<{ name: string; stepType: WorkflowStepType; config?: Record<string, unknown> }>;
+  steps?: WorkflowStepInput[];
+};
+
+type WorkflowStepInput = {
+  name: string;
+  stepType: WorkflowStepType;
+  config?: Record<string, unknown>;
 };
 
 function nowFrom(context?: Partial<WorkflowContext>) {
@@ -76,7 +82,7 @@ function createWorkflowStep(
   };
 }
 
-function defaultStepsForWorkflow(workflowType: WorkflowType) {
+function defaultStepsForWorkflow(workflowType: WorkflowType): WorkflowStepInput[] {
   if (workflowType === "PAIN_POINT_TO_FEATURE_REQUEST") {
     return [
       { name: "Extract pain point", stepType: "EXTRACT_PAIN_POINTS" as WorkflowStepType },

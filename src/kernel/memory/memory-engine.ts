@@ -50,7 +50,9 @@ export function createMemoryFromObservation(
     frequency: 1,
     confidenceScore: Number(observation.confidenceScore ?? 0.7),
     importanceScore: text.toLowerCase().includes("product page") ? 90 : 68,
-    status: "RESEARCHING"
+    status: "RESEARCHING",
+    createdAt: now,
+    updatedAt: now
   };
 }
 
