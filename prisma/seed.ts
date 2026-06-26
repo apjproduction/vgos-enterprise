@@ -543,12 +543,40 @@ async function seedMarketObjects(personas: Awaited<ReturnType<typeof seedPersona
     }
   });
 
-  const contentAssets = await Promise.all(
+  type ContentAssetSeed = [
+    string,
+    string,
+    string,
+    string | null,
+    string[]
+  ];
+
+  const contentAssetSeeds: ContentAssetSeed[] = [
     [
-      ["content-blog-002", "BLOG-002", "What Is Video Production Intelligence?", questionB.id, ["Video Production Intelligence", "AI video production"]],
-      ["content-blog-003", "BLOG-003", "Purpose-Specific AI for Video Teams", questionB.id, ["Purpose-Specific AI", "video workflow automation"]],
-      ["content-blog-004", "BLOG-004", "How to Turn a Product Page Into a Video", questionA.id, ["product page to video", "AI video production"]]
-    ].map(async ([id, code, title, questionId, keywordNames]) => {
+      "content-blog-002",
+      "BLOG-002",
+      "What Is Video Production Intelligence?",
+      questionB.id,
+      ["Video Production Intelligence", "AI video production"]
+    ],
+    [
+      "content-blog-003",
+      "BLOG-003",
+      "Purpose-Specific AI for Video Teams",
+      questionB.id,
+      ["Purpose-Specific AI", "video workflow automation"]
+    ],
+    [
+      "content-blog-004",
+      "BLOG-004",
+      "How to Turn a Product Page Into a Video",
+      questionA.id,
+      ["product page to video", "AI video production"]
+    ]
+  ];
+
+  const contentAssets = await Promise.all(
+    contentAssetSeeds.map(async ([id, code, title, questionId, keywordNames]) => {
       const asset = await prisma.contentAsset.upsert({
         where: { id },
         update: {
