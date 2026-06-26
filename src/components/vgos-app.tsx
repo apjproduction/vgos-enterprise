@@ -33,6 +33,15 @@ import {
 } from "@/kernel/decisions/decision-engine";
 import { calculateObjectiveHealth } from "@/kernel/goals/goal-engine";
 import { runAgent } from "@/kernel/agents/agent-runtime";
+import { capabilityRegistry } from "@/kernel/capabilities/capability-registry";
+import {
+  activatePlan,
+  completePlan,
+  evaluatePlanHealth,
+  generatePlanFromObjective,
+  generatePlanFromPatterns,
+  generatePlanFromRecommendedActions
+} from "@/kernel/planning/planning-engine";
 import {
   calculateOpportunityScore,
   createDefaultRecord,
@@ -48,9 +57,12 @@ import {
   workspaceId,
   type ActionStatus,
   type CollectionKey,
+  type EventSeverity,
+  type EventStatus,
   type Objective,
   type PageDefinition,
   type PageId,
+  type Plan,
   type PlatformState,
   type Priority,
   type RecommendationType,
@@ -96,6 +108,10 @@ const statusOptions = [
 ];
 
 const priorityOptions: Priority[] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
+
+function priorityRank(priority?: string) {
+  return { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 }[priority as Priority] ?? 4;
+}
 
 const recommendationOptions: RecommendationType[] = [
   "BLOG_IDEA",
@@ -188,6 +204,57 @@ const workflowStepTypeOptions = [
   "NOTIFY_MISSION_CONTROL"
 ];
 
+const planTypeOptions = [
+  "SEO_PLAN",
+  "AEO_PLAN",
+  "GEO_PLAN",
+  "AUTHORITY_PLAN",
+  "CONTENT_PLAN",
+  "PRODUCT_PLAN",
+  "LAUNCH_PLAN",
+  "COMMUNITY_PLAN",
+  "REVENUE_PLAN",
+  "EXPERIMENT_PLAN"
+];
+
+const planStatusOptions = ["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"];
+
+const planItemTypeOptions = [
+  "BLOG",
+  "FOUNDER_POST",
+  "COMPANY_POST",
+  "X_THREAD",
+  "PINTEREST_PIN",
+  "DIRECTORY_SUBMISSION",
+  "BACKLINK_OUTREACH",
+  "COMMUNITY_REPLY",
+  "DEMO",
+  "FAQ",
+  "LANDING_PAGE_UPDATE",
+  "EXPERIMENT",
+  "PRODUCT_TASK",
+  "INTERNAL_LINK",
+  "NEWSLETTER",
+  "YOUTUBE_SCRIPT"
+];
+
+const planItemStatusOptions = ["NOT_STARTED", "IN_PROGRESS", "BLOCKED", "COMPLETED", "ARCHIVED"];
+
+const planDependencyTypeOptions = ["BLOCKS", "REQUIRES", "SUPPORTS", "SEQUENCED_BEFORE", "SHOULD_FOLLOW"];
+
+const planConstraintTypeOptions = [
+  "TIME",
+  "BUDGET",
+  "CONTENT_NOT_READY",
+  "DESIGN_NOT_READY",
+  "PRODUCT_NOT_READY",
+  "DATA_NOT_AVAILABLE",
+  "RESOURCE_LIMITED",
+  "APPROVAL_REQUIRED"
+];
+
+const severityOptions = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+
 function priorityTone(priority?: Priority) {
   if (priority === "CRITICAL") return "red";
   if (priority === "HIGH") return "amber";
@@ -196,10 +263,11 @@ function priorityTone(priority?: Priority) {
 }
 
 function statusTone(status?: string) {
-  if (status === "LIVE" || status === "PUBLISHED") return "green";
-  if (status === "IN_PROGRESS" || status === "RESEARCHING") return "blue";
+  if (status === "LIVE" || status === "PUBLISHED" || status === "ACTIVE" || status === "COMPLETED") return "green";
+  if (status === "IN_PROGRESS" || status === "RESEARCHING" || status === "DRAFT") return "blue";
+  if (status === "BLOCKED") return "red";
   if (status === "SUBMITTED") return "teal";
-  if (status === "ARCHIVED") return "slate";
+  if (status === "ARCHIVED" || status === "PAUSED") return "slate";
   return "amber";
 }
 
@@ -232,6 +300,13 @@ function sourceTypeToCollection(sourceType: string): EditableCollection {
     WorkflowStep: "workflowSteps",
     WorkflowRun: "workflowRuns",
     AgentHandoff: "agentHandoffs",
+    Plan: "plans",
+    Milestone: "milestones",
+    PlanItem: "planItems",
+    PlanDependency: "planDependencies",
+    PlanConstraint: "planConstraints",
+    PredictedOutcome: "predictedOutcomes",
+    ResourceCapacity: "resourceCapacities",
     Experiment: "experiments",
     Observation: "observations",
     Insight: "insights",
@@ -266,6 +341,13 @@ function collectionToSourceType(collection: EditableCollection) {
     workflowSteps: "WorkflowStep",
     workflowRuns: "WorkflowRun",
     agentHandoffs: "AgentHandoff",
+    plans: "Plan",
+    milestones: "Milestone",
+    planItems: "PlanItem",
+    planDependencies: "PlanDependency",
+    planConstraints: "PlanConstraint",
+    predictedOutcomes: "PredictedOutcome",
+    resourceCapacities: "ResourceCapacity",
     experiments: "Experiment",
     insights: "Insight",
     hypotheses: "Hypothesis"
@@ -291,7 +373,12 @@ function eventTypeForCollection(collection: EditableCollection) {
     reasoningTraces: "REASONING_TRACE_CREATED",
     objectives: "OBJECTIVE_CREATED",
     keyResults: "KEY_RESULT_UPDATED",
-    agentRuns: "AGENT_RUN_STARTED"
+    agentRuns: "AGENT_RUN_STARTED",
+    plans: "PLAN_CREATED",
+    planItems: "PLAN_ITEM_COMPLETED",
+    milestones: "MILESTONE_COMPLETED",
+    planConstraints: "CONSTRAINT_ADDED",
+    predictedOutcomes: "OUTCOME_PREDICTED"
   };
   return map[collection] ?? null;
 }
@@ -424,7 +511,11 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
 
   function saveDraft() {
     if (!draft) return;
-    const nextItem = { ...draft.item, updatedAt: new Date().toISOString() };
+    const nextItem = {
+  ...draft.item,
+  updatedAt: new Date().toISOString(),
+} as (typeof draft.item & { id: string; updatedAt: string });
+
     const current = getCollection(state, draft.collection);
     const exists = current.some((item) => item.id === nextItem.id);
     const nextRecords = exists
@@ -515,6 +606,172 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
     navigateTo("agents");
   }
 
+  function addPlanBundle(bundle: ReturnType<typeof generatePlanFromRecommendedActions>) {
+    const now = new Date().toISOString();
+    setState((currentState) => ({
+      ...currentState,
+      plans: [bundle.plan, ...currentState.plans],
+      milestones: [...bundle.milestones, ...currentState.milestones],
+      planItems: [...bundle.items, ...currentState.planItems],
+      planDependencies: [...bundle.dependencies, ...currentState.planDependencies],
+      planConstraints: [...bundle.constraints, ...currentState.planConstraints],
+      predictedOutcomes: [...bundle.predictedOutcomes, ...currentState.predictedOutcomes],
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "PLAN_CREATED" as any,
+          sourceType: "Plan",
+          sourceId: bundle.plan.id,
+          title: `${bundle.plan.title} created`,
+          description: bundle.plan.description,
+          metadata: { generatedBy: "planning-engine", planType: bundle.plan.planType },
+          severity: "HIGH" as EventSeverity,
+          status: "PENDING" as EventStatus,
+          createdAt: now
+        },
+        ...bundle.predictedOutcomes.map((outcome) => ({
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "OUTCOME_PREDICTED" as any,
+          sourceType: "PredictedOutcome",
+          sourceId: outcome.id,
+          title: `${outcome.metricName} predicted`,
+          description: outcome.rationale,
+          metadata: { generatedBy: "planning-engine", planId: bundle.plan.id },
+          severity: "MEDIUM" as EventSeverity,
+          status: "PROCESSED" as EventStatus,
+          createdAt: now,
+          processedAt: now
+        })),
+        ...currentState.events
+      ]
+    }));
+    setActivePage("plans");
+    setDraft(null);
+    resetFilters();
+  }
+
+  function generatePlanFromObjectiveRecord(objective: AnyRecord) {
+    addPlanBundle(
+      generatePlanFromObjective(objective as Objective, {
+        workspaceId: activeWorkspaceId,
+        organizationId: orgId
+      })
+    );
+  }
+
+  function generatePlanFromRecommendedActionQueue(action?: AnyRecord) {
+    const actions = action
+      ? [action]
+      : state.recommendedActions
+          .filter((item) => item.workspaceId === activeWorkspaceId && item.status !== "COMPLETED")
+          .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))
+          .slice(0, 6);
+    addPlanBundle(
+      generatePlanFromRecommendedActions(actions as any, {
+        workspaceId: activeWorkspaceId,
+        organizationId: orgId
+      })
+    );
+  }
+
+  function generatePlanFromPatternQueue(pattern?: AnyRecord) {
+    const patterns = pattern
+      ? [pattern]
+      : state.patterns
+          .filter((item) => item.workspaceId === activeWorkspaceId && item.status !== "ARCHIVED")
+          .sort((a, b) => b.importanceScore - a.importanceScore)
+          .slice(0, 5);
+    addPlanBundle(
+      generatePlanFromPatterns(patterns as any, {
+        workspaceId: activeWorkspaceId,
+        organizationId: orgId
+      })
+    );
+  }
+
+  function activatePlanRecord(plan: AnyRecord) {
+    const nextPlan = activatePlan(plan as Plan);
+    const now = new Date().toISOString();
+    setState((currentState) => ({
+      ...currentState,
+      plans: currentState.plans.map((item) => (item.id === plan.id ? nextPlan : item)),
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "PLAN_ACTIVATED" as any,
+          sourceType: "Plan",
+          sourceId: plan.id,
+          title: `${plan.title} activated`,
+          description: plan.description ?? "",
+          metadata: { generatedBy: "planning-engine" },
+          severity: "HIGH" as EventSeverity,
+          status: "PENDING" as EventStatus,
+          createdAt: now
+        },
+        ...currentState.events
+      ]
+    }));
+  }
+
+  function completePlanRecord(plan: AnyRecord) {
+    const nextPlan = completePlan(plan as Plan);
+    const now = new Date().toISOString();
+    setState((currentState) => ({
+      ...currentState,
+      plans: currentState.plans.map((item) => (item.id === plan.id ? nextPlan : item)),
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "PLAN_COMPLETED" as any,
+          sourceType: "Plan",
+          sourceId: plan.id,
+          title: `${plan.title} completed`,
+          description: plan.expectedOutcome ?? "",
+          metadata: { generatedBy: "planning-engine" },
+          severity: "MEDIUM" as EventSeverity,
+          status: "PENDING" as EventStatus,
+          createdAt: now
+        },
+        ...currentState.events
+      ]
+    }));
+  }
+
+  function markPlanItemComplete(item: AnyRecord) {
+    const now = new Date().toISOString();
+    setState((currentState) => ({
+      ...currentState,
+      planItems: currentState.planItems.map((candidate) =>
+        candidate.id === item.id ? { ...candidate, status: "COMPLETED" as any, updatedAt: now } : candidate
+      ),
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "PLAN_ITEM_COMPLETED" as any,
+          sourceType: "PlanItem",
+          sourceId: item.id,
+          title: `${item.title} completed`,
+          description: item.description ?? "",
+          metadata: { generatedBy: "planning-engine", planId: item.planId },
+          severity: "MEDIUM" as EventSeverity,
+          status: "PENDING" as EventStatus,
+          createdAt: now
+        },
+        ...currentState.events
+      ]
+    }));
+  }
+
   function markActionCompleted(actionId: string) {
     const completedAt = new Date().toISOString();
     setState((currentState) => ({
@@ -555,7 +812,7 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
   function handleConversion(conversion: string, item: AnyRecord, collection?: EditableCollection) {
     const now = new Date().toISOString();
     if (conversion === "ProcessIntelligence") {
-      const result = processIntelligenceRecord(item, {
+      const result = processIntelligenceRecord(item as any, {
         workspaceId: activeWorkspaceId,
         organizationId: orgId,
         sourceType: collection ? collectionToSourceType(collection) : String(item.sourceType ?? "Record"),
@@ -581,6 +838,46 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
       setActivePage("intelligencePipeline");
       setDraft(null);
       resetFilters();
+      return;
+    }
+    if (conversion === "ObjectiveToPlan") {
+      generatePlanFromObjectiveRecord(item);
+      return;
+    }
+    if (conversion === "RecommendedActionToPlan") {
+      generatePlanFromRecommendedActionQueue(item);
+      return;
+    }
+    if (conversion === "PatternToPlan") {
+      generatePlanFromPatternQueue(item);
+      return;
+    }
+    if (conversion === "ActivatePlan") {
+      activatePlanRecord(item);
+      return;
+    }
+    if (conversion === "CompletePlan") {
+      completePlanRecord(item);
+      return;
+    }
+    if (conversion === "CompletePlanItem") {
+      markPlanItemComplete(item);
+      return;
+    }
+    if (conversion === "PlanAddDependency") {
+      setDraft({
+        collection: "planDependencies",
+        item: { ...createDefaultRecord("planDependencies", activeWorkspaceId), planId: item.id },
+        isNew: true
+      });
+      return;
+    }
+    if (conversion === "PlanAddConstraint") {
+      setDraft({
+        collection: "planConstraints",
+        item: { ...createDefaultRecord("planConstraints", activeWorkspaceId), planId: item.id },
+        isNew: true
+      });
       return;
     }
     if (conversion === "QuestionToContentAsset") {
@@ -799,6 +1096,7 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
               onEdit={openEdit}
               onNavigate={navigateTo}
               onRunAgent={runAgentManually}
+              onGeneratePlan={() => generatePlanFromRecommendedActionQueue()}
               markActionCompleted={markActionCompleted}
               convertActionToTask={convertActionToTask}
             />
@@ -945,6 +1243,22 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
               onEdit={openEdit}
               onRunWorkflow={runWorkflowManually}
             />
+          ) : activePage === "plans" ? (
+            <PlansPage
+              state={state}
+              page={page}
+              activeWorkspaceId={activeWorkspaceId}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              onCreate={openCreate}
+              onEdit={openEdit}
+              onGenerateFromActions={() => generatePlanFromRecommendedActionQueue()}
+              onGenerateFromPatterns={() => generatePlanFromPatternQueue()}
+              onActivatePlan={activatePlanRecord}
+              onCompletePlanItem={markPlanItemComplete}
+            />
+          ) : activePage === "capabilities" ? (
+            <CapabilitiesPage page={page} />
           ) : page.collection ? (
             <DataPage
               state={state}
@@ -984,6 +1298,7 @@ function MissionControl({
   onEdit,
   onNavigate,
   onRunAgent,
+  onGeneratePlan,
   markActionCompleted,
   convertActionToTask
 }: {
@@ -994,6 +1309,7 @@ function MissionControl({
   onEdit: (collection: EditableCollection, item: AnyRecord) => void;
   onNavigate: (page: PageId) => void;
   onRunAgent: () => void;
+  onGeneratePlan: () => void;
   markActionCompleted: (id: string) => void;
   convertActionToTask: (action: AnyRecord) => void;
 }) {
@@ -1040,6 +1356,25 @@ function MissionControl({
   const agentRecommendations = state.aiRecommendations
     .filter((item) => item.workspaceId === activeWorkspaceId && item.generatedBy.includes("Agent"))
     .slice(0, 5);
+  const workspacePlans = state.plans.filter((item) => item.workspaceId === activeWorkspaceId);
+  const topActivePlan =
+    workspacePlans.find((item) => item.status === "ACTIVE") ??
+    [...workspacePlans].sort((a, b) => b.confidenceScore - a.confidenceScore)[0];
+  const nextPlanItems = state.planItems
+    .filter((item) => item.workspaceId === activeWorkspaceId && !["COMPLETED", "ARCHIVED"].includes(item.status))
+    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+    .slice(0, 5);
+  const blockedPlanItems = state.planItems
+    .filter((item) => item.workspaceId === activeWorkspaceId && item.status === "BLOCKED")
+    .slice(0, 5);
+  const topPlanHealth = topActivePlan
+    ? evaluatePlanHealth({
+        plan: topActivePlan,
+        items: state.planItems.filter((item) => item.planId === topActivePlan.id),
+        dependencies: state.planDependencies.filter((item) => item.planId === topActivePlan.id),
+        constraints: state.planConstraints.filter((item) => item.planId === topActivePlan.id)
+      })
+    : null;
 
   return (
     <div className="space-y-4">
@@ -1057,6 +1392,15 @@ function MissionControl({
         <MetricCard label="Knowledge Relationships" value={metrics.totalKnowledgeRelationships} />
         <MetricCard label="Active Workflows" value={metrics.activeWorkflows} />
         <MetricCard label="Pending Handoffs" value={metrics.pendingHandoffs} />
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <MetricCard label="Active Plans" value={metrics.activePlans} />
+        <MetricCard label="Draft Plans" value={metrics.draftPlans} />
+        <MetricCard label="Overdue Plan Items" value={metrics.overduePlanItems} />
+        <MetricCard label="Blocked Items" value={metrics.blockedPlanItems} />
+        <MetricCard label="Predicted Outcomes" value={metrics.predictedOutcomes} />
+        <MetricCard label="Resource Capacity" value={`${metrics.resourceCapacityHours}h`} />
       </section>
 
       <section className="space-y-3">
@@ -1147,6 +1491,53 @@ function MissionControl({
             </div>
             <InlineList title="Pending Handoffs" items={pendingHandoffs.map((item) => `${item.fromAgentId} to ${item.toAgentId}`)} />
             <InlineList title="Agent Recommendations" items={agentRecommendations.map((item) => item.title)} />
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <CardTitle>Planning Engine</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Plans sequence objectives, recommendations, dependencies, capacity, and predicted outcomes.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => onNavigate("plans")}>
+              <ArrowRight className="h-4 w-4" />
+              Open plans
+            </Button>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2">
+            <InlineList title="Top Active Plan" items={topActivePlan ? [topActivePlan.title] : []} />
+            <InlineList title="Next 5 Plan Items" items={nextPlanItems.map((item) => `${item.title} - ${formatDate(item.dueDate)}`)} />
+            <InlineList title="Blocked Plan Items" items={blockedPlanItems.map((item) => item.title)} />
+            <InlineList title="Plan Health Score" items={topPlanHealth ? [`${topPlanHealth.score}/100 - ${formatEnum(topPlanHealth.status)}`] : []} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Planning Actions</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            <Button variant="outline" onClick={() => onCreate("plans")}>
+              <Plus className="h-4 w-4" />
+              Create Plan
+            </Button>
+            <Button variant="outline" onClick={onGeneratePlan}>
+              <ArrowRight className="h-4 w-4" />
+              Generate From Actions
+            </Button>
+            <Button variant="outline" onClick={() => onCreate("planDependencies")}>
+              <Plus className="h-4 w-4" />
+              Add Dependency
+            </Button>
+            <Button onClick={() => onCreate("planConstraints")}>
+              <Plus className="h-4 w-4" />
+              Add Constraint
+            </Button>
           </CardContent>
         </Card>
       </section>
@@ -2008,8 +2399,20 @@ function getConversionOptions(collection: EditableCollection) {
     conversations: [{ label: "Process Intelligence", value: "ProcessIntelligence" }],
     insights: [{ label: "Create hypothesis", value: "InsightToHypothesis" }],
     hypotheses: [{ label: "Create experiment", value: "HypothesisToExperiment" }],
+    objectives: [{ label: "Generate plan", value: "ObjectiveToPlan" }],
+    patterns: [{ label: "Generate plan", value: "PatternToPlan" }],
     aiRecommendations: [{ label: "Create action", value: "AIRecommendationToRecommendedAction" }],
-    recommendedActions: [{ label: "Convert to task", value: "RecommendedActionToTask" }]
+    recommendedActions: [
+      { label: "Generate plan", value: "RecommendedActionToPlan" },
+      { label: "Convert to task", value: "RecommendedActionToTask" }
+    ],
+    plans: [
+      { label: "Activate plan", value: "ActivatePlan" },
+      { label: "Complete plan", value: "CompletePlan" },
+      { label: "Add dependency", value: "PlanAddDependency" },
+      { label: "Add constraint", value: "PlanAddConstraint" }
+    ],
+    planItems: [{ label: "Mark complete", value: "CompletePlanItem" }]
   };
   return options[collection] ?? [];
 }
@@ -2308,6 +2711,299 @@ function OpportunityPage({
         />
       </CardContent>
     </Card>
+  );
+}
+
+function PlansPage({
+  state,
+  page,
+  activeWorkspaceId,
+  searchQuery,
+  setSearchQuery,
+  onCreate,
+  onEdit,
+  onGenerateFromActions,
+  onGenerateFromPatterns,
+  onActivatePlan,
+  onCompletePlanItem
+}: {
+  state: PlatformState;
+  page: PageDefinition;
+  activeWorkspaceId: string;
+  searchQuery: string;
+  setSearchQuery: (value: string) => void;
+  onCreate: (collection: EditableCollection) => void;
+  onEdit: (collection: EditableCollection, item: AnyRecord) => void;
+  onGenerateFromActions: () => void;
+  onGenerateFromPatterns: () => void;
+  onActivatePlan: (plan: AnyRecord) => void;
+  onCompletePlanItem: (item: AnyRecord) => void;
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [planTypeFilter, setPlanTypeFilter] = useState<FilterValue<string>>("ALL");
+  const plans = state.plans
+    .filter((item) => item.workspaceId === activeWorkspaceId)
+    .filter((item) => planTypeFilter === "ALL" || item.planType === planTypeFilter)
+    .filter((item) => JSON.stringify(item).toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => {
+      if (a.status === "ACTIVE" && b.status !== "ACTIVE") return -1;
+      if (b.status === "ACTIVE" && a.status !== "ACTIVE") return 1;
+      return b.confidenceScore - a.confidenceScore;
+    });
+  const selectedPlan = plans.find((item) => item.id === selectedId) ?? plans[0];
+  const milestones = selectedPlan
+    ? state.milestones
+        .filter((item) => item.planId === selectedPlan.id)
+        .sort((a, b) => a.order - b.order)
+    : [];
+  const items = selectedPlan
+    ? state.planItems
+        .filter((item) => item.planId === selectedPlan.id)
+        .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+    : [];
+  const dependencies = selectedPlan ? state.planDependencies.filter((item) => item.planId === selectedPlan.id) : [];
+  const constraints = selectedPlan ? state.planConstraints.filter((item) => item.planId === selectedPlan.id) : [];
+  const outcomes = selectedPlan ? state.predictedOutcomes.filter((item) => item.planId === selectedPlan.id) : [];
+  const objective = selectedPlan ? state.objectives.find((item) => item.id === selectedPlan.objectiveId) : undefined;
+  const relatedActions = selectedPlan?.objectiveId
+    ? state.recommendedActions.filter((item) => item.objectiveId === selectedPlan.objectiveId).slice(0, 5)
+    : [];
+  const health = selectedPlan
+    ? evaluatePlanHealth({ plan: selectedPlan, items, dependencies, constraints })
+    : null;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <CardTitle>{page.label}</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">{page.description}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={onGenerateFromPatterns}>
+              <ArrowRight className="h-4 w-4" />
+              From Patterns
+            </Button>
+            <Button variant="outline" onClick={onGenerateFromActions}>
+              <ArrowRight className="h-4 w-4" />
+              From Actions
+            </Button>
+            <Button onClick={() => onCreate("plans")}>
+              <Plus className="h-4 w-4" />
+              Plan
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-2 xl:grid-cols-[minmax(240px,1fr)_220px_170px_170px]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="Search plans"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+            </div>
+            <Select
+              value={planTypeFilter}
+              onChange={(event) => setPlanTypeFilter(event.target.value as FilterValue<string>)}
+            >
+              <option value="ALL">All plan types</option>
+              {planTypeOptions.map((type) => (
+                <option key={type} value={type}>
+                  {formatEnum(type)}
+                </option>
+              ))}
+            </Select>
+            <FocusRow label="Plans" value={String(plans.length)} />
+            <FocusRow label="Items" value={String(state.planItems.filter((item) => item.workspaceId === activeWorkspaceId).length)} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,0.88fr)_minmax(460px,1.12fr)]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Plan Library</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {plans.map((plan) => (
+              <button
+                key={plan.id}
+                className={cn(
+                  "w-full rounded-md border border-border p-3 text-left transition-colors hover:bg-muted/45",
+                  selectedPlan?.id === plan.id ? "bg-muted" : "bg-background"
+                )}
+                onClick={() => setSelectedId(plan.id)}
+              >
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone="violet">{formatEnum(plan.planType)}</Badge>
+                  <Badge tone={statusTone(plan.status)}>{formatEnum(plan.status)}</Badge>
+                  <Badge tone="blue">{Math.round(plan.confidenceScore * 100)}%</Badge>
+                </div>
+                <p className="mt-2 text-sm font-semibold">{plan.title}</p>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{plan.expectedOutcome}</p>
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <CardTitle>{selectedPlan?.title ?? "Plan Detail"}</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {selectedPlan?.description ?? "Select a plan to inspect execution context."}
+              </p>
+            </div>
+            {selectedPlan ? (
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => onEdit("plans", selectedPlan)}>
+                  <Edit3 className="h-4 w-4" />
+                  Edit
+                </Button>
+                <Button size="sm" onClick={() => onActivatePlan(selectedPlan)}>
+                  <ArrowRight className="h-4 w-4" />
+                  Activate
+                </Button>
+              </div>
+            ) : null}
+          </CardHeader>
+          {selectedPlan ? (
+            <CardContent className="space-y-4">
+              <div className="grid gap-2 sm:grid-cols-4">
+                <FocusRow label="Health" value={health ? `${health.score}/100` : "-"} />
+                <FocusRow label="Milestones" value={String(milestones.length)} />
+                <FocusRow label="Items" value={String(items.length)} />
+                <FocusRow label="Outcomes" value={String(outcomes.length)} />
+              </div>
+
+              <div className="rounded-md border border-border bg-background p-3">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Plan Overview</p>
+                <p className="mt-2 text-sm font-semibold">{selectedPlan.expectedOutcome}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  {formatDate(selectedPlan.startDate)} to {formatDate(selectedPlan.endDate)} - Owner {selectedPlan.owner}
+                </p>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <InlineList title="Related Objective" items={objective ? [objective.title] : []} />
+                <InlineList title="Related Recommended Actions" items={relatedActions.map((item) => item.title)} />
+              </div>
+
+              <section className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">Milestones</h3>
+                  <Button variant="outline" size="sm" onClick={() => onCreate("milestones")}>
+                    <Plus className="h-4 w-4" />
+                    Milestone
+                  </Button>
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {milestones.map((milestone) => (
+                    <button
+                      key={milestone.id}
+                      className="rounded-md border border-border bg-background p-3 text-left hover:bg-muted/45"
+                      onClick={() => onEdit("milestones", milestone)}
+                    >
+                      <div className="flex flex-wrap gap-2">
+                        <Badge tone={priorityTone(milestone.priority)}>{formatEnum(milestone.priority)}</Badge>
+                        <Badge tone={statusTone(milestone.status)}>{formatEnum(milestone.status)}</Badge>
+                      </div>
+                      <p className="mt-2 text-sm font-semibold">{milestone.title}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Due {formatDate(milestone.dueDate)}</p>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">Plan Items</h3>
+                  <Button variant="outline" size="sm" onClick={() => onCreate("planItems")}>
+                    <Plus className="h-4 w-4" />
+                    Item
+                  </Button>
+                </div>
+                {items.slice(0, 12).map((item) => (
+                  <div key={item.id} className="rounded-md border border-border bg-background p-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap gap-2">
+                          <Badge tone="violet">{formatEnum(item.itemType)}</Badge>
+                          <Badge tone={priorityTone(item.priority)}>{formatEnum(item.priority)}</Badge>
+                          <Badge tone={statusTone(item.status)}>{formatEnum(item.status)}</Badge>
+                          <Badge tone="blue">Impact {item.estimatedImpactScore}</Badge>
+                        </div>
+                        <p className="mt-2 text-sm font-semibold">{item.title}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Due {formatDate(item.dueDate)} - {item.owner}</p>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-2">
+                        <Button variant="outline" size="sm" onClick={() => onEdit("planItems", item)}>
+                          <Edit3 className="h-4 w-4" />
+                          Edit
+                        </Button>
+                        <Button size="sm" onClick={() => onCompletePlanItem(item)}>
+                          Complete
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </section>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <InlineList
+                  title="Dependencies"
+                  items={dependencies.map((dependency) => `${dependency.fromItemId} ${formatEnum(dependency.dependencyType)} ${dependency.toItemId}`)}
+                />
+                <InlineList title="Constraints" items={constraints.map((constraint) => `${constraint.title} - ${formatEnum(constraint.severity)}`)} />
+                <InlineList title="Predicted Outcomes" items={outcomes.map((outcome) => `${outcome.metricName}: ${outcome.predictedValue}`)} />
+                <InlineList title="Health Rationale" items={health ? [health.rationale] : []} />
+              </div>
+            </CardContent>
+          ) : null}
+        </Card>
+      </section>
+    </div>
+  );
+}
+
+function CapabilitiesPage({ page }: { page: PageDefinition }) {
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>{page.label}</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">{page.description}</p>
+        </CardHeader>
+      </Card>
+
+      <div className="grid gap-3 xl:grid-cols-2">
+        {capabilityRegistry.map((capability) => (
+          <Card key={capability.id}>
+            <CardHeader>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone={capability.status === "ACTIVE" ? "green" : capability.status === "BETA" ? "blue" : "amber"}>
+                  {capability.status}
+                </Badge>
+                <Badge tone="violet">{capability.version}</Badge>
+              </div>
+              <CardTitle>{capability.name}</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">{capability.description}</p>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2">
+              <InlineList title="Inputs" items={capability.inputs} />
+              <InlineList title="Outputs" items={capability.outputs} />
+              <InlineList title="Dependencies" items={capability.dependencies} />
+              <InlineList title="Events" items={[...capability.eventsConsumed, ...capability.eventsProduced]} />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -2944,7 +3640,8 @@ function EditorPanel({
 }) {
   if (!draft) return null;
 
-  const fields = getEditorFields(draft.collection, state);
+  const activeDraft = draft;
+  const fields = getEditorFields(activeDraft.collection, state);
 
   function updateField(key: string, value: string, kind?: FieldConfig["kind"]) {
     const nextValue =
@@ -2957,9 +3654,9 @@ function EditorPanel({
               .filter(Boolean)
           : value;
     setDraft({
-      ...draft,
+      ...activeDraft,
       item: {
-        ...draft.item,
+        ...activeDraft.item,
         [key]: nextValue
       }
     });
@@ -2969,8 +3666,8 @@ function EditorPanel({
     <div className="fixed inset-y-0 right-0 z-30 flex w-full max-w-xl flex-col border-l border-border bg-card shadow-panel">
       <div className="flex items-start justify-between gap-3 border-b border-border p-4">
         <div className="min-w-0">
-          <p className="text-sm font-semibold">{draft.isNew ? "Create" : "Edit"} record</p>
-          <p className="truncate text-xs text-muted-foreground">{draft.collection}</p>
+          <p className="text-sm font-semibold">{activeDraft.isNew ? "Create" : "Edit"} record</p>
+          <p className="truncate text-xs text-muted-foreground">{activeDraft.collection}</p>
         </div>
         <Button variant="outline" size="icon" onClick={() => setDraft(null)}>
           <X className="h-4 w-4" />
@@ -2984,15 +3681,15 @@ function EditorPanel({
             {field.kind === "textarea" || field.kind === "tags" ? (
               <Textarea
                 value={
-                  Array.isArray(draft.item[field.key])
-                    ? draft.item[field.key].join("\n")
-                    : String(draft.item[field.key] ?? "")
+                  Array.isArray(activeDraft.item[field.key])
+                    ? activeDraft.item[field.key].join("\n")
+                    : String(activeDraft.item[field.key] ?? "")
                 }
                 onChange={(event) => updateField(field.key, event.target.value, field.kind)}
               />
             ) : field.kind === "select" ? (
               <Select
-                value={String(draft.item[field.key] ?? "")}
+                value={String(activeDraft.item[field.key] ?? "")}
                 onChange={(event) => updateField(field.key, event.target.value, field.kind)}
               >
                 {(field.options ?? []).map((option) => (
@@ -3004,7 +3701,7 @@ function EditorPanel({
             ) : (
               <Input
                 type={field.kind === "number" ? "number" : "text"}
-                value={String(draft.item[field.key] ?? "")}
+                value={String(activeDraft.item[field.key] ?? "")}
                 onChange={(event) => updateField(field.key, event.target.value, field.kind)}
               />
             )}
@@ -3014,12 +3711,12 @@ function EditorPanel({
 
       <div className="space-y-3 border-t border-border p-4">
         <div className="flex flex-wrap gap-2">
-          {getConversionOptions(draft.collection).map((option) => (
+          {getConversionOptions(activeDraft.collection).map((option) => (
             <Button
               key={option.value}
               variant="outline"
               size="sm"
-              onClick={() => onConvert(option.value, draft.item, draft.collection)}
+              onClick={() => onConvert(option.value, activeDraft.item, activeDraft.collection)}
             >
               {option.label}
             </Button>
@@ -3046,6 +3743,10 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
   const workflowOptions = state.workflows.map((workflow) => workflow.id);
   const memoryOptions = state.memories.map((memory) => memory.id);
   const agentOptions = state.agents.map((agent) => agent.id);
+  const planOptions = state.plans.map((plan) => plan.id);
+  const milestoneOptions = state.milestones.map((milestone) => milestone.id);
+  const planItemOptions = state.planItems.map((item) => item.id);
+  const objectiveOptions = state.objectives.map((objective) => objective.id);
   const commonCore: FieldConfig[] = [
     { key: "title", label: "Title" },
     { key: "description", label: "Description", kind: "textarea" },
@@ -3366,6 +4067,93 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
     ];
   }
 
+  if (collection === "plans") {
+    return [
+      { key: "title", label: "Title" },
+      { key: "description", label: "Description", kind: "textarea" },
+      { key: "planType", label: "Plan Type", kind: "select", options: planTypeOptions },
+      { key: "status", label: "Status", kind: "select", options: planStatusOptions },
+      { key: "objectiveId", label: "Objective", kind: "select", options: ["", ...objectiveOptions] },
+      { key: "startDate", label: "Start Date" },
+      { key: "endDate", label: "End Date" },
+      { key: "owner", label: "Owner" },
+      { key: "expectedOutcome", label: "Expected Outcome", kind: "textarea" },
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" }
+    ];
+  }
+
+  if (collection === "milestones") {
+    return [
+      { key: "planId", label: "Plan", kind: "select", options: planOptions },
+      { key: "title", label: "Title" },
+      { key: "description", label: "Description", kind: "textarea" },
+      { key: "dueDate", label: "Due Date" },
+      { key: "status", label: "Status", kind: "select", options: planItemStatusOptions },
+      { key: "priority", label: "Priority", kind: "select", options: priorityOptions },
+      { key: "owner", label: "Owner" },
+      { key: "expectedImpact", label: "Expected Impact", kind: "textarea" },
+      { key: "order", label: "Order", kind: "number" }
+    ];
+  }
+
+  if (collection === "planItems") {
+    return [
+      { key: "planId", label: "Plan", kind: "select", options: planOptions },
+      { key: "milestoneId", label: "Milestone", kind: "select", options: ["", ...milestoneOptions] },
+      { key: "title", label: "Title" },
+      { key: "description", label: "Description", kind: "textarea" },
+      { key: "itemType", label: "Item Type", kind: "select", options: planItemTypeOptions },
+      { key: "sourceType", label: "Source Type" },
+      { key: "sourceId", label: "Source ID" },
+      { key: "priority", label: "Priority", kind: "select", options: priorityOptions },
+      { key: "status", label: "Status", kind: "select", options: planItemStatusOptions },
+      { key: "owner", label: "Owner" },
+      { key: "dueDate", label: "Due Date" },
+      { key: "estimatedImpactScore", label: "Estimated Impact", kind: "number" },
+      { key: "estimatedEffortScore", label: "Estimated Effort", kind: "number" }
+    ];
+  }
+
+  if (collection === "planDependencies") {
+    return [
+      { key: "planId", label: "Plan", kind: "select", options: planOptions },
+      { key: "fromItemId", label: "From Item", kind: "select", options: planItemOptions },
+      { key: "toItemId", label: "To Item", kind: "select", options: planItemOptions },
+      { key: "dependencyType", label: "Dependency Type", kind: "select", options: planDependencyTypeOptions },
+      { key: "reason", label: "Reason", kind: "textarea" }
+    ];
+  }
+
+  if (collection === "planConstraints") {
+    return [
+      { key: "planId", label: "Plan", kind: "select", options: planOptions },
+      { key: "title", label: "Title" },
+      { key: "description", label: "Description", kind: "textarea" },
+      { key: "constraintType", label: "Constraint Type", kind: "select", options: planConstraintTypeOptions },
+      { key: "severity", label: "Severity", kind: "select", options: severityOptions }
+    ];
+  }
+
+  if (collection === "predictedOutcomes") {
+    return [
+      { key: "planId", label: "Plan", kind: "select", options: planOptions },
+      { key: "metricName", label: "Metric Name" },
+      { key: "predictedValue", label: "Predicted Value", kind: "number" },
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" },
+      { key: "rationale", label: "Rationale", kind: "textarea" }
+    ];
+  }
+
+  if (collection === "resourceCapacities") {
+    return [
+      { key: "owner", label: "Owner" },
+      { key: "role", label: "Role" },
+      { key: "weeklyHours", label: "Weekly Hours", kind: "number" },
+      { key: "focusArea", label: "Focus Area" },
+      { key: "notes", label: "Notes", kind: "textarea" }
+    ];
+  }
+
   if (collection === "knowledgeRelationships") {
     return [
       { key: "fromObjectId", label: "From Object", kind: "select", options: knowledgeObjectOptions },
@@ -3504,6 +4292,11 @@ function ContextBadges({ item }: { item: AnyRecord }) {
     item.workflowType ? ["Workflow", formatEnum(item.workflowType), "violet"] : null,
     item.triggerType ? ["Trigger", formatEnum(item.triggerType), "blue"] : null,
     item.stepType ? ["Step", formatEnum(item.stepType), "teal"] : null,
+    item.planType ? ["Plan", formatEnum(item.planType), "violet"] : null,
+    item.itemType ? ["Item", formatEnum(item.itemType), "teal"] : null,
+    item.dependencyType ? ["Dependency", formatEnum(item.dependencyType), "violet"] : null,
+    item.constraintType ? ["Constraint", formatEnum(item.constraintType), "amber"] : null,
+    item.severity ? ["Severity", formatEnum(item.severity), item.severity === "CRITICAL" ? "red" : "amber"] : null,
     item.strength !== undefined ? ["Strength", Number(item.strength).toFixed(2), "blue"] : null,
     item.opportunityKind ? ["Kind", item.opportunityKind, "slate"] : null,
     item.businessValueScore !== undefined ? ["Business", item.businessValueScore, "green"] : null,
@@ -3516,7 +4309,7 @@ function ContextBadges({ item }: { item: AnyRecord }) {
     item.agentType ? ["Agent", formatEnum(item.agentType), "violet"] : null,
     item.industry ? ["Industry", item.industry, "blue"] : null,
     item.channel ? ["Channel", item.channel, "teal"] : null
-  ].filter(Boolean) as [string, string | number, "blue" | "teal" | "amber" | "green" | "slate" | "violet"][];
+  ].filter(Boolean) as [string, string | number, "blue" | "teal" | "amber" | "green" | "slate" | "violet" | "red"][];
 
   if (badges.length === 0) {
     return <span className="text-xs text-muted-foreground">Workspace scoped</span>;
