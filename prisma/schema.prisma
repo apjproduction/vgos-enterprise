@@ -715,6 +715,20 @@ model Workspace {
   name                 String
   slug                 String
   organizationId       String
+  companyProductName   String?
+  website              String?
+  timezone             String?               @default("America/Los_Angeles")
+  defaultOwner         String?
+  productDescription   String?               @db.Text
+  targetAudience       String?               @db.Text
+  positioning          String?               @db.Text
+  competitorNames      String[]              @default([])
+  weeklyCapacity       Int?                  @default(20)
+  defaultMissionPriority Priority?           @default(HIGH)
+  contentCadence       String?
+  approvalRequirements String[]              @default([])
+  onboardingCompleted  Boolean               @default(false)
+  onboardingCompletedAt DateTime?
   organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   personas             Persona[]
   conversations        Conversation[]

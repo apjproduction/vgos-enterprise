@@ -8,6 +8,8 @@ import {
   Lightbulb,
   Network,
   Search,
+  Settings,
+  ShieldCheck,
   Sparkles,
   Target,
   UsersRound
@@ -506,6 +508,20 @@ export type Workspace = {
   name: string;
   slug: string;
   organizationId: string;
+  companyProductName?: string;
+  website?: string;
+  timezone?: string;
+  defaultOwner?: string;
+  productDescription?: string;
+  targetAudience?: string;
+  positioning?: string;
+  competitors?: string[];
+  weeklyCapacity?: number;
+  defaultMissionPriority?: Priority;
+  contentCadence?: string;
+  approvalRequirements?: string[];
+  onboardingCompleted?: boolean;
+  onboardingCompletedAt?: string;
 };
 
 export type ScopedRecord = {
@@ -1401,6 +1417,8 @@ export type PlatformState = {
 
 export type PageId =
   | "missionControl"
+  | "onboarding"
+  | "priorities"
   | "missions"
   | "connectors"
   | "signals"
@@ -1427,6 +1445,9 @@ export type PageId =
   | "attributions"
   | "strategyAdjustments"
   | "capabilities"
+  | "auditLogs"
+  | "systemHealth"
+  | "settings"
   | "opportunityQueue"
   | "recommendedActions"
   | "intelligenceEngine"
@@ -1492,6 +1513,7 @@ export type CollectionKey =
   | "connectorSyncRuns"
   | "recommendedActions"
   | "events"
+  | "auditLogs"
   | "contentAssets"
   | "directorySubmissions"
   | "backlinks"
@@ -1550,6 +1572,18 @@ export const pageDefinitions: PageDefinition[] = [
     icon: Activity
   },
   {
+    id: "onboarding",
+    label: "Onboarding",
+    description: "Guided workspace setup that creates the first mission, plan, and recommendations.",
+    icon: Sparkles
+  },
+  {
+    id: "priorities",
+    label: "Priorities",
+    description: "Daily and weekly priority queues selected from missions, plans, recommendations, and execution signals.",
+    icon: CheckCircle2
+  },
+  {
     id: "missions",
     label: "Missions",
     description: "Highest-level business missions tying objectives, plans, execution, measurements, and learning together.",
@@ -1578,7 +1612,7 @@ export const pageDefinitions: PageDefinition[] = [
   },
   {
     id: "briefing",
-    label: "Intelligence Briefing",
+    label: "Daily Briefing",
     description: "Rule-based summary of recent changes, attention areas, and weekly focus.",
     icon: Search,
   },
@@ -1726,6 +1760,25 @@ export const pageDefinitions: PageDefinition[] = [
     label: "Capabilities",
     description: "Registered VGOS kernel capabilities, dependencies, inputs, outputs, and operating status.",
     icon: Sparkles
+  },
+  {
+    id: "auditLogs",
+    label: "Audit Logs",
+    description: "Workspace-scoped record of manual edits, generated changes, quality checks, and operational activity.",
+    icon: Database,
+    collection: "auditLogs"
+  },
+  {
+    id: "systemHealth",
+    label: "System Health",
+    description: "Diagnostics for connectors, quality, errors, audit activity, sync health, and readiness checks.",
+    icon: ShieldCheck
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    description: "Workspace, product context, operational preferences, and connector readiness settings.",
+    icon: Settings
   },
   {
     id: "opportunityQueue",
@@ -4010,7 +4063,24 @@ export const initialPlatformState: PlatformState = {
       id: workspaceId,
       name: "VidMaker Growth OS",
       slug: "vidmaker-growth-os",
-      organizationId: orgId
+      organizationId: orgId,
+      companyProductName: "VidMaker",
+      website: "https://vidmaker.com",
+      timezone: "America/Los_Angeles",
+      defaultOwner: "Tom Promise",
+      productDescription:
+        "VidMaker turns source material such as product pages, launch pages, and scripts into governed video workflows.",
+      targetAudience:
+        "Founders, growth operators, ecommerce teams, SaaS marketers, creators, and agencies that need repeatable video production.",
+      positioning:
+        "Video Production Intelligence for teams that need source-aware, ready-to-post video workflows.",
+      competitors: ["InVideo", "Runway", "Synthesia", "Pictory", "Canva"],
+      weeklyCapacity: 24,
+      defaultMissionPriority: "HIGH",
+      contentCadence: "3 proof-led assets per week",
+      approvalRequirements: ["Founder approval", "Brand approval", "SEO approval"],
+      onboardingCompleted: true,
+      onboardingCompletedAt: daysAgo(6)
     }
   ],
   personas,

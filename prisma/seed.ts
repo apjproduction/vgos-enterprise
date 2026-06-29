@@ -473,13 +473,47 @@ async function seedFoundation() {
       }
     },
     update: {
-      name: "VidMaker Growth OS"
+      name: "VidMaker Growth OS",
+      companyProductName: "VidMaker",
+      website: "https://vidmaker.com",
+      timezone: "America/Los_Angeles",
+      defaultOwner: "Tom Promise",
+      productDescription:
+        "VidMaker turns source material such as product pages, launch pages, and scripts into governed video workflows.",
+      targetAudience:
+        "Founders, growth operators, ecommerce teams, SaaS marketers, creators, and agencies that need repeatable video production.",
+      positioning:
+        "Video Production Intelligence for teams that need source-aware, ready-to-post video workflows.",
+      competitorNames: ["InVideo", "Runway", "Synthesia", "Pictory", "Canva"],
+      weeklyCapacity: 24,
+      defaultMissionPriority: "HIGH",
+      contentCadence: "3 proof-led assets per week",
+      approvalRequirements: ["Founder approval", "Brand approval", "SEO approval"],
+      onboardingCompleted: true,
+      onboardingCompletedAt: dateFromNow(-6)
     },
     create: {
       id: workspaceId,
       name: "VidMaker Growth OS",
       slug: "vidmaker-growth-os",
-      organizationId: organization.id
+      organizationId: organization.id,
+      companyProductName: "VidMaker",
+      website: "https://vidmaker.com",
+      timezone: "America/Los_Angeles",
+      defaultOwner: "Tom Promise",
+      productDescription:
+        "VidMaker turns source material such as product pages, launch pages, and scripts into governed video workflows.",
+      targetAudience:
+        "Founders, growth operators, ecommerce teams, SaaS marketers, creators, and agencies that need repeatable video production.",
+      positioning:
+        "Video Production Intelligence for teams that need source-aware, ready-to-post video workflows.",
+      competitorNames: ["InVideo", "Runway", "Synthesia", "Pictory", "Canva"],
+      weeklyCapacity: 24,
+      defaultMissionPriority: "HIGH",
+      contentCadence: "3 proof-led assets per week",
+      approvalRequirements: ["Founder approval", "Brand approval", "SEO approval"],
+      onboardingCompleted: true,
+      onboardingCompletedAt: dateFromNow(-6)
     }
   });
 

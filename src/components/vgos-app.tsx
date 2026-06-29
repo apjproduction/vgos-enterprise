@@ -3,13 +3,21 @@
 import { useMemo, useState, type ReactNode } from "react";
 import {
   Activity,
+  Archive,
   ArrowRight,
+  Ban,
+  CalendarClock,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Database,
   Edit3,
   Filter,
+  Play,
   Plus,
   Save,
   Search,
+  ShieldCheck,
   Trash2,
   X
 } from "lucide-react";
@@ -20,9 +28,30 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  ConfirmDialog,
+  EmptyState,
+  ErrorState,
+  HealthBadge,
+  LoadingState,
+  PageIntro,
+  PriorityBadge,
+  StatusBadge
+} from "@/components/ui/production-states";
 import { cn } from "@/lib/utils";
 import { processIntelligenceRecord } from "@/lib/intelligence-pipeline";
 import { buildOpportunityQueue, type OpportunityItem } from "@/lib/opportunity-engine";
+import { getCurrentUser } from "@/lib/auth/auth-placeholder";
+import {
+  connectorSetupOptions,
+  createOnboardingArtifacts,
+  defaultMissionSelections,
+  getEmptyStateCopy,
+  getPageIntro,
+  navigationGroups,
+  readOnlyCollections,
+  type OnboardingAnswers
+} from "@/lib/production-ux";
 import {
   rankRecommendedActions,
   rankOpportunities,
@@ -145,7 +174,8 @@ import {
   type SignalType,
   type StrategyAdjustment,
   type Status,
-  type SyncStatus
+  type SyncStatus,
+  type Workspace
 } from "@/lib/vgos-data";
 
 type AnyRecord = Record<string, any>;
@@ -911,9 +941,13 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
   const [priorityFilter, setPriorityFilter] = useState<FilterValue<Priority>>("ALL");
   const [opportunityFilter, setOpportunityFilter] = useState<OpportunityFilter>("ALL");
   const [draft, setDraft] = useState<DraftState>(null);
+  const [pendingDelete, setPendingDelete] = useState<DraftState>(null);
+  const [collapsedNavGroups, setCollapsedNavGroups] = useState<Record<string, boolean>>({});
 
   const page = pageDefinitions.find((item) => item.id === activePage) ?? pageDefinitions[0];
   const workspace = state.workspaces.find((item) => item.id === activeWorkspaceId);
+  const currentUser = getCurrentUser();
+  const pageIntro = getPageIntro(page);
   const metrics = useMemo(
     () => getExecutiveMetrics(state, activeWorkspaceId),
     [state, activeWorkspaceId]
@@ -984,6 +1018,46 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
       )
     );
     setDraft(null);
+  }
+
+  function requestDeleteDraft() {
+    if (!draft) return;
+    setPendingDelete(draft);
+  }
+
+  function confirmDeleteDraft() {
+    deleteDraft();
+    setPendingDelete(null);
+  }
+
+  function updateWorkspace(updates: Partial<Workspace>) {
+    setState((currentState) => ({
+      ...currentState,
+      workspaces: currentState.workspaces.map((item) =>
+        item.id === activeWorkspaceId ? { ...item, ...updates } : item
+      )
+    }));
+  }
+
+  function completeOnboarding(answers: OnboardingAnswers) {
+    const artifacts = createOnboardingArtifacts(answers, activeWorkspaceId);
+    setState((currentState) => ({
+      ...currentState,
+      workspaces: currentState.workspaces.map((item) =>
+        item.id === activeWorkspaceId ? { ...item, ...artifacts.workspacePatch } : item
+      ),
+      objectives: [artifacts.objective, ...currentState.objectives],
+      missions: [artifacts.mission, ...currentState.missions],
+      plans: [artifacts.plan, ...currentState.plans],
+      planItems: [...artifacts.planItems, ...currentState.planItems],
+      recommendedActions: [...artifacts.recommendedActions, ...currentState.recommendedActions],
+      missionObjectives: [...artifacts.missionObjectives, ...currentState.missionObjectives],
+      missionPlans: [...artifacts.missionPlans, ...currentState.missionPlans],
+      events: [...artifacts.events, ...currentState.events]
+    }));
+    setDraft(null);
+    setActivePage("missionControl");
+    resetFilters();
   }
 
   function resetFilters() {
@@ -1748,6 +1822,74 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
     }));
   }
 
+  function updateRecommendedActionStatus(actionId: string, status: ActionStatus) {
+    const now = new Date().toISOString();
+    setState((currentState) => ({
+      ...currentState,
+      recommendedActions: currentState.recommendedActions.map((action) =>
+        action.id === actionId ? { ...action, status, updatedAt: now } : action
+      )
+    }));
+  }
+
+  function snoozeRecommendedAction(actionId: string) {
+    const now = new Date().toISOString();
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 7);
+    setState((currentState) => ({
+      ...currentState,
+      recommendedActions: currentState.recommendedActions.map((action) =>
+        action.id === actionId
+          ? { ...action, status: "PENDING" as ActionStatus, dueDate: dueDate.toISOString(), updatedAt: now }
+          : action
+      )
+    }));
+  }
+
+  function updatePlanItemStatus(item: AnyRecord, status: PlanItem["status"]) {
+    const now = new Date().toISOString();
+    setState((currentState) => ({
+      ...currentState,
+      planItems: currentState.planItems.map((candidate) =>
+        candidate.id === item.id ? { ...candidate, status, updatedAt: now } : candidate
+      )
+    }));
+  }
+
+  function snoozePlanItem(item: AnyRecord) {
+    const now = new Date().toISOString();
+    const dueDate = new Date(item.dueDate ?? now);
+    dueDate.setDate(dueDate.getDate() + 7);
+    setState((currentState) => ({
+      ...currentState,
+      planItems: currentState.planItems.map((candidate) =>
+        candidate.id === item.id ? { ...candidate, dueDate: dueDate.toISOString(), updatedAt: now } : candidate
+      )
+    }));
+  }
+
+  function updateExecutionStatus(item: AnyRecord, status: ExecutionStatus) {
+    const now = new Date().toISOString();
+    setState((currentState) => ({
+      ...currentState,
+      executionItems: currentState.executionItems.map((candidate) =>
+        candidate.id === item.id ? { ...candidate, status, updatedAt: now } : candidate
+      )
+    }));
+  }
+
+  function snoozeExecutionItem(item: AnyRecord) {
+    const now = new Date().toISOString();
+    const dueDate = new Date(item.dueDate ?? now);
+    dueDate.setDate(dueDate.getDate() + 7);
+    setState((currentState) => ({
+      ...currentState,
+      executionItems: currentState.executionItems.map((candidate) =>
+        candidate.id === item.id ? { ...candidate, dueDate: dueDate.toISOString(), updatedAt: now } : candidate
+      )
+    }));
+  }
+
   function convertActionToTask(action: AnyRecord) {
     const now = new Date().toISOString();
     const task = {
@@ -2274,6 +2416,8 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
     }
   }
 
+  const canCreatePageRecord = page.collection && !readOnlyCollections.has(page.collection);
+
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#f7f9fb_0%,#edf2f7_100%)]">
       <div className="border-b border-border bg-card">
@@ -2285,14 +2429,18 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
                   <Database className="mr-1 h-3 w-3" />
                   Growth Intelligence Platform
                 </Badge>
-                <Badge tone="green">Observation - Insight - Hypothesis - Experiment - Outcome</Badge>
+                <Badge tone="green">Production UX & Operational Readiness</Badge>
+                <Badge tone="slate">
+                  <ShieldCheck className="mr-1 h-3 w-3" />
+                  {currentUser.name} - Owner
+                </Badge>
               </div>
               <h1 className="mt-2 text-2xl font-semibold tracking-normal sm:text-3xl">
-                VGOS v5.0 Enterprise
+                VGOS v5.4 Enterprise
               </h1>
               <p className="mt-1 max-w-4xl text-sm text-muted-foreground">
-                VidMaker intelligence layer for SEO, AEO, GEO, product, content,
-                authority, community, and growth decisions.
+                Daily command workspace for priorities, missions, approvals, blockers,
+                recommendations, connected intelligence, and production controls.
               </p>
             </div>
             <div className="w-full max-w-xs">
@@ -2316,44 +2464,74 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
         <aside className="space-y-4 lg:sticky lg:top-4 lg:h-fit">
           <Card>
             <CardHeader>
-              <CardTitle>Platform pages</CardTitle>
+              <CardTitle>Navigation</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {pageDefinitions.map((item) => {
-                const Icon = item.icon;
-                const active = activePage === item.id;
+              {navigationGroups.map((group) => {
+                const collapsed = collapsedNavGroups[group.label] ?? false;
                 return (
-                  <button
-                    key={item.id}
-                    className={cn(
-                      "flex min-h-12 w-full items-center gap-3 rounded-md border px-3 py-2 text-left transition-colors",
-                      active
-                        ? "border-primary/30 bg-primary text-primary-foreground"
-                        : "border-transparent hover:border-border hover:bg-muted"
+                  <div key={group.label} className="rounded-md border border-border bg-background">
+                    <button
+                      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs font-semibold uppercase text-muted-foreground"
+                      onClick={() =>
+                        setCollapsedNavGroups((current) => ({
+                          ...current,
+                          [group.label]: !collapsed
+                        }))
+                      }
+                    >
+                      <span>{group.label}</span>
+                      {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </button>
+                    {collapsed ? null : (
+                      <div className="space-y-1 border-t border-border p-2">
+                        {group.pages.map((pageId) => {
+                          const item = pageDefinitions.find((definition) => definition.id === pageId);
+                          if (!item) return null;
+                          const Icon = item.icon;
+                          const active = activePage === item.id;
+                          return (
+                            <button
+                              key={item.id}
+                              className={cn(
+                                "flex min-h-11 w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors",
+                                active
+                                  ? "bg-primary text-primary-foreground"
+                                  : "hover:bg-muted"
+                              )}
+                              onClick={() => {
+                                setActivePage(item.id);
+                                setDraft(null);
+                                resetFilters();
+                              }}
+                            >
+                              <span
+                                className={cn(
+                                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
+                                  active ? "bg-primary-foreground/15" : "bg-secondary text-secondary-foreground"
+                                )}
+                              >
+                                <Icon className="h-4 w-4" />
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-semibold">{item.label}</span>
+                                <span
+                                  className={cn(
+                                    "block truncate text-xs",
+                                    active ? "text-primary-foreground/75" : "text-muted-foreground"
+                                  )}
+                                >
+                                  {item.collection
+                                    ? `${getCollection(state, item.collection).filter((row) => row.workspaceId === activeWorkspaceId).length} records`
+                                    : "Command view"}
+                                </span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     )}
-                    onClick={() => {
-                      setActivePage(item.id);
-                      setDraft(null);
-                      resetFilters();
-                    }}
-                  >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold">{item.label}</span>
-                      <span
-                        className={cn(
-                          "block truncate text-xs",
-                          active ? "text-primary-foreground/75" : "text-muted-foreground"
-                        )}
-                      >
-                        {item.collection
-                          ? `${getCollection(state, item.collection).filter((row) => row.workspaceId === activeWorkspaceId).length} records`
-                          : "Command view"}
-                      </span>
-                    </span>
-                  </button>
+                  </div>
                 );
               })}
             </CardContent>
@@ -2364,14 +2542,23 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
             <div className="rounded-md border border-border bg-card p-3 shadow-sm">
               <p className="text-sm font-semibold">{workspace?.name ?? "Workspace"}</p>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Owned by APJ Labs. All intelligence pages are filtered to this
-                workspace so the system is tenant-ready from the foundation.
+                Owned by {workspace?.defaultOwner ?? currentUser.name}. All pages are filtered to this
+                workspace, with settings prepared for persistent tenant context.
               </p>
             </div>
           </section>
         </aside>
 
         <section className="min-w-0 space-y-4">
+          {activePage !== "missionControl" && activePage !== "onboarding" ? (
+            <PageIntro
+              title={pageIntro.title}
+              description={pageIntro.description}
+              whyItMatters={pageIntro.whyItMatters}
+              nextActionLabel={canCreatePageRecord ? `Create ${page.label}` : undefined}
+              nextAction={canCreatePageRecord && page.collection ? () => openCreate(page.collection!) : undefined}
+            />
+          ) : null}
           {activePage === "missionControl" ? (
             <MissionControl
               state={state}
@@ -2379,17 +2566,19 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
               metrics={metrics}
               onCreate={openCreate}
               onEdit={openEdit}
-            onNavigate={navigateTo}
-            onRunAgent={runAgentManually}
-            onGeneratePlan={() => generatePlanFromRecommendedActionQueue()}
-            onConvertPlanToExecutions={convertPlanToExecutions}
-            markActionCompleted={markActionCompleted}
-            convertActionToTask={convertActionToTask}
-            onRunConnectorSync={() => {
-              const connector = state.connectors.find((item) => item.workspaceId === activeWorkspaceId && ["MOCK", "CONNECTED"].includes(item.status));
-              if (connector) runConnectorSyncRecord(connector);
-            }}
-          />
+              onNavigate={navigateTo}
+              onRunAgent={runAgentManually}
+              onGeneratePlan={() => generatePlanFromRecommendedActionQueue()}
+              onConvertPlanToExecutions={convertPlanToExecutions}
+              markActionCompleted={markActionCompleted}
+              convertActionToTask={convertActionToTask}
+              onRunConnectorSync={() => {
+                const connector = state.connectors.find((item) => item.workspaceId === activeWorkspaceId && ["MOCK", "CONNECTED"].includes(item.status));
+                if (connector) runConnectorSyncRecord(connector);
+              }}
+            />
+          ) : activePage === "onboarding" ? (
+            <OnboardingPage workspace={workspace} onComplete={completeOnboarding} onNavigate={navigateTo} />
           ) : activePage === "missions" ? (
             <MissionsPage
               state={state}
@@ -2479,6 +2668,10 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
               onEdit={openEdit}
               markActionCompleted={markActionCompleted}
               convertActionToTask={convertActionToTask}
+              onConvertToExecution={convertRecommendedActionToExecution}
+              onStartAction={(action) => updateRecommendedActionStatus(action.id, "IN_PROGRESS")}
+              onSnoozeAction={(action) => snoozeRecommendedAction(action.id)}
+              onArchiveAction={(action) => updateRecommendedActionStatus(action.id, "DISMISSED")}
             />
           ) : activePage === "intelligenceEngine" ? (
             <EnginePage
@@ -2553,7 +2746,7 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
               onCreate={openCreate}
               onEdit={openEdit}
             />
-          ) : activePage === "decisions" ? (
+          ) : activePage === "priorities" || activePage === "decisions" ? (
             <DecisionPage
               state={state}
               page={page}
@@ -2596,6 +2789,9 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
               onCompletePlanItem={markPlanItemComplete}
               onConvertPlanToExecutions={convertPlanToExecutions}
               onConvertPlanItemToExecution={convertPlanItemToExecution}
+              onBlockPlanItem={(item) => updatePlanItemStatus(item, "BLOCKED")}
+              onSnoozePlanItem={snoozePlanItem}
+              onArchivePlanItem={(item) => updatePlanItemStatus(item, "ARCHIVED")}
             />
           ) : activePage === "executions" ? (
             <ExecutionsPage
@@ -2615,6 +2811,9 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
               onAddEvidence={addEvidenceForExecution}
               onAddBlocker={addBlockerForExecution}
               onRequestApproval={requestApprovalForExecution}
+              onBlockExecution={(item) => updateExecutionStatus(item, "BLOCKED")}
+              onSnoozeExecution={snoozeExecutionItem}
+              onArchiveExecution={(item) => updateExecutionStatus(item, "CANCELLED")}
               onConvertResult={(conversion, item) => handleConversion(conversion, item, "executionResults")}
             />
           ) : activePage === "measurements" ? (
@@ -2631,6 +2830,20 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
               onCreate={openCreate}
               onEdit={openEdit}
               onConvert={(conversion, item, collection) => handleConversion(conversion, item, collection)}
+            />
+          ) : activePage === "systemHealth" ? (
+            <SystemHealthPage
+              state={state}
+              metrics={metrics}
+              activeWorkspaceId={activeWorkspaceId}
+              onNavigate={navigateTo}
+            />
+          ) : activePage === "settings" ? (
+            <SettingsPage
+              workspace={workspace}
+              state={state}
+              activeWorkspaceId={activeWorkspaceId}
+              onUpdateWorkspace={updateWorkspace}
             />
           ) : activePage === "capabilities" ? (
             <CapabilitiesPage page={page} />
@@ -2657,9 +2870,17 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
         draft={draft}
         setDraft={setDraft}
         onSave={saveDraft}
-        onDelete={deleteDraft}
+        onDelete={requestDeleteDraft}
         onConvert={handleConversion}
         state={state}
+      />
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title="Delete this record?"
+        description="This removes the selected workspace record from the current VGOS session. Future persistence will route this through an audited API action."
+        confirmLabel="Delete"
+        onConfirm={confirmDeleteDraft}
+        onCancel={() => setPendingDelete(null)}
       />
     </main>
   );
@@ -2692,245 +2913,136 @@ function MissionControl({
   convertActionToTask: (action: AnyRecord) => void;
   onRunConnectorSync: () => void;
 }) {
-  const queue = buildOpportunityQueue(state, activeWorkspaceId);
-  const actions = state.recommendedActions
-    .filter((item) => item.workspaceId === activeWorkspaceId && item.status !== "COMPLETED")
-    .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority));
-  const activeExperiments = state.experiments.filter(
-    (item) => item.workspaceId === activeWorkspaceId && item.status === "IN_PROGRESS"
-  );
-  const contentAttention = state.contentAssets.filter(
-    (item) => item.workspaceId === activeWorkspaceId && item.status !== "PUBLISHED"
-  );
-  const authorityActions = actions.filter((item) =>
-    ["SUBMIT_DIRECTORY", "REACH_OUT_FOR_BACKLINK", "ADD_INTERNAL_LINK"].includes(item.actionType)
-  );
   const dailyPriorities = selectTopDailyPriorities(state, activeWorkspaceId, 5);
-  const weeklyPriorities = selectTopWeeklyPriorities(state, activeWorkspaceId, 5);
-  const strategicActions = rankRecommendedActions(state, activeWorkspaceId).slice(0, 5);
-  const activePatterns = state.patterns
-    .filter((item) => item.workspaceId === activeWorkspaceId && item.status !== "ARCHIVED")
-    .sort((a, b) => b.importanceScore - a.importanceScore)
-    .slice(0, 5);
-  const objectiveProgress = summarizeObjectiveProgress(state, activeWorkspaceId).slice(0, 5);
-  const topEntities = state.knowledgeObjects
-    .filter((item) => item.workspaceId === activeWorkspaceId && item.objectType === "ENTITY")
-    .sort((a, b) => b.importanceScore - a.importanceScore)
-    .slice(0, 5);
-  const topTopics = state.knowledgeObjects
-    .filter((item) => item.workspaceId === activeWorkspaceId && item.objectType !== "ENTITY")
-    .sort((a, b) => b.importanceScore - a.importanceScore)
-    .slice(0, 5);
-  const knowledgeGaps = state.knowledgeObjects
-    .filter((item) => item.workspaceId === activeWorkspaceId && item.confidenceScore < 0.8)
-    .sort((a, b) => a.confidenceScore - b.confidenceScore)
-    .slice(0, 5);
-  const recentWorkflowRuns = state.workflowRuns
-    .filter((item) => item.workspaceId === activeWorkspaceId)
-    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
-    .slice(0, 5);
-  const pendingHandoffs = state.agentHandoffs
-    .filter((item) => item.workspaceId === activeWorkspaceId && item.status === "PENDING")
-    .slice(0, 5);
-  const agentRecommendations = state.aiRecommendations
-    .filter((item) => item.workspaceId === activeWorkspaceId && item.generatedBy.includes("Agent"))
-    .slice(0, 5);
-  const workspacePlans = state.plans.filter((item) => item.workspaceId === activeWorkspaceId);
-  const topActivePlan =
-    workspacePlans.find((item) => item.status === "ACTIVE") ??
-    [...workspacePlans].sort((a, b) => b.confidenceScore - a.confidenceScore)[0];
-  const nextPlanItems = state.planItems
-    .filter((item) => item.workspaceId === activeWorkspaceId && !["COMPLETED", "ARCHIVED"].includes(item.status))
-    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-    .slice(0, 5);
-  const blockedPlanItems = state.planItems
-    .filter((item) => item.workspaceId === activeWorkspaceId && item.status === "BLOCKED")
-    .slice(0, 5);
-  const topPlanHealth = topActivePlan
-    ? evaluatePlanHealth({
-        plan: topActivePlan,
-        items: state.planItems.filter((item) => item.planId === topActivePlan.id),
-        dependencies: state.planDependencies.filter((item) => item.planId === topActivePlan.id),
-        constraints: state.planConstraints.filter((item) => item.planId === topActivePlan.id)
-      })
-    : null;
-  const workspaceExecutionItems = state.executionItems.filter((item) => item.workspaceId === activeWorkspaceId);
-  const executionQueue = getExecutionQueue(workspaceExecutionItems);
-  const executionHealth = getExecutionHealth(
-    workspaceExecutionItems,
-    state.executionEvidence.filter((item) => item.workspaceId === activeWorkspaceId),
-    state.executionBlockers.filter((item) => item.workspaceId === activeWorkspaceId),
-    state.executionResults.filter((item) => item.workspaceId === activeWorkspaceId)
-  );
-  const readyExecutionItems = executionQueue.filter((item) => item.status === "READY" || item.status === "APPROVED").slice(0, 5);
-  const blockedExecutionItems = executionQueue.filter((item) => item.status === "BLOCKED").slice(0, 5);
-  const approvalQueue = state.approvalRequests
-    .filter((item) => item.workspaceId === activeWorkspaceId && (item.status === "REQUESTED" || item.status === "CHANGES_REQUESTED"))
-    .slice(0, 5);
-  const recentlyCompletedExecutions = workspaceExecutionItems
-    .filter((item) => item.status === "COMPLETED")
-    .sort((a, b) => new Date(b.completedAt ?? b.updatedAt).getTime() - new Date(a.completedAt ?? a.updatedAt).getTime())
-    .slice(0, 5);
-  const workspaceMetrics = state.metrics.filter((item) => item.workspaceId === activeWorkspaceId);
-  const workspaceMeasurements = state.measurements
-    .filter((item) => item.workspaceId === activeWorkspaceId)
-    .sort((a, b) => new Date(b.measuredAt).getTime() - new Date(a.measuredAt).getTime());
-  const topMeasurementTrends = workspaceMetrics
-    .map((metric) => ({ metric, trend: getMetricTrend(metric, workspaceMeasurements) }))
-    .sort((a, b) => Math.abs(b.trend.changePercent) - Math.abs(a.trend.changePercent))
-    .slice(0, 5);
-  const highConfidenceLearnings = state.learnings
-    .filter((item) => item.workspaceId === activeWorkspaceId && item.confidenceScore >= 0.8)
-    .sort((a, b) => b.confidenceScore - a.confidenceScore)
-    .slice(0, 5);
-  const proposedAdjustments = state.strategyAdjustments
-    .filter((item) => item.workspaceId === activeWorkspaceId && item.status === "PROPOSED")
-    .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))
-    .slice(0, 5);
-  const recentAttributions = state.attributions
-    .filter((item) => item.workspaceId === activeWorkspaceId)
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 5);
   const activeMissionOverviews = state.missions
     .filter((item) => item.workspaceId === activeWorkspaceId && ["ACTIVE", "AT_RISK", "BLOCKED"].includes(item.status))
     .map((mission) => getMissionOverview(state, mission.id))
     .filter((item): item is NonNullable<typeof item> => Boolean(item))
-    .sort((a, b) => b.mission.priority.localeCompare(a.mission.priority) || b.riskScore - a.riskScore)
-    .slice(0, 6);
-  const recentSignals = state.normalizedSignals
+    .sort((a, b) => priorityRank(a.mission.priority) - priorityRank(b.mission.priority) || b.riskScore - a.riskScore)
+    .slice(0, 3);
+  const recentChanges = state.events
     .filter((item) => item.workspaceId === activeWorkspaceId)
-    .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
-  const connectorErrors = state.connectorSyncRuns
-    .filter((item) => item.workspaceId === activeWorkspaceId && item.status === "FAILED")
-    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+  const approvalQueue = state.approvalRequests
+    .filter((item) => item.workspaceId === activeWorkspaceId && ["REQUESTED", "CHANGES_REQUESTED"].includes(item.status))
+    .sort((a, b) => new Date(a.requestedAt).getTime() - new Date(b.requestedAt).getTime())
     .slice(0, 5);
-  const routedIntelligence = state.intelligenceObjects
-    .filter((item) => item.workspaceId === activeWorkspaceId && item.sourceType === "NormalizedSignal")
+  const blockedPlanItems = state.planItems
+    .filter((item) => item.workspaceId === activeWorkspaceId && item.status === "BLOCKED")
+    .slice(0, 3);
+  const blockedExecutions = state.executionItems
+    .filter((item) => item.workspaceId === activeWorkspaceId && item.status === "BLOCKED")
+    .slice(0, 3);
+  const openBlockers = state.executionBlockers
+    .filter((item) => item.workspaceId === activeWorkspaceId && ["OPEN", "IN_REVIEW"].includes(item.status))
+    .slice(0, 3);
+  const blockedItems = [
+    ...openBlockers.map((item) => ({ id: item.id, title: item.title, detail: item.owner, collection: "executionBlockers" as EditableCollection, item })),
+    ...blockedExecutions.map((item) => ({ id: item.id, title: item.title, detail: item.owner, collection: "executionItems" as EditableCollection, item })),
+    ...blockedPlanItems.map((item) => ({ id: item.id, title: item.title, detail: item.owner, collection: "planItems" as EditableCollection, item }))
+  ].slice(0, 5);
+  const recommendations = rankRecommendedActions(state, activeWorkspaceId)
+    .filter((item) => item.status !== "COMPLETED")
     .slice(0, 5);
-  const externalOpportunities = state.normalizedSignals
-    .filter((item) => item.workspaceId === activeWorkspaceId && (item.priority === "CRITICAL" || item.confidenceScore >= 0.85))
-    .slice(0, 5);
-  const qualityRecommendations = [...state.aiRecommendations, ...state.recommendedActions]
+  const connectors = state.connectors
     .filter((item) => item.workspaceId === activeWorkspaceId)
-    .sort((a, b) => (b.qualityScore ?? 0) - (a.qualityScore ?? 0));
-  const highConfidenceRecommendations = qualityRecommendations
-    .filter((item) => item.confidenceScore >= 0.8 && (item.qualityScore ?? 0) >= 75)
-    .slice(0, 5);
-  const lowConfidenceRecommendations = qualityRecommendations
-    .filter((item) => item.confidenceScore < 0.65 || (item.qualityScore ?? 100) < 65)
-    .sort((a, b) => a.confidenceScore - b.confidenceScore || (a.qualityScore ?? 0) - (b.qualityScore ?? 0))
-    .slice(0, 5);
-  const duplicateRiskRecommendations = qualityRecommendations
-    .filter((item) => (item.duplicateRisk ?? 0) >= 0.5)
-    .sort((a, b) => (b.duplicateRisk ?? 0) - (a.duplicateRisk ?? 0))
-    .slice(0, 5);
-  const missingEvidenceRecommendations = qualityRecommendations
-    .filter((item) => (item.missingEvidence ?? []).length > 0)
-    .sort((a, b) => (b.missingEvidence ?? []).length - (a.missingEvidence ?? []).length)
-    .slice(0, 5);
+    .sort((a, b) => b.healthScore - a.healthScore)
+    .slice(0, 3);
+  const topActivePlan = state.plans
+    .filter((item) => item.workspaceId === activeWorkspaceId)
+    .find((item) => item.status === "ACTIVE");
+  const atRiskMissions = activeMissionOverviews.filter((item) => item.mission.status === "AT_RISK" || item.riskScore >= 45).length;
+
   return (
     <div className="space-y-4">
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <MetricCard label="Active Missions" value={metrics.activeMissions} />
-        <MetricCard label="Mission Health" value={`${metrics.averageMissionHealth}%`} />
-        <MetricCard label="Mission Velocity" value={`${metrics.averageMissionVelocity}%`} />
-        <MetricCard label="Mission Risk" value={`${metrics.averageMissionRisk}%`} />
-        <MetricCard label="Mission Confidence" value={`${metrics.averageMissionConfidence}%`} />
-        <MetricCard label="Mission Completion" value={`${metrics.averageMissionCompletion}%`} />
-      </section>
-      <section className="space-y-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">Enterprise Health</h2>
-            <p className="text-sm text-muted-foreground">
-              Quality, confidence, duplicate risk, audit activity, and kernel reliability across the active workspace.
-            </p>
-          </div>
-          <Badge tone="green">VGOS v5.3</Badge>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <MetricCard label="Signal Quality" value={`${metrics.averageSignalQuality}%`} />
-          <MetricCard label="Recommendation Quality" value={`${metrics.averageRecommendationQuality}%`} />
-          <MetricCard label="Duplicate Risk" value={metrics.duplicateRiskRecommendations} />
-          <MetricCard label="Connector Health" value={`${metrics.averageConnectorHealth}%`} />
-          <MetricCard label="Kernel Errors" value={metrics.kernelErrors} />
-          <MetricCard label="Audit Events" value={metrics.auditEvents} />
-          <MetricCard label="Test Coverage Placeholder" value={metrics.testCoveragePlaceholder} />
-          <MetricCard label="Low Confidence Items" value={metrics.lowConfidenceRecommendations} />
-        </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <BriefingCard
-            title="High-confidence recommendations"
-            items={highConfidenceRecommendations.map((item) => `${item.title} (${Math.round(item.confidenceScore * 100)}%)`)}
-          />
-          <BriefingCard
-            title="Low-confidence recommendations"
-            items={lowConfidenceRecommendations.map((item) => `${item.title} (${Math.round(item.confidenceScore * 100)}%)`)}
-          />
-          <BriefingCard
-            title="Duplicate-risk recommendations"
-            items={duplicateRiskRecommendations.map((item) => `${item.title} (${Math.round((item.duplicateRisk ?? 0) * 100)}%)`)}
-          />
-          <BriefingCard
-            title="Recommendations missing evidence"
-            items={missingEvidenceRecommendations.map((item) => `${item.title}: ${(item.missingEvidence ?? []).join(", ")}`)}
-          />
-        </div>
+      <PageIntro
+        title="Mission Control"
+        description="A daily operating view for priorities, changed work, approvals, blockers, recommendations, mission risk, and connected intelligence."
+        whyItMatters="VGOS keeps diagnostics out of the daily flow and puts the operator's next decisions at the top of the workspace."
+        nextActionLabel="Review Priorities"
+        nextAction={() => onNavigate("priorities")}
+      />
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <FocusRow label="Today" value={`${dailyPriorities.length} priorities`} />
+        <FocusRow label="Approvals" value={String(metrics.pendingApprovals)} />
+        <FocusRow label="Blocked" value={String(metrics.openExecutionBlockers + metrics.blockedPlanItems)} />
+        <FocusRow label="At risk" value={`${atRiskMissions} missions`} />
       </section>
 
-      <section className="space-y-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">Connected Intelligence</h2>
-            <p className="text-sm text-muted-foreground">
-              External sources enter VGOS through connectors, raw signals, normalized signals, events, and the kernel router.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => onCreate("connectors")}>
-              Add Connector
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>Today&apos;s Priorities</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">The five items VGOS would spend operator capacity on first.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => onNavigate("priorities")}>
+              <ArrowRight className="h-4 w-4" />
+              Open Priorities
             </Button>
-            <Button variant="secondary" size="sm" onClick={onRunConnectorSync}>
-              Run Sync
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {dailyPriorities.length ? (
+              dailyPriorities.map((action) => <RankedActionRow key={action.id} action={action} onEdit={onEdit} />)
+            ) : (
+              <EmptyState
+                title="No daily priorities yet."
+                description="Add recommendations, active plans, or execution items so VGOS can rank the day."
+                actionLabel="Create Recommendation"
+                onAction={() => onCreate("recommendedActions")}
+                secondaryText="Daily priorities are selected from recommendation, objective, and execution context."
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>What Changed</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">Recent workspace events since the last operating review.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => onNavigate("briefing")}>
+              <ArrowRight className="h-4 w-4" />
+              Daily Briefing
             </Button>
-            <Button variant="outline" size="sm" onClick={() => onNavigate("signals")}>
-              View Signals
-            </Button>
-            <Button size="sm" onClick={() => onNavigate("connectors")}>
-              Review Failed Signals
-            </Button>
-          </div>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-          <MetricCard label="Active Connectors" value={metrics.activeConnectors} />
-          <MetricCard label="Signals Received" value={metrics.signalsReceived} />
-          <MetricCard label="Signals Routed" value={metrics.signalsRouted} />
-          <MetricCard label="Failed Signals" value={metrics.failedSignals} />
-          <MetricCard label="Last Sync" value={metrics.lastConnectorSync ? formatDate(metrics.lastConnectorSync) : "None"} />
-          <MetricCard label="Connector Health" value={`${metrics.averageConnectorHealth}%`} />
-        </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <BriefingCard title="Recent Signals" items={recentSignals.map((item) => item.title)} />
-          <BriefingCard title="Connector Errors" items={connectorErrors.map((item) => item.error ?? `${item.connectorId} failed`)} />
-          <BriefingCard title="Routed Intelligence" items={routedIntelligence.map((item) => item.summary)} />
-          <BriefingCard title="New External Opportunities" items={externalOpportunities.map((item) => item.title)} />
-        </div>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {recentChanges.map((event) => (
+              <button
+                key={event.id}
+                className="w-full rounded-md border border-border bg-background p-3 text-left hover:bg-muted/45"
+                onClick={() => onNavigate("briefing")}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge status={event.status} />
+                  <Badge tone={event.severity === "CRITICAL" ? "red" : event.severity === "HIGH" ? "amber" : "slate"}>
+                    {formatEnum(event.severity)}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-sm font-semibold">{event.title}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{formatDate(event.createdAt)} - {event.description}</p>
+              </button>
+            ))}
+          </CardContent>
+        </Card>
       </section>
 
       <section className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold">Active Missions</h2>
-            <p className="text-sm text-muted-foreground">
-              Business-level outcomes tying objectives, plans, execution, metrics, and learning together.
-            </p>
+            <p className="text-sm text-muted-foreground">Mission health and risk for the outcomes currently in motion.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" size="sm" onClick={() => onNavigate("missions")}>
+            <Button variant="outline" size="sm" onClick={() => onNavigate("missions")}>
+              <ArrowRight className="h-4 w-4" />
               Open Missions
             </Button>
             <Button size="sm" onClick={() => onCreate("missions")}>
+              <Plus className="h-4 w-4" />
               New Mission
             </Button>
           </div>
@@ -2947,473 +3059,408 @@ function MissionControl({
                   <p className="truncate text-sm font-semibold">{overview.mission.title}</p>
                   <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{overview.mission.description}</p>
                 </div>
-                <Badge tone={statusTone(overview.mission.status)}>{formatEnum(overview.mission.status)}</Badge>
+                <StatusBadge status={overview.mission.status} />
               </div>
-              <div className="mt-3 grid grid-cols-4 gap-2">
-                <FocusRow label="Health" value={`${overview.healthScore}%`} />
-                <FocusRow label="Done" value={`${overview.completionScore}%`} />
-                <FocusRow label="Risk" value={`${overview.riskScore}%`} />
-                <FocusRow label="Velocity" value={`${overview.velocityScore}%`} />
+              <div className="mt-3 flex flex-wrap gap-2">
+                <PriorityBadge priority={overview.mission.priority} />
+                <HealthBadge score={overview.healthScore} />
+                <Badge tone={overview.riskScore >= 45 ? "red" : overview.riskScore >= 30 ? "amber" : "green"}>
+                  Risk {overview.riskScore}%
+                </Badge>
               </div>
             </button>
           ))}
+          {activeMissionOverviews.length === 0 ? (
+            <EmptyState
+              title="No active missions yet."
+              description="Create a mission to give VGOS a strategic outcome to operate against today."
+              actionLabel="Create Mission"
+              onAction={() => onCreate("missions")}
+              secondaryText="Mission Control becomes most useful once a mission connects to plans and executions."
+            />
+          ) : null}
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <MetricCard label="Active Memories" value={metrics.activeMemories} />
-        <MetricCard label="Detected Patterns" value={metrics.detectedPatterns} />
-        <MetricCard label="Active Objectives" value={metrics.activeObjectives} />
-        <MetricCard label="Agent Runs" value={metrics.agentRuns} />
-        <MetricCard label="Reasoning Traces" value={metrics.reasoningTraces} />
-        <MetricCard label="High Impact Actions" value={metrics.highImpactActions} />
-      </section>
-
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Knowledge Objects" value={metrics.totalKnowledgeObjects} />
-        <MetricCard label="Knowledge Relationships" value={metrics.totalKnowledgeRelationships} />
-        <MetricCard label="Active Workflows" value={metrics.activeWorkflows} />
-        <MetricCard label="Pending Handoffs" value={metrics.pendingHandoffs} />
-      </section>
-
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <MetricCard label="Active Plans" value={metrics.activePlans} />
-        <MetricCard label="Draft Plans" value={metrics.draftPlans} />
-        <MetricCard label="Overdue Plan Items" value={metrics.overduePlanItems} />
-        <MetricCard label="Blocked Items" value={metrics.blockedPlanItems} />
-        <MetricCard label="Predicted Outcomes" value={metrics.predictedOutcomes} />
-        <MetricCard label="Resource Capacity" value={`${metrics.resourceCapacityHours}h`} />
-      </section>
-
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <MetricCard label="Ready Executions" value={metrics.readyExecutions} />
-        <MetricCard label="In Progress" value={metrics.inProgressExecutions} />
-        <MetricCard label="Blocked Executions" value={metrics.blockedExecutions} />
-        <MetricCard label="Pending Approvals" value={metrics.pendingApprovals} />
-        <MetricCard label="Completed This Week" value={metrics.completedExecutionsThisWeek} />
-        <MetricCard label="Evidence Added" value={metrics.evidenceAdded} />
-      </section>
-
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <MetricCard label="Metrics Tracked" value={metrics.metricsTracked} />
-        <MetricCard label="Measurements This Week" value={metrics.measurementsThisWeek} />
-        <MetricCard label="High-Confidence Learnings" value={metrics.highConfidenceLearnings} />
-        <MetricCard label="Pending Adjustments" value={metrics.pendingStrategyAdjustments} />
-        <MetricCard label="Objectives Improved" value={metrics.objectiveMetricsImproved} />
-        <MetricCard label="Prediction Accuracy" value={`${Math.round(metrics.predictionAccuracy * 100)}%`} />
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">Today&apos;s Priority Briefing</h2>
-            <p className="text-sm text-muted-foreground">
-              What needs attention across opportunities, actions, experiments,
-              authority, and content.
-            </p>
-          </div>
-          <Badge tone="blue">Mission Control</Badge>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <BriefingCard title="Top 5 Opportunities" items={queue.slice(0, 5).map((item) => item.title)} />
-          <BriefingCard
-            title="Processed Intelligence"
-            items={state.intelligenceObjects
-              .filter((item) => item.workspaceId === activeWorkspaceId)
-              .sort((a, b) => b.opportunityScore - a.opportunityScore)
-              .slice(0, 5)
-              .map((item) => item.summary)}
-          />
-          <BriefingCard title="Top 5 Recommended Actions" items={actions.slice(0, 5).map((item) => item.title)} />
-          <BriefingCard title="Top 5 Strategic Actions" items={strategicActions.map((item) => item.title)} />
-          <BriefingCard
-            title="High-Opportunity Questions"
-            items={state.questions.filter((item) => item.opportunityScore >= 3500).slice(0, 5).map((item) => item.title)}
-          />
-          <BriefingCard
-            title="High-Priority Pain Points"
-            items={state.painPoints.filter((item) => ["HIGH", "CRITICAL"].includes(item.priority)).slice(0, 5).map((item) => item.title)}
-          />
-          <BriefingCard
-            title="Pending AI Recommendations"
-            items={state.aiRecommendations.filter((item) => item.status !== "PUBLISHED").slice(0, 5).map((item) => item.title)}
-          />
-          <BriefingCard title="Active Experiments" items={activeExperiments.slice(0, 5).map((item) => item.title)} />
-          <BriefingCard title="Directory/Backlink Actions" items={authorityActions.slice(0, 5).map((item) => item.title)} />
-          <BriefingCard title="Content Assets Needing Attention" items={contentAttention.slice(0, 5).map((item) => item.title)} />
-          <BriefingCard title="Knowledge-Backed Reasoning" items={strategicActions.map((item) => item.reasoningSummary)} />
-        </div>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Knowledge Layer</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <FocusRow label="Top entities" value={String(metrics.topEntities)} />
-              <FocusRow label="Knowledge gaps" value={String(metrics.knowledgeGaps)} />
-            </div>
-            <InlineList title="Top Entities" items={topEntities.map((item) => item.title)} />
-            <InlineList title="Top Topics" items={topTopics.map((item) => item.title)} />
-            <InlineList title="Gaps" items={knowledgeGaps.map((item) => `${item.title} (${Math.round(item.confidenceScore * 100)}%)`)} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Workflow Layer</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <FocusRow label="Recent runs" value={String(metrics.recentWorkflowRuns)} />
-              <FocusRow label="Needs approval" value={String(metrics.workflowsWaitingForApproval)} />
-            </div>
-            <InlineList title="Recent Runs" items={recentWorkflowRuns.map((item) => `${item.workflowId}: ${formatEnum(item.status)}`)} />
-            <InlineList
-              title="Failed Runs"
-              items={state.workflowRuns
-                .filter((item) => item.workspaceId === activeWorkspaceId && item.status === "DISMISSED")
-                .map((item) => item.workflowId)}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Agent Layer</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <FocusRow label="Active agents" value={String(metrics.activeAgents)} />
-              <FocusRow label="Recent runs" value={String(metrics.agentRuns)} />
-            </div>
-            <InlineList title="Pending Handoffs" items={pendingHandoffs.map((item) => `${item.fromAgentId} to ${item.toAgentId}`)} />
-            <InlineList title="Agent Recommendations" items={agentRecommendations.map((item) => item.title)} />
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
+      <section className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <CardTitle>Planning Engine</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Plans sequence objectives, recommendations, dependencies, capacity, and predicted outcomes.
-              </p>
+            <div>
+              <CardTitle>What Needs Approval</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">Items waiting on founder, brand, SEO, product, content, or publishing review.</p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => onNavigate("plans")}>
+            <Button variant="outline" size="sm" onClick={() => onNavigate("approvals")}>
               <ArrowRight className="h-4 w-4" />
-              Open plans
+              Review All
             </Button>
           </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-2">
-            <InlineList title="Top Active Plan" items={topActivePlan ? [topActivePlan.title] : []} />
-            <InlineList title="Next 5 Plan Items" items={nextPlanItems.map((item) => `${item.title} - ${formatDate(item.dueDate)}`)} />
-            <InlineList title="Blocked Plan Items" items={blockedPlanItems.map((item) => item.title)} />
-            <InlineList title="Plan Health Score" items={topPlanHealth ? [`${topPlanHealth.score}/100 - ${formatEnum(topPlanHealth.status)}`] : []} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Planning Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2">
-            <Button variant="outline" onClick={() => onCreate("plans")}>
-              <Plus className="h-4 w-4" />
-              Create Plan
-            </Button>
-            <Button variant="outline" onClick={onGeneratePlan}>
-              <ArrowRight className="h-4 w-4" />
-              Generate From Actions
-            </Button>
-            <Button variant="outline" onClick={() => onCreate("planDependencies")}>
-              <Plus className="h-4 w-4" />
-              Add Dependency
-            </Button>
-            <Button onClick={() => onCreate("planConstraints")}>
-              <Plus className="h-4 w-4" />
-              Add Constraint
-            </Button>
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
-        <Card>
-          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <CardTitle>Execution Engine</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Execution tracks owners, approvals, blockers, evidence, results, and learning from planned work.
-              </p>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => onNavigate("executions")}>
-              <ArrowRight className="h-4 w-4" />
-              Open queue
-            </Button>
-          </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-2">
-            <InlineList title="Top Ready Execution Items" items={readyExecutionItems.map((item) => item.title)} />
-            <InlineList title="Blocked Items" items={blockedExecutionItems.map((item) => item.title)} />
-            <InlineList title="Approval Queue" items={approvalQueue.map((item) => `${item.title} - ${item.reviewer}`)} />
-            <InlineList title="Recently Completed" items={recentlyCompletedExecutions.map((item) => item.title)} />
-            <InlineList title="Execution Results" items={state.executionResults.filter((item) => item.workspaceId === activeWorkspaceId).slice(0, 5).map((item) => item.summary)} />
-            <InlineList title="Execution Health Score" items={[`${executionHealth.score}/100 - ${executionHealth.rationale}`]} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Execution Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2">
-            <Button variant="outline" onClick={() => onCreate("executionItems")}>
-              <Plus className="h-4 w-4" />
-              Create Execution Item
-            </Button>
-            <Button variant="outline" onClick={() => topActivePlan && onConvertPlanToExecutions(topActivePlan)}>
-              <ArrowRight className="h-4 w-4" />
-              Convert Plan
-            </Button>
-            <Button variant="outline" onClick={() => onNavigate("approvals")}>
-              <ArrowRight className="h-4 w-4" />
-              Review Approvals
-            </Button>
-            <Button variant="outline" onClick={() => onCreate("executionEvidence")}>
-              <Plus className="h-4 w-4" />
-              Add Evidence
-            </Button>
-            <Button onClick={() => onNavigate("executions")}>
-              <ArrowRight className="h-4 w-4" />
-              View Execution Queue
-            </Button>
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
-        <Card>
-          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <CardTitle>Measurement & Learning Engine</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Converts execution results into metric movement, learnings, attribution, and strategy feedback.
-              </p>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => onNavigate("measurements")}>
-              <ArrowRight className="h-4 w-4" />
-              Open measurements
-            </Button>
-          </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-2">
-            <InlineList
-              title="Metric Movement"
-              items={topMeasurementTrends.map(
-                ({ metric, trend }) =>
-                  `${metric.name}: ${trend.direction} ${trend.changePercent}% (${trend.currentValue} ${metric.unit})`
-              )}
-            />
-            <InlineList
-              title="Recent Measurements"
-              items={workspaceMeasurements
-                .slice(0, 5)
-                .map((item) => `${state.metrics.find((metric) => metric.id === item.metricId)?.name ?? item.metricId}: ${item.notes ?? item.value}`)}
-            />
-            <InlineList
-              title="High-Confidence Learnings"
-              items={highConfidenceLearnings.map((item) => `${item.title} (${Math.round(item.confidenceScore * 100)}%)`)}
-            />
-            <InlineList
-              title="Attribution Signals"
-              items={recentAttributions.map((item) => `${formatEnum(item.attributionType)}: ${item.sourceType} to ${item.targetType}`)}
-            />
-            <InlineList title="Proposed Adjustments" items={proposedAdjustments.map((item) => item.title)} />
-            <InlineList
-              title="Metrics Needing Attention"
-              items={workspaceMetrics
-                .filter((item) => ["WATCH", "DECLINING", "STALLED"].includes(item.status))
-                .map((item) => `${item.name} - ${formatEnum(item.status)}`)}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Measurement Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2">
-            <Button variant="outline" onClick={() => onCreate("metrics")}>
-              <Plus className="h-4 w-4" />
-              Add Metric
-            </Button>
-            <Button variant="outline" onClick={() => onCreate("measurements")}>
-              <Plus className="h-4 w-4" />
-              Add Measurement
-            </Button>
-            <Button variant="outline" onClick={() => onCreate("learnings")}>
-              <Plus className="h-4 w-4" />
-              Add Learning
-            </Button>
-            <Button onClick={() => onNavigate("strategyAdjustments")}>
-              <ArrowRight className="h-4 w-4" />
-              Review Strategy Feedback
-            </Button>
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Daily Priorities</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {dailyPriorities.map((action) => (
-              <RankedActionRow key={action.id} action={action} onEdit={onEdit} />
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Active Patterns</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {activePatterns.map((pattern) => {
-              const action = actions.find((item) => item.patternId === pattern.id || item.sourceId === pattern.id);
-              return (
-                <div key={pattern.id} className="rounded-md border border-border p-3">
-                  <div className="flex flex-wrap gap-2">
-                    <Badge tone={pattern.trendDirection === "RISING" ? "amber" : "slate"}>
-                      {formatEnum(pattern.trendDirection)}
-                    </Badge>
-                    <Badge tone="blue">{pattern.importanceScore}/100</Badge>
-                  </div>
-                  <p className="mt-2 text-sm font-semibold">{pattern.title}</p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    {action?.title ?? "No recommended action linked yet."}
-                  </p>
+          <CardContent className="space-y-2">
+            {approvalQueue.length ? approvalQueue.map((approval) => (
+              <button
+                key={approval.id}
+                className="w-full rounded-md border border-border bg-background p-3 text-left hover:bg-muted/45"
+                onClick={() => onEdit("approvalRequests", approval)}
+              >
+                <div className="flex flex-wrap gap-2">
+                  <StatusBadge status={approval.status} />
+                  <Badge tone="violet">{formatEnum(approval.approvalType)}</Badge>
                 </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Weekly Priorities</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {weeklyPriorities.map((action) => (
-              <RankedActionRow key={action.id} action={action} onEdit={onEdit} />
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Active Objectives</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {objectiveProgress.map(({ objective, progress }) => (
-              <ObjectiveProgressRow
-                key={objective.id}
-                objective={objective}
-                progress={progress}
-                health={calculateObjectiveHealth(objective, state.keyResults)}
+                <p className="mt-2 text-sm font-semibold">{approval.title}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Reviewer {approval.reviewer} - Requested {formatDate(approval.requestedAt)}</p>
+              </button>
+            )) : (
+              <EmptyState
+                title="No approvals waiting."
+                description="Request approval when a content, product, brand, or publishing decision needs review."
+                actionLabel="Request Approval"
+                onAction={() => onCreate("approvalRequests")}
+                secondaryText="Approval requests help VGOS keep high-risk work from shipping without review."
               />
-            ))}
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>What Is Blocked</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">Work that needs a dependency, asset, approval, or owner decision before it can move.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => onNavigate("blockers")}>
+              <ArrowRight className="h-4 w-4" />
+              Open Blockers
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {blockedItems.length ? blockedItems.map((blocked) => (
+              <button
+                key={blocked.id}
+                className="w-full rounded-md border border-border bg-background p-3 text-left hover:bg-muted/45"
+                onClick={() => onEdit(blocked.collection, blocked.item)}
+              >
+                <div className="flex flex-wrap gap-2">
+                  <StatusBadge status={"BLOCKED"} />
+                  <Badge tone="slate">{blocked.detail}</Badge>
+                </div>
+                <p className="mt-2 text-sm font-semibold">{blocked.title}</p>
+              </button>
+            )) : (
+              <EmptyState
+                title="Nothing is blocked."
+                description="Add a blocker when work cannot move because a dependency, approval, or asset is missing."
+                actionLabel="Add Blocker"
+                onAction={() => onCreate("executionBlockers")}
+                secondaryText="Blockers keep the daily view honest about what can actually ship."
+              />
+            )}
           </CardContent>
         </Card>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
         <Card>
-          <CardHeader>
-            <CardTitle>Opportunity Queue</CardTitle>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>VGOS Recommendations</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">High-confidence actions VGOS recommends converting into execution.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => onNavigate("recommendedActions")}>
+              <ArrowRight className="h-4 w-4" />
+              Open Queue
+            </Button>
           </CardHeader>
-          <CardContent>
-            <OpportunityQueueList items={queue.slice(0, 10)} onEdit={onEdit} />
+          <CardContent className="space-y-3">
+            {recommendations.map((action) => (
+              <div key={action.id} className="rounded-md border border-border bg-background p-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap gap-2">
+                      <PriorityBadge priority={action.priority} />
+                      <StatusBadge status={action.status} />
+                      <Badge tone="blue">{Math.round(action.confidenceScore * 100)}%</Badge>
+                    </div>
+                    <p className="mt-2 text-sm font-semibold">{action.title}</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{action.reasoningSummary}</p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={() => markActionCompleted(action.id)}>
+                      <CheckCircle2 className="h-4 w-4" />
+                      Mark Complete
+                    </Button>
+                    <Button size="sm" onClick={() => convertActionToTask(action)}>
+                      <ArrowRight className="h-4 w-4" />
+                      Convert to Task
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Weekly Focus</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <FocusRow label="Content target" value="Publish BLOG-004 with proof-first examples" />
-              <FocusRow label="Outreach target" value="Submit VidMaker to Futurepedia and Toolify" />
-              <FocusRow label="Community target" value="Reply to Product Hunt and LinkedIn URL-to-video threads" />
-              <FocusRow label="Experiment target" value="Run product-page-to-video demo distribution test" />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2">
-              <Button variant="outline" onClick={() => onNavigate("intelligencePipeline")}>
+        <Card>
+          <CardHeader>
+            <CardTitle>Connected Intelligence Status</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">Connector health that affects today&apos;s signals and recommendations.</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-2">
+              {connectors.map((connector) => (
+                <button
+                  key={connector.id}
+                  className="rounded-md border border-border bg-background p-3 text-left hover:bg-muted/45"
+                  onClick={() => onEdit("connectors", connector)}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{connector.name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Last sync {connector.lastSyncAt ? formatDate(connector.lastSyncAt) : "not run"}</p>
+                    </div>
+                    <HealthBadge score={connector.healthScore} />
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div className="grid gap-2">
+              <Button variant="outline" onClick={onRunConnectorSync}>
                 <ArrowRight className="h-4 w-4" />
-                Run Intelligence Pipeline
+                Run Sync
               </Button>
-              <Button variant="outline" onClick={() => onCreate("knowledgeObjects")}>
+              <Button variant="outline" onClick={() => onNavigate("systemHealth")}>
+                <ShieldCheck className="h-4 w-4" />
+                System Health
+              </Button>
+              <Button onClick={() => topActivePlan && onConvertPlanToExecutions(topActivePlan)} disabled={!topActivePlan}>
+                <ArrowRight className="h-4 w-4" />
+                Convert Active Plan
+              </Button>
+              <Button variant="outline" onClick={onGeneratePlan}>
                 <Plus className="h-4 w-4" />
-                Create Knowledge Object
-              </Button>
-              <Button variant="outline" onClick={() => onNavigate("workflows")}>
-                <ArrowRight className="h-4 w-4" />
-                Run Workflow
+                Generate Plan
               </Button>
               <Button variant="outline" onClick={onRunAgent}>
                 <ArrowRight className="h-4 w-4" />
                 Run Agent
               </Button>
-              <Button variant="outline" onClick={() => onNavigate("briefing")}>
-                <ArrowRight className="h-4 w-4" />
-                View Briefing
-              </Button>
-              <Button variant="outline" onClick={() => onCreate("conversations")}>
-                <Plus className="h-4 w-4" />
-                Add Conversation
-              </Button>
-              <Button onClick={() => onCreate("directorySubmissions")}>
-                <Plus className="h-4 w-4" />
-                Add Directory Submission
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Action controls</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {actions.slice(0, 3).map((action) => (
-                <div key={action.id} className="rounded-md border border-border p-2">
-                  <p className="text-xs font-semibold">{action.title}</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" onClick={() => markActionCompleted(action.id)}>
-                      Complete
-                    </Button>
-                    <Button size="sm" onClick={() => convertActionToTask(action)}>
-                      Task
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
       </section>
+    </div>
+  );
+}
+
+function OnboardingPage({
+  workspace,
+  onComplete,
+  onNavigate
+}: {
+  workspace?: Workspace;
+  onComplete: (answers: OnboardingAnswers) => void;
+  onNavigate: (page: PageId) => void;
+}) {
+  const [step, setStep] = useState(0);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [answers, setAnswers] = useState<OnboardingAnswers>({
+    workspaceName: workspace?.name ?? "VidMaker Growth OS",
+    companyProductName: workspace?.companyProductName ?? "VidMaker",
+    website: workspace?.website ?? "https://vidmaker.com",
+    primaryGoal: "Turn product-page-to-video demand into qualified signups and visible authority.",
+    productDescription: workspace?.productDescription ?? "",
+    targetAudience: workspace?.targetAudience ?? "",
+    positioning: workspace?.positioning ?? "",
+    competitors: (workspace?.competitors ?? []).join(", "),
+    selectedMissions: defaultMissionSelections.slice(0, 3),
+    selectedConnectors: ["GitHub", "Google Search Console", "Google Analytics", "Manual Import"]
+  });
+  const steps = ["Workspace Setup", "Product Context", "Mission Selection", "Connector Setup", "Generate First Plan"];
+
+  function updateAnswer(key: keyof OnboardingAnswers, value: string) {
+    setAnswers((current) => ({ ...current, [key]: value }));
+  }
+
+  function toggleListValue(key: "selectedMissions" | "selectedConnectors", value: string) {
+    setAnswers((current) => {
+      const selected = current[key];
+      return {
+        ...current,
+        [key]: selected.includes(value)
+          ? selected.filter((item) => item !== value)
+          : [...selected, value]
+      };
+    });
+  }
+
+  function generatePlan() {
+    setIsGenerating(true);
+    onComplete(answers);
+  }
+
+  if (isGenerating) {
+    return <LoadingState title="Generating first plan" description="VGOS is creating the initial mission, objective, plan items, and recommendations." />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <PageIntro
+        title="Onboarding"
+        description="Set the workspace context VGOS needs before daily operation begins."
+        whyItMatters="VGOS uses these answers to create the first mission, objectives, recommendations, and plan items for the active workspace."
+        nextActionLabel={step === steps.length - 1 ? "Generate First Plan" : "Continue"}
+        nextAction={() => (step === steps.length - 1 ? generatePlan() : setStep((current) => Math.min(current + 1, steps.length - 1)))}
+      />
+
+      <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
+        <Card>
+          <CardContent className="space-y-2 p-3">
+            {steps.map((label, index) => (
+              <button
+                key={label}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm",
+                  step === index ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                )}
+                onClick={() => setStep(index)}
+              >
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary text-xs font-semibold text-secondary-foreground">
+                  {index + 1}
+                </span>
+                <span className="font-medium">{label}</span>
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{steps[step]}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {step === 0 ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <LabeledInput label="Workspace name" value={answers.workspaceName} onChange={(value) => updateAnswer("workspaceName", value)} />
+                <LabeledInput label="Company/product name" value={answers.companyProductName} onChange={(value) => updateAnswer("companyProductName", value)} />
+                <LabeledInput label="Website" value={answers.website} onChange={(value) => updateAnswer("website", value)} />
+                <LabeledInput label="Primary goal" value={answers.primaryGoal} onChange={(value) => updateAnswer("primaryGoal", value)} wide />
+              </div>
+            ) : null}
+
+            {step === 1 ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <LabeledTextarea label="Product description" value={answers.productDescription} onChange={(value) => updateAnswer("productDescription", value)} />
+                <LabeledTextarea label="Target audience" value={answers.targetAudience} onChange={(value) => updateAnswer("targetAudience", value)} />
+                <LabeledTextarea label="Core positioning" value={answers.positioning} onChange={(value) => updateAnswer("positioning", value)} />
+                <LabeledTextarea label="Main competitors" value={answers.competitors} onChange={(value) => updateAnswer("competitors", value)} />
+              </div>
+            ) : null}
+
+            {step === 2 ? (
+              <div className="grid gap-2 md:grid-cols-2">
+                {defaultMissionSelections.map((mission) => (
+                  <label key={mission} className="flex items-start gap-3 rounded-md border border-border bg-background p-3 text-sm">
+                    <input
+                      className="mt-1"
+                      type="checkbox"
+                      checked={answers.selectedMissions.includes(mission)}
+                      onChange={() => toggleListValue("selectedMissions", mission)}
+                    />
+                    <span>
+                      <span className="block font-semibold">{mission}</span>
+                      <span className="mt-1 block text-xs leading-5 text-muted-foreground">Create mission context and suggested work for this operating lane.</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            ) : null}
+
+            {step === 3 ? (
+              <div className="grid gap-2 md:grid-cols-2">
+                {connectorSetupOptions.map((connector) => (
+                  <label key={connector} className="flex items-start gap-3 rounded-md border border-border bg-background p-3 text-sm">
+                    <input
+                      className="mt-1"
+                      type="checkbox"
+                      checked={answers.selectedConnectors.includes(connector)}
+                      onChange={() => toggleListValue("selectedConnectors", connector)}
+                    />
+                    <span>
+                      <span className="block font-semibold">{connector}</span>
+                      <span className="mt-1 block text-xs leading-5 text-muted-foreground">Mock/manual setup for now, ready for live connector configuration later.</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            ) : null}
+
+            {step === 4 ? (
+              <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <FocusRow label="Missions" value={String(answers.selectedMissions.length)} />
+                  <FocusRow label="Connectors" value={String(answers.selectedConnectors.length)} />
+                  <FocusRow label="Owner" value="Tom Promise" />
+                </div>
+                <InlineList title="Selected missions" items={answers.selectedMissions} />
+                <InlineList title="Connector setup" items={answers.selectedConnectors} />
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={() => onNavigate("missionControl")}>
+                    <ArrowRight className="h-4 w-4" />
+                    Skip
+                  </Button>
+                  <Button onClick={generatePlan}>
+                    <CheckCircle2 className="h-4 w-4" />
+                    Generate First Plan
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap justify-between gap-2 border-t border-border pt-4">
+              <Button variant="outline" onClick={() => setStep((current) => Math.max(current - 1, 0))} disabled={step === 0}>
+                Back
+              </Button>
+              <Button onClick={() => (step === steps.length - 1 ? generatePlan() : setStep((current) => Math.min(current + 1, steps.length - 1)))}>
+                {step === steps.length - 1 ? "Generate First Plan" : "Continue"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function LabeledInput({
+  label,
+  value,
+  onChange,
+  wide
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  wide?: boolean;
+}) {
+  return (
+    <div className={cn("space-y-1.5", wide ? "md:col-span-2" : undefined)}>
+      <Label>{label}</Label>
+      <Input value={value} onChange={(event) => onChange(event.target.value)} />
+    </div>
+  );
+}
+
+function LabeledTextarea({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <Textarea value={value} onChange={(event) => onChange(event.target.value)} />
     </div>
   );
 }
@@ -3932,7 +3979,11 @@ function RecommendedActionsPage({
   onCreate,
   onEdit,
   markActionCompleted,
-  convertActionToTask
+  convertActionToTask,
+  onConvertToExecution,
+  onStartAction,
+  onSnoozeAction,
+  onArchiveAction
 }: {
   state: PlatformState;
   page: PageDefinition;
@@ -3947,6 +3998,10 @@ function RecommendedActionsPage({
   onEdit: (collection: EditableCollection, item: AnyRecord) => void;
   markActionCompleted: (id: string) => void;
   convertActionToTask: (action: AnyRecord) => void;
+  onConvertToExecution: (action: AnyRecord) => void;
+  onStartAction: (action: AnyRecord) => void;
+  onSnoozeAction: (action: AnyRecord) => void;
+  onArchiveAction: (action: AnyRecord) => void;
 }) {
   const items = state.recommendedActions
     .filter((item) => item.workspaceId === activeWorkspaceId)
@@ -4002,16 +4057,43 @@ function RecommendedActionsPage({
                   >
                     View source
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => markActionCompleted(action.id)}>
-                    Mark completed
+                  <Button size="sm" variant="outline" onClick={() => onStartAction(action)}>
+                    <Play className="h-4 w-4" />
+                    Start
                   </Button>
-                  <Button size="sm" onClick={() => convertActionToTask(action)}>
-                    Convert to task
+                  <Button size="sm" variant="outline" onClick={() => markActionCompleted(action.id)}>
+                    <CheckCircle2 className="h-4 w-4" />
+                    Mark Complete
+                  </Button>
+                  <Button size="sm" onClick={() => onConvertToExecution(action)}>
+                    <ArrowRight className="h-4 w-4" />
+                    Convert to Execution
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => onSnoozeAction(action)}>
+                    <CalendarClock className="h-4 w-4" />
+                    Snooze
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => convertActionToTask(action)}>
+                    <Plus className="h-4 w-4" />
+                    Task
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => onArchiveAction(action)}>
+                    <Archive className="h-4 w-4" />
+                    Archive
                   </Button>
                 </div>
               </div>
             </div>
           ))}
+          {items.length === 0 ? (
+            <EmptyState
+              title="No recommendations yet."
+              description="Create or generate recommendations so VGOS has suggested next actions to rank."
+              actionLabel="Create Recommendation"
+              onAction={() => onCreate("recommendedActions")}
+              secondaryText="Recommendations can become execution items, plan items, or tasks."
+            />
+          ) : null}
         </div>
       </CardContent>
     </Card>
@@ -4505,8 +4587,14 @@ function MissionsPage({
           </section>
         ) : (
           <Card>
-            <CardContent className="py-10 text-center text-sm text-muted-foreground">
-              No missions match the current filters.
+            <CardContent className="p-4">
+              <EmptyState
+                title="No missions yet."
+                description="Create your first mission to tell VGOS what strategic outcome to drive."
+                actionLabel="Create Mission"
+                onAction={() => onCreate("missions")}
+                secondaryText="Missions connect objectives, plans, execution, results, and learning."
+              />
             </CardContent>
           </Card>
         )}
@@ -4741,8 +4829,14 @@ function ConnectorsPage({
           </section>
         ) : (
           <Card>
-            <CardContent className="py-10 text-center text-sm text-muted-foreground">
-              No connectors match the current filters.
+            <CardContent className="p-4">
+              <EmptyState
+                title="No connectors added yet."
+                description="Add a connector to bring live signals into VGOS."
+                actionLabel="Add Connector"
+                onAction={() => onCreate("connectors")}
+                secondaryText="Mock connectors are enough to prepare the workspace before live credentials are configured."
+              />
             </CardContent>
           </Card>
         )}
@@ -4879,6 +4973,8 @@ function DataPage({
     .filter((item) => itemMatchesFilters(item, searchQuery, statusFilter, priorityFilter));
   const hasStatus = items.some((item) => "status" in item);
   const hasPriority = items.some((item) => "priority" in item);
+  const readOnly = readOnlyCollections.has(collection);
+  const emptyState = getEmptyStateCopy(collection, page.label);
 
   return (
     <Card>
@@ -4887,10 +4983,12 @@ function DataPage({
           <CardTitle>{page.label}</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">{page.description}</p>
         </div>
-        <Button onClick={() => onCreate(collection)}>
-          <Plus className="h-4 w-4" />
-          Create
-        </Button>
+        {!readOnly ? (
+          <Button onClick={() => onCreate(collection)}>
+            <Plus className="h-4 w-4" />
+            Create
+          </Button>
+        ) : null}
       </CardHeader>
       <CardContent>
         <TableFilters
@@ -4903,12 +5001,22 @@ function DataPage({
           hasStatus={hasStatus}
           hasPriority={hasPriority}
         />
-        <RecordTable
-          items={items}
-          collection={collection}
-          onEdit={onEdit}
-          showOpportunity={false}
-        />
+        {items.length ? (
+          <RecordTable
+            items={items}
+            collection={collection}
+            onEdit={onEdit}
+            showOpportunity={false}
+          />
+        ) : (
+          <EmptyState
+            title={emptyState.title}
+            description={emptyState.description}
+            actionLabel={!readOnly ? emptyState.actionLabel : undefined}
+            onAction={!readOnly ? () => onCreate(collection) : undefined}
+            secondaryText={emptyState.secondaryText}
+          />
+        )}
       </CardContent>
     </Card>
   );
@@ -5020,7 +5128,10 @@ function PlansPage({
   onActivatePlan,
   onCompletePlanItem,
   onConvertPlanToExecutions,
-  onConvertPlanItemToExecution
+  onConvertPlanItemToExecution,
+  onBlockPlanItem,
+  onSnoozePlanItem,
+  onArchivePlanItem
 }: {
   state: PlatformState;
   page: PageDefinition;
@@ -5035,6 +5146,9 @@ function PlansPage({
   onCompletePlanItem: (item: AnyRecord) => void;
   onConvertPlanToExecutions: (plan: AnyRecord) => void;
   onConvertPlanItemToExecution: (item: AnyRecord) => void;
+  onBlockPlanItem: (item: AnyRecord) => void;
+  onSnoozePlanItem: (item: AnyRecord) => void;
+  onArchivePlanItem: (item: AnyRecord) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [planTypeFilter, setPlanTypeFilter] = useState<FilterValue<string>>("ALL");
@@ -5144,6 +5258,15 @@ function PlansPage({
                 <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{plan.expectedOutcome}</p>
               </button>
             ))}
+            {plans.length === 0 ? (
+              <EmptyState
+                title="No plans yet."
+                description="Create a plan to sequence objectives, recommendations, constraints, and expected outcomes."
+                actionLabel="Create Plan"
+                onAction={() => onCreate("plans")}
+                secondaryText="Plans become the bridge between strategy and execution."
+              />
+            ) : null}
           </CardContent>
         </Card>
 
@@ -5247,10 +5370,24 @@ function PlansPage({
                           Edit
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => onConvertPlanItemToExecution(item)}>
-                          Execute
+                          <ArrowRight className="h-4 w-4" />
+                          Convert to Execution
                         </Button>
                         <Button size="sm" onClick={() => onCompletePlanItem(item)}>
-                          Complete
+                          <CheckCircle2 className="h-4 w-4" />
+                          Mark Complete
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => onBlockPlanItem(item)}>
+                          <Ban className="h-4 w-4" />
+                          Block
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => onSnoozePlanItem(item)}>
+                          <CalendarClock className="h-4 w-4" />
+                          Snooze
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => onArchivePlanItem(item)}>
+                          <Archive className="h-4 w-4" />
+                          Archive
                         </Button>
                       </div>
                     </div>
@@ -5292,6 +5429,9 @@ function ExecutionsPage({
   onAddEvidence,
   onAddBlocker,
   onRequestApproval,
+  onBlockExecution,
+  onSnoozeExecution,
+  onArchiveExecution,
   onConvertResult
 }: {
   state: PlatformState;
@@ -5310,6 +5450,9 @@ function ExecutionsPage({
   onAddEvidence: (item: AnyRecord) => void;
   onAddBlocker: (item: AnyRecord) => void;
   onRequestApproval: (item: AnyRecord) => void;
+  onBlockExecution: (item: AnyRecord) => void;
+  onSnoozeExecution: (item: AnyRecord) => void;
+  onArchiveExecution: (item: AnyRecord) => void;
   onConvertResult: (conversion: string, item: AnyRecord) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -5504,9 +5647,13 @@ function ExecutionsPage({
               );
             })}
             {executions.length === 0 ? (
-              <div className="flex min-h-40 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
-                No execution items match this view.
-              </div>
+              <EmptyState
+                title="No execution items yet."
+                description="Convert a plan item or recommendation into an execution item."
+                actionLabel="Create Execution"
+                onAction={() => onCreate("executionItems")}
+                secondaryText="Execution items track owners, due dates, approvals, blockers, evidence, and results."
+              />
             ) : null}
           </CardContent>
         </Card>
@@ -5536,22 +5683,34 @@ function ExecutionsPage({
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => onAddEvidence(selectedExecution)}>
                   <Plus className="h-4 w-4" />
-                  Evidence
+                  Add Evidence
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => onAddBlocker(selectedExecution)}>
-                  <Plus className="h-4 w-4" />
-                  Blocker
+                <Button variant="outline" size="sm" onClick={() => {
+                  onBlockExecution(selectedExecution);
+                  onAddBlocker(selectedExecution);
+                }}>
+                  <Ban className="h-4 w-4" />
+                  Block
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => onRequestApproval(selectedExecution)}>
                   <Plus className="h-4 w-4" />
-                  Approval
+                  Request Approval
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => onSnoozeExecution(selectedExecution)}>
+                  <CalendarClock className="h-4 w-4" />
+                  Snooze
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => onArchiveExecution(selectedExecution)}>
+                  <Archive className="h-4 w-4" />
+                  Archive
                 </Button>
                 <Button
                   size="sm"
                   onClick={() => onCompleteExecution(selectedExecution)}
                   disabled={selectedExecution.status === "COMPLETED"}
                 >
-                  Complete
+                  <CheckCircle2 className="h-4 w-4" />
+                  Mark Complete
                 </Button>
               </div>
             ) : null}
@@ -6026,6 +6185,245 @@ function MeasurementLearningPage({
         </CardHeader>
         <CardContent>
           <RecordTable items={measurements} collection="measurements" onEdit={onEdit} showOpportunity={false} />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function SystemHealthPage({
+  state,
+  metrics,
+  activeWorkspaceId,
+  onNavigate
+}: {
+  state: PlatformState;
+  metrics: ReturnType<typeof getExecutiveMetrics>;
+  activeWorkspaceId: string;
+  onNavigate: (page: PageId) => void;
+}) {
+  const connectors = state.connectors.filter((item) => item.workspaceId === activeWorkspaceId);
+  const failedSyncs = state.connectorSyncRuns
+    .filter((item) => item.workspaceId === activeWorkspaceId && item.status === "FAILED")
+    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+    .slice(0, 5);
+  const lastSuccessfulSync = state.connectorSyncRuns
+    .filter((item) => item.workspaceId === activeWorkspaceId && item.status === "COMPLETED")
+    .sort((a, b) => new Date(b.completedAt ?? b.startedAt).getTime() - new Date(a.completedAt ?? a.startedAt).getTime())[0];
+  const qualityRecords = [...state.aiRecommendations, ...state.recommendedActions].filter(
+    (item) => item.workspaceId === activeWorkspaceId
+  );
+  const lowConfidenceItems = qualityRecords
+    .filter((item) => item.confidenceScore < 0.65 || (item.qualityScore ?? 100) < 65)
+    .slice(0, 5);
+  const duplicateRiskItems = qualityRecords
+    .filter((item) => (item.duplicateRisk ?? 0) >= 0.5)
+    .sort((a, b) => (b.duplicateRisk ?? 0) - (a.duplicateRisk ?? 0))
+    .slice(0, 5);
+  const kernelErrors = [
+    ...failedSyncs.map((item) => `${item.connectorId}: ${item.error ?? "Sync failed"}`),
+    ...state.rawSignals
+      .filter((item) => item.workspaceId === activeWorkspaceId && item.status === "FAILED")
+      .map((item) => `${item.source}: ${item.error ?? "Signal failed"}`),
+    ...state.executionItems
+      .filter((item) => item.workspaceId === activeWorkspaceId && item.status === "FAILED")
+      .map((item) => item.title)
+  ].slice(0, 8);
+  const recentEvents = state.events
+    .filter((item) => item.workspaceId === activeWorkspaceId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5);
+  const recentAuditEvents = state.auditLogs
+    .filter((item) => item.workspaceId === activeWorkspaceId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5);
+  const envChecks = [
+    "DATABASE_URL: server-side Prisma connection check pending",
+    "Connector API keys: mock placeholders only",
+    "Public app URL: optional until deployment",
+    "Auth provider keys: not required for placeholder auth"
+  ];
+
+  return (
+    <div className="space-y-4">
+      {kernelErrors.length ? (
+        <ErrorState
+          title="System diagnostics need attention"
+          description={`${kernelErrors.length} recent kernel, sync, or execution issues are visible in this workspace.`}
+          actionLabel="Open Sync Runs"
+          onAction={() => onNavigate("syncRuns")}
+        />
+      ) : null}
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Connector Health" value={`${metrics.averageConnectorHealth}%`} />
+        <MetricCard label="Signal Quality" value={`${metrics.averageSignalQuality}%`} />
+        <MetricCard label="Recommendation Quality" value={`${metrics.averageRecommendationQuality}%`} />
+        <MetricCard label="Kernel Errors" value={metrics.kernelErrors} />
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Connector Health</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {connectors.map((connector) => (
+              <div key={connector.id} className="rounded-md border border-border bg-background p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{connector.name}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{connector.description}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <StatusBadge status={connector.status} />
+                    <HealthBadge score={connector.healthScore} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Signal Quality</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2">
+            <FocusRow label="Raw signals" value={String(metrics.signalsReceived)} />
+            <FocusRow label="Routed" value={String(metrics.signalsRouted)} />
+            <FocusRow label="Failed" value={String(metrics.failedSignals)} />
+            <FocusRow label="Last sync" value={lastSuccessfulSync ? formatDate(lastSuccessfulSync.completedAt ?? lastSuccessfulSync.startedAt) : "None"} />
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-3">
+        <InlineList title="Recommendation Quality" items={qualityRecords.slice(0, 5).map((item) => `${item.title} - ${item.qualityScore ?? Math.round(item.confidenceScore * 100)}/100`)} />
+        <InlineList title="Duplicate Risk" items={duplicateRiskItems.map((item) => `${item.title} - ${Math.round((item.duplicateRisk ?? 0) * 100)}%`)} />
+        <InlineList title="Low Confidence Items" items={lowConfidenceItems.map((item) => `${item.title} - ${Math.round(item.confidenceScore * 100)}%`)} />
+        <InlineList title="Kernel Errors" items={kernelErrors} />
+        <InlineList title="Failed Syncs" items={failedSyncs.map((item) => `${item.connectorId}: ${item.error ?? "Failed"}`)} />
+        <InlineList title="Missing Environment Variables" items={envChecks} />
+        <InlineList title="Audit Events" items={recentAuditEvents.map((item) => `${item.actor}: ${item.action}`)} />
+        <InlineList title="Recent System Events" items={recentEvents.map((item) => `${formatDate(item.createdAt)} - ${item.title}`)} />
+        <InlineList title="Last Successful Sync" items={lastSuccessfulSync ? [`${lastSuccessfulSync.connectorId} - ${formatDate(lastSuccessfulSync.completedAt ?? lastSuccessfulSync.startedAt)}`] : []} />
+      </section>
+    </div>
+  );
+}
+
+function SettingsPage({
+  workspace,
+  state,
+  activeWorkspaceId,
+  onUpdateWorkspace
+}: {
+  workspace?: Workspace;
+  state: PlatformState;
+  activeWorkspaceId: string;
+  onUpdateWorkspace: (updates: Partial<Workspace>) => void;
+}) {
+  if (!workspace) {
+    return <ErrorState description="No workspace is selected. Choose a workspace before editing settings." />;
+  }
+
+  const connectors = state.connectors.filter((item) => item.workspaceId === activeWorkspaceId);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Workspace Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          <LabeledInput label="Workspace name" value={workspace.name} onChange={(value) => onUpdateWorkspace({ name: value })} />
+          <LabeledInput label="Company/product name" value={workspace.companyProductName ?? ""} onChange={(value) => onUpdateWorkspace({ companyProductName: value })} />
+          <LabeledInput label="Website" value={workspace.website ?? ""} onChange={(value) => onUpdateWorkspace({ website: value })} />
+          <LabeledInput label="Timezone" value={workspace.timezone ?? ""} onChange={(value) => onUpdateWorkspace({ timezone: value })} />
+          <LabeledInput label="Default owner" value={workspace.defaultOwner ?? ""} onChange={(value) => onUpdateWorkspace({ defaultOwner: value })} />
+          <div className="space-y-1.5">
+            <Label>Onboarding</Label>
+            <div className="flex h-9 items-center rounded-md border border-input bg-background px-3 text-sm">
+              {workspace.onboardingCompleted ? `Completed ${workspace.onboardingCompletedAt ? formatDate(workspace.onboardingCompletedAt) : ""}` : "Not completed"}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Product Context</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          <LabeledTextarea label="Product description" value={workspace.productDescription ?? ""} onChange={(value) => onUpdateWorkspace({ productDescription: value })} />
+          <LabeledTextarea label="Target audience" value={workspace.targetAudience ?? ""} onChange={(value) => onUpdateWorkspace({ targetAudience: value })} />
+          <LabeledTextarea label="Positioning" value={workspace.positioning ?? ""} onChange={(value) => onUpdateWorkspace({ positioning: value })} />
+          <LabeledTextarea
+            label="Competitors"
+            value={(workspace.competitors ?? []).join("\n")}
+            onChange={(value) =>
+              onUpdateWorkspace({
+                competitors: value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean)
+              })
+            }
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Operational Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="space-y-1.5">
+            <Label>Weekly capacity</Label>
+            <Input
+              type="number"
+              value={String(workspace.weeklyCapacity ?? 20)}
+              onChange={(event) => onUpdateWorkspace({ weeklyCapacity: Number(event.target.value) })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Default mission priority</Label>
+            <Select
+              value={workspace.defaultMissionPriority ?? "HIGH"}
+              onChange={(event) => onUpdateWorkspace({ defaultMissionPriority: event.target.value as Priority })}
+            >
+              {priorityOptions.map((priority) => (
+                <option key={priority} value={priority}>{formatEnum(priority)}</option>
+              ))}
+            </Select>
+          </div>
+          <LabeledInput label="Content cadence" value={workspace.contentCadence ?? ""} onChange={(value) => onUpdateWorkspace({ contentCadence: value })} />
+          <LabeledTextarea
+            label="Approval requirements"
+            value={(workspace.approvalRequirements ?? []).join("\n")}
+            onChange={(value) =>
+              onUpdateWorkspace({
+                approvalRequirements: value.split(/[\n,]/).map((item) => item.trim()).filter(Boolean)
+              })
+            }
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Connector Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {connectors.map((connector) => (
+            <div key={connector.id} className="grid gap-3 rounded-md border border-border bg-background p-3 md:grid-cols-[minmax(0,1fr)_140px_180px_220px]">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{connector.name}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{connector.provider}</p>
+              </div>
+              <StatusBadge status={connector.status} />
+              <div className="text-sm text-muted-foreground">Sync: {connector.nextSyncAt ? formatDate(connector.nextSyncAt) : "Manual"}</div>
+              <Input value="Configured server-side" disabled aria-label={`${connector.name} API key placeholder`} />
+            </div>
+          ))}
         </CardContent>
       </Card>
     </div>

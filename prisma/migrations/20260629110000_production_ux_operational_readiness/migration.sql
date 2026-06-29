@@ -1,0 +1,15 @@
+ALTER TABLE "Workspace"
+ADD COLUMN "companyProductName" TEXT,
+ADD COLUMN "website" TEXT,
+ADD COLUMN "timezone" TEXT DEFAULT 'America/Los_Angeles',
+ADD COLUMN "defaultOwner" TEXT,
+ADD COLUMN "productDescription" TEXT,
+ADD COLUMN "targetAudience" TEXT,
+ADD COLUMN "positioning" TEXT,
+ADD COLUMN "competitorNames" TEXT[] DEFAULT ARRAY[]::TEXT[],
+ADD COLUMN "weeklyCapacity" INTEGER DEFAULT 20,
+ADD COLUMN "defaultMissionPriority" "Priority" DEFAULT 'HIGH',
+ADD COLUMN "contentCadence" TEXT,
+ADD COLUMN "approvalRequirements" TEXT[] DEFAULT ARRAY[]::TEXT[],
+ADD COLUMN "onboardingCompleted" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "onboardingCompletedAt" TIMESTAMP(3);

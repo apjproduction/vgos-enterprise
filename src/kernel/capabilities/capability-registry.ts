@@ -220,7 +220,31 @@ export const capabilityRegistry: CapabilityDefinition[] = [
     eventsConsumed: ["RAW_SIGNAL_RECEIVED", "SIGNAL_NORMALIZED", "AI_RECOMMENDATION_CREATED", "MISSION_UPDATED"],
     eventsProduced: ["SIGNAL_ROUTED", "MISSION_HEALTH_CHANGED"],
     status: "ACTIVE"
-  },  {
+  },
+  {
+    id: "production-ux-operational-readiness",
+    name: "Production UX & Operational Readiness",
+    description: "Simplifies daily operation through Mission Control, onboarding, grouped navigation, settings, system health, empty states, and production-safe UI controls.",
+    version: "1.0.0",
+    inputs: ["Missions", "Recommendations", "Executions", "Connectors", "System Events"],
+    outputs: [
+      "Simplified Mission Control",
+      "Onboarding Flow",
+      "Settings",
+      "System Health",
+      "Usability Components"
+    ],
+    dependencies: [
+      "Mission Engine",
+      "Execution Engine",
+      "Connected Intelligence",
+      "Intelligence Quality Layer"
+    ],
+    eventsConsumed: ["MISSION_UPDATED", "EXECUTION_BLOCKED", "APPROVAL_REQUESTED", "CONNECTOR_HEALTH_CHANGED"],
+    eventsProduced: ["MISSION_UPDATED"],
+    status: "ACTIVE"
+  },
+  {
     id: "event-system",
     name: "Event System",
     description: "Records workspace-scoped events that trigger workflows and kernel updates.",
