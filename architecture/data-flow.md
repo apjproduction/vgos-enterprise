@@ -30,6 +30,17 @@ flowchart LR
 
 ```mermaid
 flowchart LR
+  A["Kernel"] --> B["Advisor Context"]
+  B --> C["Executive Brief"]
+  C --> D["Priority"]
+  D --> E["Work Queue"]
+  E --> F["Execution"]
+  F --> G["Results"]
+  G --> H["Learning"]
+```
+
+```mermaid
+flowchart LR
   A["Objective"] --> B["Pattern"]
   B --> C["Recommendation"]
   C --> D["Plan"]
@@ -73,7 +84,7 @@ flowchart LR
 
 ## Context
 
-Phase Alpha gave VGOS memory, patterns, reasoning traces, objectives, agents, events, and decision ranking. Phase Beta makes those artifacts reusable through canonical knowledge objects, relationships, workflows, and handoffs. The Planning Engine adds structured execution planning on top of recommendations and constraints. The Execution Engine turns plans into owned execution items, proof, approvals, blockers, and results. The Measurement & Learning Engine turns those results into measurable evidence, learning, attribution, strategy adjustment, and better future recommendations. The Mission Engine rolls those layers into top-level business missions with health, velocity, risk, confidence, completion, summaries, and recommendations. Connected Intelligence prepares live external sources while requiring every connector to pass through raw signals, normalized signals, events, and kernel routing. Intelligence Quality adds a deterministic trust gate between normalization and downstream intelligence so quality scoring, duplicate detection, confidence calibration, and audit events happen before Mission Control acts on new recommendations.
+Phase Alpha gave VGOS memory, patterns, reasoning traces, objectives, agents, events, and decision ranking. Phase Beta makes those artifacts reusable through canonical knowledge objects, relationships, workflows, and handoffs. The Planning Engine adds structured execution planning on top of recommendations and constraints. The Execution Engine turns plans into owned execution items, proof, approvals, blockers, and results. The Measurement & Learning Engine turns those results into measurable evidence, learning, attribution, strategy adjustment, and better future recommendations. The Mission Engine rolls those layers into top-level business missions with health, velocity, risk, confidence, completion, summaries, and recommendations. Connected Intelligence prepares live external sources while requiring every connector to pass through raw signals, normalized signals, events, and kernel routing. Intelligence Quality adds a deterministic trust gate between normalization and downstream intelligence so quality scoring, duplicate detection, confidence calibration, and audit events happen before System Mission Control acts on new recommendations. Executive Intelligence adds an Advisor Context layer that translates kernel state into Executive Brief, priorities, Work Queue, Results, and Learning review surfaces.
 
 ## Decision
 
@@ -81,7 +92,7 @@ All significant market and growth artifacts can be represented as workspace-scop
 
 ## Consequences
 
-- Mission Control can summarize knowledge, workflow, agent, and decision layers from one state model.
+- Executive Brief and System Mission Control can summarize knowledge, workflow, agent, and decision layers from one state model.
 - Semantic search can start with mock keyword similarity and later switch to embeddings without changing the product pages.
 - Workflows can begin as deterministic runs and later call external AI services or background job queues.
 - Planning connects strategic decisions to sequenced execution and expected outcomes.
@@ -90,6 +101,7 @@ All significant market and growth artifacts can be represented as workspace-scop
 - Mission connects objectives, plans, execution, measurement, learning, and strategy into one business outcome with health and progress.
 - Connected Intelligence connects external sources to VGOS through connectors, raw signals, normalized signals, events, and kernel routing.
 - Intelligence Quality checks normalized signals, detects duplicates, calibrates recommendation confidence, and records audit events before enterprise workflows rely on new intelligence.
+- Executive Intelligence converts kernel state into advisor context, daily priorities, work queue action, results review, and learning loops without adding another backend engine.
 
 ## Future Considerations
 

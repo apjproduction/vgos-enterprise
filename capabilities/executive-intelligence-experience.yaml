@@ -1,0 +1,33 @@
+id: executive-intelligence-experience
+name: Executive Intelligence Experience
+version: 1.0.0
+status: ACTIVE
+dependencies:
+  - Mission Engine
+  - Planning Engine
+  - Execution Engine
+  - Measurement & Learning Engine
+  - Intelligence Quality Layer
+  - Connected Intelligence
+outputs:
+  - Executive Brief
+  - Advisor Workspace
+  - Work Queue
+  - Persona Navigation
+  - Explainable Recommendations
+eventsConsumed:
+  - MISSION_UPDATED
+  - EXECUTION_STARTED
+  - EXECUTION_BLOCKED
+  - APPROVAL_REQUESTED
+  - EXECUTION_COMPLETED
+  - MEASUREMENT_CREATED
+eventsProduced:
+  - EXECUTIVE_BRIEF_GENERATED
+  - ADVISOR_QUESTION_ANSWERED
+  - WORK_QUEUE_REVIEWED
+description: >
+  Makes VGOS feel like an executive partner by translating kernel state into
+  a daily brief, rule-based advisor answers, persona-aware navigation, a simple
+  work queue, results narration, and explainable recommendations without adding
+  another backend engine.

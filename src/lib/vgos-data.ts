@@ -1,11 +1,14 @@
 import {
   Activity,
   BrainCircuit,
+  BriefcaseBusiness,
   CheckCircle2,
   CircleHelp,
+  ClipboardList,
   Database,
   FlaskConical,
   Lightbulb,
+  MessageSquare,
   Network,
   Search,
   Settings,
@@ -1416,6 +1419,9 @@ export type PlatformState = {
 };
 
 export type PageId =
+  | "executiveBrief"
+  | "advisor"
+  | "workQueue"
   | "missionControl"
   | "onboarding"
   | "priorities"
@@ -1566,9 +1572,27 @@ const score = (
 
 export const pageDefinitions: PageDefinition[] = [
   {
+    id: "executiveBrief",
+    label: "Executive Brief",
+    description: "Plain-language daily brief with priorities, mission health, wins, attention areas, and VGOS recommendations.",
+    icon: BriefcaseBusiness
+  },
+  {
+    id: "advisor",
+    label: "Advisor",
+    description: "Rule-based executive AI workspace for asking VGOS what to do, why work is at risk, and what changed.",
+    icon: MessageSquare
+  },
+  {
+    id: "workQueue",
+    label: "Work Queue",
+    description: "Simplified daily execution queue for ready work, blockers, approvals, overdue items, and completed work.",
+    icon: ClipboardList
+  },
+  {
     id: "missionControl",
-    label: "Mission Control",
-    description: "Executive command center for what the VidMaker team should do next.",
+    label: "System Mission Control",
+    description: "Technical command center for kernel-driven mission, planning, execution, and connected intelligence operations.",
     icon: Activity
   },
   {

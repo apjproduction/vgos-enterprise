@@ -24,7 +24,38 @@ export type NavigationGroup = {
   pages: PageId[];
 };
 
-export const navigationGroups: NavigationGroup[] = [
+export type PersonaMode = "Founder" | "Marketing" | "SEO" | "Product" | "Developer";
+export type NavigationMode = "operator" | "studio";
+
+export const personaModes: PersonaMode[] = ["Founder", "Marketing", "SEO", "Product", "Developer"];
+
+export const operatorNavigationGroups: NavigationGroup[] = [
+  {
+    label: "Operator Mode",
+    pages: ["executiveBrief", "workQueue", "missions", "plans", "executions", "results", "advisor", "settings"]
+  }
+];
+
+export const intelligenceStudioNavigationGroups: NavigationGroup[] = [
+  {
+    label: "Intelligence Studio",
+    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning"]
+  },
+  {
+    label: "Connections",
+    pages: ["connectors", "syncRuns"]
+  },
+  {
+    label: "System",
+    pages: ["missionControl", "capabilities", "auditLogs", "systemHealth", "settings"]
+  }
+];
+
+export const developerNavigationGroups: NavigationGroup[] = [
+  {
+    label: "Executive",
+    pages: ["executiveBrief", "workQueue", "advisor", "results"]
+  },
   {
     label: "Command Center",
     pages: ["missionControl", "briefing", "priorities"]
@@ -50,6 +81,73 @@ export const navigationGroups: NavigationGroup[] = [
     pages: ["capabilities", "auditLogs", "systemHealth", "settings"]
   }
 ];
+
+export const navigationGroups = operatorNavigationGroups;
+
+const personaShortcutMap: Record<PersonaMode, PageId[]> = {
+  Founder: ["executiveBrief", "missions", "workQueue", "results", "advisor", "settings"],
+  Marketing: ["contentEngine", "approvals", "results", "recommendedActions", "workQueue", "advisor"],
+  SEO: ["searchEngine", "opportunityQueue", "contentEngine", "authorityEngine", "results", "advisor"],
+  Product: ["productEngine", "blockers", "executions", "results", "signals", "advisor"],
+  Developer: ["missionControl", "connectors", "signals", "intelligencePipeline", "capabilities", "systemHealth"]
+};
+
+const personaNavigationMap: Partial<Record<PersonaMode, NavigationGroup[]>> = {
+  Marketing: [
+    {
+      label: "Marketing Focus",
+      pages: ["executiveBrief", "workQueue", "contentEngine", "approvals", "results", "recommendedActions", "advisor", "settings"]
+    }
+  ],
+  SEO: [
+    {
+      label: "SEO Focus",
+      pages: ["executiveBrief", "workQueue", "searchEngine", "opportunityQueue", "contentEngine", "authorityEngine", "results", "advisor"]
+    }
+  ],
+  Product: [
+    {
+      label: "Product Focus",
+      pages: ["executiveBrief", "workQueue", "productEngine", "blockers", "executions", "signals", "results", "advisor"]
+    }
+  ]
+};
+
+export function getNavigationGroupsForMode(personaMode: PersonaMode, navigationMode: NavigationMode): NavigationGroup[] {
+  if (personaMode === "Developer") return developerNavigationGroups;
+  if (navigationMode === "studio") return intelligenceStudioNavigationGroups;
+  return personaNavigationMap[personaMode] ?? operatorNavigationGroups;
+}
+
+export function getPersonaShortcuts(personaMode: PersonaMode) {
+  return personaShortcutMap[personaMode];
+}
+
+export function getPersonaEmphasis(personaMode: PersonaMode) {
+  const copy: Record<PersonaMode, { title: string; description: string }> = {
+    Founder: {
+      title: "Executive partner mode",
+      description: "Founder mode emphasizes the brief, missions, daily work, results, and advisor."
+    },
+    Marketing: {
+      title: "Marketing operating mode",
+      description: "Marketing mode emphasizes campaigns, content, approvals, results, and recommendations."
+    },
+    SEO: {
+      title: "SEO intelligence mode",
+      description: "SEO mode emphasizes keywords, AEO/GEO, content clusters, backlinks, and search performance."
+    },
+    Product: {
+      title: "Product signal mode",
+      description: "Product mode emphasizes feedback, blockers, feature requests, product signals, and execution results."
+    },
+    Developer: {
+      title: "Developer mode",
+      description: "Developer mode exposes technical pages, connectors, signals, pipelines, capabilities, audit logs, and system health."
+    }
+  };
+  return copy[personaMode];
+}
 
 export const readOnlyCollections = new Set<CollectionKey>([
   "auditLogs",
@@ -295,7 +393,7 @@ export function createOnboardingArtifacts(answers: OnboardingAnswers, workspaceI
       evidenceStrength: 68,
       missingEvidence: [],
       duplicateRisk: 0.1,
-      confidenceExplanation: "Based on production readiness controls requested for VGOS v5.4.",
+      confidenceExplanation: "Based on production readiness controls and executive operating needs.",
       objectiveId,
       ...base
     }
@@ -360,7 +458,7 @@ export function createOnboardingArtifacts(answers: OnboardingAnswers, workspaceI
 export function getPageIntro(page: PageDefinition) {
   const byPage: Partial<Record<PageId, { whyItMatters: string; nextActionLabel?: string }>> = {
     missionControl: {
-      whyItMatters: "VGOS condenses workspace activity into the decisions, approvals, blockers, and recommendations that need attention today."
+      whyItMatters: "System Mission Control keeps the technical operating surface available under Intelligence Studio."
     },
     onboarding: {
       whyItMatters: "VGOS uses onboarding answers to seed the workspace context, first mission, first plan, and recommended actions.",

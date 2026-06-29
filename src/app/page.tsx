@@ -1,5 +1,5 @@
-import { VgosApp } from "@/components/vgos-app";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <VgosApp />;
+  redirect("/executive-brief");
 }

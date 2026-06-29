@@ -224,7 +224,7 @@ export const capabilityRegistry: CapabilityDefinition[] = [
   {
     id: "production-ux-operational-readiness",
     name: "Production UX & Operational Readiness",
-    description: "Simplifies daily operation through Mission Control, onboarding, grouped navigation, settings, system health, empty states, and production-safe UI controls.",
+    description: "Simplifies daily operation through onboarding, grouped navigation, settings, system health, empty states, and production-safe UI controls.",
     version: "1.0.0",
     inputs: ["Missions", "Recommendations", "Executions", "Connectors", "System Events"],
     outputs: [
@@ -242,6 +242,42 @@ export const capabilityRegistry: CapabilityDefinition[] = [
     ],
     eventsConsumed: ["MISSION_UPDATED", "EXECUTION_BLOCKED", "APPROVAL_REQUESTED", "CONNECTOR_HEALTH_CHANGED"],
     eventsProduced: ["MISSION_UPDATED"],
+    status: "ACTIVE"
+  },
+  {
+    id: "executive-intelligence-experience",
+    name: "Executive Intelligence Experience",
+    description: "Translates VGOS kernel state into an executive brief, advisor workspace, work queue, persona navigation, and explainable recommendations.",
+    version: "1.0.0",
+    inputs: ["Missions", "Plans", "Executions", "Measurements", "Signals", "Recommendations"],
+    outputs: [
+      "Executive Brief",
+      "Advisor Workspace",
+      "Work Queue",
+      "Persona Navigation",
+      "Explainable Recommendations"
+    ],
+    dependencies: [
+      "Mission Engine",
+      "Planning Engine",
+      "Execution Engine",
+      "Measurement & Learning Engine",
+      "Intelligence Quality Layer",
+      "Connected Intelligence"
+    ],
+    eventsConsumed: [
+      "MISSION_UPDATED",
+      "EXECUTION_STARTED",
+      "EXECUTION_BLOCKED",
+      "APPROVAL_REQUESTED",
+      "EXECUTION_COMPLETED",
+      "MEASUREMENT_CREATED"
+    ],
+    eventsProduced: [
+      "EXECUTIVE_BRIEF_GENERATED",
+      "ADVISOR_QUESTION_ANSWERED",
+      "WORK_QUEUE_REVIEWED"
+    ],
     status: "ACTIVE"
   },
   {

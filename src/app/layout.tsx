@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "VGOS v5.4 Enterprise",
-  description: "Production-ready Growth Intelligence Operating System for VidMaker"
+  title: "VGOS v6.0 Executive Intelligence",
+  description: "Executive Intelligence Experience for VidMaker Growth OS"
 };
 
 export default function RootLayout({

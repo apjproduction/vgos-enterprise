@@ -6,10 +6,12 @@ import {
   Archive,
   ArrowRight,
   Ban,
+  BarChart3,
   CalendarClock,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  CircleHelp,
   Database,
   Edit3,
   Filter,
@@ -17,10 +19,12 @@ import {
   Plus,
   Save,
   Search,
+  Send,
   ShieldCheck,
   Trash2,
   X
 } from "lucide-react";
+import { CommandPalette, type CommandPaletteItem } from "@/components/command-palette";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,11 +51,25 @@ import {
   createOnboardingArtifacts,
   defaultMissionSelections,
   getEmptyStateCopy,
+  getNavigationGroupsForMode,
   getPageIntro,
-  navigationGroups,
+  getPersonaEmphasis,
+  getPersonaShortcuts,
+  personaModes,
   readOnlyCollections,
-  type OnboardingAnswers
+  type NavigationMode,
+  type OnboardingAnswers,
+  type PersonaMode
 } from "@/lib/production-ux";
+import {
+  answerExecutiveQuestion,
+  buildAdvisorContext,
+  generateDailyBrief,
+  generateMonthlyReview,
+  generateWeeklyReview
+} from "@/kernel/advisor/advisor-engine";
+import { advisorSuggestedQuestions } from "@/kernel/advisor/advisor-prompts";
+import type { AdvisorAnswer, ExecutivePriority } from "@/kernel/advisor/advisor-types";
 import {
   rankRecommendedActions,
   rankOpportunities,
@@ -932,9 +950,11 @@ function recordDescription(item: AnyRecord) {
   );
 }
 
-export function VgosApp({ initialPage = "missionControl" }: { initialPage?: PageId } = {}) {
+export function VgosApp({ initialPage = "executiveBrief" }: { initialPage?: PageId } = {}) {
   const [state, setState] = useState<PlatformState>(initialPlatformState);
   const [activePage, setActivePage] = useState<PageId>(initialPage);
+  const [personaMode, setPersonaMode] = useState<PersonaMode>("Founder");
+  const [navigationMode, setNavigationMode] = useState<NavigationMode>("operator");
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(workspaceId);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<FilterValue<string>>("ALL");
@@ -948,10 +968,38 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
   const workspace = state.workspaces.find((item) => item.id === activeWorkspaceId);
   const currentUser = getCurrentUser();
   const pageIntro = getPageIntro(page);
+  const visibleNavigationGroups = useMemo(
+    () => getNavigationGroupsForMode(personaMode, navigationMode),
+    [personaMode, navigationMode]
+  );
+  const personaShortcutIds = useMemo(() => getPersonaShortcuts(personaMode), [personaMode]);
+  const personaEmphasis = getPersonaEmphasis(personaMode);
   const metrics = useMemo(
     () => getExecutiveMetrics(state, activeWorkspaceId),
     [state, activeWorkspaceId]
   );
+  const commandItems: CommandPaletteItem[] = [
+    { id: "go-executive-brief", label: "Go to Executive Brief", description: "Open today's daily executive brief.", action: () => navigateTo("executiveBrief") },
+    { id: "go-missions", label: "Go to Missions", description: "Open strategic missions.", action: () => navigateTo("missions") },
+    { id: "go-work-queue", label: "Go to Work Queue", description: "Open today's execution queue.", action: () => navigateTo("workQueue") },
+    { id: "go-results", label: "Go to Results", description: "Review wins, measurements, and learnings.", action: () => navigateTo("results") },
+    { id: "go-studio", label: "Go to Intelligence Studio", description: "Switch to deeper signal, memory, connector, and system views.", action: () => {
+        setNavigationMode("studio");
+        navigateTo("intelligencePipeline");
+      } },
+    { id: "create-mission", label: "Create Mission", description: "Create a strategic mission.", action: () => openCreate("missions") },
+    { id: "create-plan", label: "Create Plan", description: "Create a plan for mission work.", action: () => openCreate("plans") },
+    { id: "create-execution", label: "Create Execution Item", description: "Create an execution item.", action: () => openCreate("executionItems") },
+    { id: "create-recommendation", label: "Create Recommendation", description: "Create a recommendation for VGOS to rank.", action: () => openCreate("recommendedActions") },
+    { id: "run-mock-sync", label: "Run Mock Sync", description: "Run the first available mock or connected source sync.", action: () => {
+        const connector = state.connectors.find((item) => item.workspaceId === activeWorkspaceId && ["MOCK", "CONNECTED"].includes(item.status));
+        if (connector) runConnectorSyncRecord(connector);
+      } },
+    { id: "view-blocked-work", label: "View Blocked Work", description: "Open blockers in the work queue.", action: () => navigateTo("workQueue") },
+    { id: "view-approvals", label: "View Approvals", description: "Open approval requests.", action: () => navigateTo("approvals") },
+    { id: "view-system-health", label: "View System Health", description: "Open diagnostics and readiness.", action: () => navigateTo("systemHealth") },
+    { id: "ask-advisor", label: "Ask Advisor", description: "Open the executive advisor workspace.", action: () => navigateTo("advisor") }
+  ];
 
   function openCreate(collection: EditableCollection) {
     const item =
@@ -993,7 +1041,7 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
           collection: draft.collection,
           qualityScore: nextItem.qualityScore,
           duplicateRisk: nextItem.duplicateRisk,
-          source: "Mission Control"
+          source: "System Mission Control"
         }
       });
       const auditedState = {
@@ -1056,7 +1104,7 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
       events: [...artifacts.events, ...currentState.events]
     }));
     setDraft(null);
-    setActivePage("missionControl");
+    setActivePage("executiveBrief");
     resetFilters();
   }
 
@@ -1094,7 +1142,7 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
         "Manual workflow run created.",
         "Loaded workspace-scoped knowledge context.",
         "Evaluated workflow steps with mock kernel services.",
-        "Mission Control updated."
+        "System Mission Control updated."
       ]
     };
     setState((currentState) => ({
@@ -2427,34 +2475,49 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone="blue">
                   <Database className="mr-1 h-3 w-3" />
-                  Growth Intelligence Platform
+                  Executive Intelligence Platform
                 </Badge>
-                <Badge tone="green">Production UX & Operational Readiness</Badge>
+                <Badge tone="green">VGOS v6.0</Badge>
                 <Badge tone="slate">
                   <ShieldCheck className="mr-1 h-3 w-3" />
                   {currentUser.name} - Owner
                 </Badge>
               </div>
               <h1 className="mt-2 text-2xl font-semibold tracking-normal sm:text-3xl">
-                VGOS v5.4 Enterprise
+                VGOS Executive Intelligence
               </h1>
               <p className="mt-1 max-w-4xl text-sm text-muted-foreground">
-                Daily command workspace for priorities, missions, approvals, blockers,
-                recommendations, connected intelligence, and production controls.
+                {personaEmphasis.description}
               </p>
             </div>
-            <div className="w-full max-w-xs">
-              <Label>Workspace</Label>
-              <Select
-                value={activeWorkspaceId}
-                onChange={(event) => setActiveWorkspaceId(event.target.value)}
-              >
-                {state.workspaces.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </Select>
+            <div className="grid w-full gap-3 md:grid-cols-[minmax(160px,220px)_minmax(180px,260px)_auto] xl:w-auto xl:items-end">
+              <div>
+                <Label>Persona</Label>
+                <Select
+                  value={personaMode}
+                  onChange={(event) => setPersonaMode(event.target.value as PersonaMode)}
+                >
+                  {personaModes.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {mode}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label>Workspace</Label>
+                <Select
+                  value={activeWorkspaceId}
+                  onChange={(event) => setActiveWorkspaceId(event.target.value)}
+                >
+                  {state.workspaces.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <CommandPalette commands={commandItems} />
             </div>
           </div>
         </div>
@@ -2464,10 +2527,24 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
         <aside className="space-y-4 lg:sticky lg:top-4 lg:h-fit">
           <Card>
             <CardHeader>
-              <CardTitle>Navigation</CardTitle>
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle>Navigation</CardTitle>
+                <Badge tone={navigationMode === "studio" || personaMode === "Developer" ? "violet" : "green"}>
+                  {personaMode === "Developer" ? "Developer" : navigationMode === "studio" ? "Studio" : "Operator"}
+                </Badge>
+              </div>
             </CardHeader>
             <CardContent className="space-y-2">
-              {navigationGroups.map((group) => {
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setNavigationMode((current) => (current === "studio" ? "operator" : "studio"))}
+                disabled={personaMode === "Developer"}
+              >
+                <ArrowRight className="h-4 w-4" />
+                {navigationMode === "studio" ? "Switch to Operator Mode" : "Switch to Intelligence Studio"}
+              </Button>
+              {visibleNavigationGroups.map((group) => {
                 const collapsed = collapsedNavGroups[group.label] ?? false;
                 return (
                   <div key={group.label} className="rounded-md border border-border bg-background">
@@ -2546,11 +2623,31 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
                 workspace, with settings prepared for persistent tenant context.
               </p>
             </div>
+            <div className="rounded-md border border-border bg-card p-3 shadow-sm">
+              <p className="text-sm font-semibold">{personaEmphasis.title}</p>
+              <div className="mt-3 grid gap-2">
+                {personaShortcutIds.map((pageId) => {
+                  const shortcut = pageDefinitions.find((definition) => definition.id === pageId);
+                  if (!shortcut) return null;
+                  const Icon = shortcut.icon;
+                  return (
+                    <button
+                      key={pageId}
+                      className="flex min-h-9 items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-muted"
+                      onClick={() => navigateTo(pageId)}
+                    >
+                      <Icon className="h-4 w-4 text-muted-foreground" />
+                      <span className="truncate">{shortcut.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </section>
         </aside>
 
         <section className="min-w-0 space-y-4">
-          {activePage !== "missionControl" && activePage !== "onboarding" ? (
+          {!["executiveBrief", "advisor", "workQueue", "results", "missionControl", "onboarding"].includes(activePage) ? (
             <PageIntro
               title={pageIntro.title}
               description={pageIntro.description}
@@ -2559,7 +2656,49 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
               nextAction={canCreatePageRecord && page.collection ? () => openCreate(page.collection!) : undefined}
             />
           ) : null}
-          {activePage === "missionControl" ? (
+          {activePage === "executiveBrief" ? (
+            <ExecutiveBriefPage
+              state={state}
+              activeWorkspaceId={activeWorkspaceId}
+              userName={currentUser.name}
+              personaMode={personaMode}
+              onNavigate={navigateTo}
+              onStartPriority={(priority) => convertRecommendedActionToExecution(priority.sourceAction)}
+              onEdit={openEdit}
+            />
+          ) : activePage === "advisor" ? (
+            <AdvisorWorkspace
+              state={state}
+              activeWorkspaceId={activeWorkspaceId}
+              onNavigate={navigateTo}
+              onStartRecommendation={(recommendationId) => {
+                const action = state.recommendedActions.find((item) => item.id === recommendationId);
+                if (action) convertRecommendedActionToExecution(action);
+              }}
+            />
+          ) : activePage === "workQueue" ? (
+            <WorkQueuePage
+              state={state}
+              activeWorkspaceId={activeWorkspaceId}
+              onCreate={openCreate}
+              onEdit={openEdit}
+              onStartExecution={startExecutionItem}
+              onCompleteExecution={completeExecutionItem}
+              onAddEvidence={addEvidenceForExecution}
+              onAddBlocker={addBlockerForExecution}
+              onRequestApproval={requestApprovalForExecution}
+              onBlockExecution={(item) => updateExecutionStatus(item, "BLOCKED")}
+              onSnoozeExecution={snoozeExecutionItem}
+            />
+          ) : activePage === "results" ? (
+            <ExecutiveResultsPage
+              state={state}
+              activeWorkspaceId={activeWorkspaceId}
+              onNavigate={navigateTo}
+              onEdit={openEdit}
+              onCreate={openCreate}
+            />
+          ) : activePage === "missionControl" ? (
             <MissionControl
               state={state}
               activeWorkspaceId={activeWorkspaceId}
@@ -2886,6 +3025,681 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
   );
 }
 
+function ExecutiveBriefPage({
+  state,
+  activeWorkspaceId,
+  userName,
+  personaMode,
+  onNavigate,
+  onStartPriority,
+  onEdit
+}: {
+  state: PlatformState;
+  activeWorkspaceId: string;
+  userName: string;
+  personaMode: PersonaMode;
+  onNavigate: (page: PageId) => void;
+  onStartPriority: (priority: ExecutivePriority) => void;
+  onEdit: (collection: EditableCollection, item: AnyRecord) => void;
+}) {
+  const brief = useMemo(
+    () => generateDailyBrief(state, activeWorkspaceId, userName),
+    [state, activeWorkspaceId, userName]
+  );
+  const context = useMemo(() => buildAdvisorContext(state, activeWorkspaceId), [state, activeWorkspaceId]);
+  const personaFocus: Record<PersonaMode, string> = {
+    Founder: "Founder mode is emphasizing decisions, proof, and leverage.",
+    Marketing: "Marketing mode is emphasizing content, approvals, and results.",
+    SEO: "SEO mode is emphasizing AEO/GEO, content clusters, backlinks, and search performance.",
+    Product: "Product mode is emphasizing feedback, blockers, feature requests, and execution results.",
+    Developer: "Developer mode is emphasizing system readiness and technical visibility."
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="max-w-4xl">
+            <Badge tone="green">Executive Brief</Badge>
+            <h2 className="mt-3 text-2xl font-semibold tracking-normal sm:text-3xl">{brief.greeting}</h2>
+            <p className="mt-2 text-base leading-7 text-muted-foreground">{brief.summary}</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{personaFocus[personaMode]}</p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3 xl:w-[520px]">
+            <FocusRow label="Priorities" value={String(brief.priorities.length)} />
+            <FocusRow label="Needs Attention" value={String(brief.needsAttention.length)} />
+            <FocusRow label="Workload" value={brief.estimatedWorkload} />
+          </div>
+        </CardHeader>
+      </Card>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>Today&apos;s Top Priorities</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">The work VGOS would spend operator capacity on first.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => onNavigate("workQueue")}>
+              <ArrowRight className="h-4 w-4" />
+              Work Queue
+            </Button>
+          </CardHeader>
+          <CardContent className="grid gap-3 lg:grid-cols-2">
+            {brief.priorities.map((priority) => (
+              <div key={priority.id} className="rounded-md border border-border bg-background p-4">
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone={priority.sourceAction.impactScore >= 85 ? "red" : "amber"}>
+                    Impact {priority.sourceAction.impactScore}
+                  </Badge>
+                  <Badge tone="blue">Confidence {Math.round(priority.confidenceScore * 100)}%</Badge>
+                </div>
+                <h3 className="mt-3 text-sm font-semibold">{priority.title}</h3>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">{priority.whyItMatters}</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <FocusRow label="Expected impact" value={priority.expectedImpact} />
+                  <FocusRow label="Effort" value={priority.estimatedEffort} />
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {priority.relatedMission ? <Badge tone="slate">{priority.relatedMission.title}</Badge> : null}
+                  <Button size="sm" onClick={() => onStartPriority(priority)}>
+                    <Play className="h-4 w-4" />
+                    Start Work
+                  </Button>
+                </div>
+                <details className="mt-3 rounded-md border border-border bg-muted/30 p-3">
+                  <summary className="cursor-pointer text-xs font-semibold text-foreground">Why?</summary>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <InlineList title="Supporting evidence" items={priority.supportingEvidence} />
+                    <InlineList title="Related signals" items={priority.relatedSignals.length ? priority.relatedSignals : ["Recent launch and proof-demand signals."]} />
+                    <InlineList title="Missing evidence" items={priority.missingEvidence.length ? priority.missingEvidence : ["No major missing evidence."]} />
+                    <InlineList title="Recommendation" items={[priority.sourceAction.confidenceExplanation || priority.sourceAction.reasoning]} />
+                  </div>
+                </details>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Mission Health Summary</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">Active missions in plain language.</p>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {brief.missionHealth.map((item) => (
+                <button
+                  key={item.mission.id}
+                  className="w-full rounded-md border border-border bg-background p-3 text-left hover:bg-muted/45"
+                  onClick={() => onEdit("missions", item.mission)}
+                >
+                  <div className="flex flex-wrap gap-2">
+                    <Badge tone={item.plainStatus === "blocked" ? "red" : item.plainStatus === "at risk" ? "amber" : item.plainStatus === "completed" ? "green" : "blue"}>
+                      {item.plainStatus}
+                    </Badge>
+                    <Badge tone="slate">{formatEnum(item.mission.priority)}</Badge>
+                  </div>
+                  <p className="mt-2 text-sm font-semibold">{item.mission.title}</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.explanation}</p>
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Executive Recommendation</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">Why VGOS recommends this.</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm leading-6">{brief.executiveRecommendation}</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <FocusRow label="Recommended focus" value={brief.recommendedFocus} />
+                <FocusRow label="Confidence" value={`${Math.round((context.topPriorities[0]?.confidenceScore ?? 0.86) * 100)}%`} />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Wins</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">Proof that moved forward.</p>
+          </CardHeader>
+          <CardContent className="grid gap-2 md:grid-cols-2">
+            {brief.recentWins.map((win) => (
+              <div key={win.id} className="rounded-md border border-border bg-background p-3">
+                <Badge tone="green">{win.sourceType}</Badge>
+                <p className="mt-2 text-sm font-semibold">{win.title}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{win.detail}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Needs Attention</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">Items that can slow today&apos;s operating rhythm.</p>
+          </CardHeader>
+          <CardContent className="grid gap-2 md:grid-cols-2">
+            {brief.needsAttention.map((item) => (
+              <div key={item.id} className="rounded-md border border-border bg-background p-3">
+                <Badge tone={priorityTone(item.severity)}>{formatEnum(item.severity)}</Badge>
+                <p className="mt-2 text-sm font-semibold">{item.title}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.reason}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </section>
+    </div>
+  );
+}
+
+function AdvisorWorkspace({
+  state,
+  activeWorkspaceId,
+  onNavigate,
+  onStartRecommendation
+}: {
+  state: PlatformState;
+  activeWorkspaceId: string;
+  onNavigate: (page: PageId) => void;
+  onStartRecommendation: (recommendationId: string) => void;
+}) {
+  const [question, setQuestion] = useState("");
+  const [answers, setAnswers] = useState<AdvisorAnswer[]>([]);
+  const defaultAnswer = useMemo(
+    () => answerExecutiveQuestion("What should I do today?", state, activeWorkspaceId),
+    [state, activeWorkspaceId]
+  );
+  const visibleAnswers = answers.length ? answers : [defaultAnswer];
+
+  function ask(nextQuestion = question) {
+    const trimmed = nextQuestion.trim();
+    if (!trimmed) return;
+    setAnswers((current) => [answerExecutiveQuestion(trimmed, state, activeWorkspaceId), ...current]);
+    setQuestion("");
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <Badge tone="blue">Executive AI Chat Workspace</Badge>
+          <h2 className="mt-2 text-2xl font-semibold tracking-normal">Ask VGOS what matters next.</h2>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+            This advisor is rule-based for now and answers from the current VGOS workspace state.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") ask();
+              }}
+              placeholder="Ask the advisor"
+            />
+            <Button onClick={() => ask()}>
+              <Send className="h-4 w-4" />
+              Ask
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {advisorSuggestedQuestions.map((prompt) => (
+              <Button
+                key={prompt}
+                variant="outline"
+                size="sm"
+                className="h-auto min-h-8 whitespace-normal text-left"
+                onClick={() => ask(prompt)}
+              >
+                {prompt}
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <section className="grid gap-4">
+        {visibleAnswers.map((answer, index) => (
+          <Card key={`${answer.question}-${index}`}>
+            <CardHeader>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Question</p>
+              <CardTitle>{answer.question}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-md border border-border bg-background p-4">
+                <p className="text-sm leading-6">{answer.answer}</p>
+                <div className="mt-3">
+                  <Badge tone="blue">Confidence {Math.round(answer.confidence * 100)}%</Badge>
+                </div>
+              </div>
+              <div className="grid gap-3 xl:grid-cols-3">
+                <InlineList title="Reasoning" items={answer.reasoning} />
+                <InlineList
+                  title="Related objects"
+                  items={answer.relatedObjects.map((item) => `${item.type}: ${item.title}${item.detail ? ` (${item.detail})` : ""}`)}
+                />
+                <div className="rounded-md border border-border bg-background p-3">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">Suggested actions</p>
+                  <div className="mt-2 space-y-2">
+                    {answer.suggestedActions.map((action) => (
+                      <Button
+                        key={`${answer.question}-${action.label}`}
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start"
+                        onClick={() => {
+                          if (action.sourceId) onStartRecommendation(action.sourceId);
+                          if (action.pageId) onNavigate(action.pageId as PageId);
+                        }}
+                      >
+                        <ArrowRight className="h-4 w-4" />
+                        {action.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+function WorkQueuePage({
+  state,
+  activeWorkspaceId,
+  onCreate,
+  onEdit,
+  onStartExecution,
+  onCompleteExecution,
+  onAddEvidence,
+  onAddBlocker,
+  onRequestApproval,
+  onBlockExecution,
+  onSnoozeExecution
+}: {
+  state: PlatformState;
+  activeWorkspaceId: string;
+  onCreate: (collection: EditableCollection) => void;
+  onEdit: (collection: EditableCollection, item: AnyRecord) => void;
+  onStartExecution: (item: AnyRecord) => void;
+  onCompleteExecution: (item: AnyRecord) => void;
+  onAddEvidence: (item: AnyRecord) => void;
+  onAddBlocker: (item: AnyRecord) => void;
+  onRequestApproval: (item: AnyRecord) => void;
+  onBlockExecution: (item: AnyRecord) => void;
+  onSnoozeExecution: (item: AnyRecord) => void;
+}) {
+  const queue = getExecutionQueue(state.executionItems.filter((item) => item.workspaceId === activeWorkspaceId));
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayWork = queue.filter((item) => item.status !== "COMPLETED" && item.status !== "CANCELLED" && new Date(item.dueDate) <= todayEnd);
+  const readyItems = queue.filter((item) => item.status === "READY" || item.status === "APPROVED");
+  const blockedItems = queue.filter((item) => item.status === "BLOCKED");
+  const approvalNeeded = queue.filter((item) => item.status === "NEEDS_APPROVAL");
+  const overdueItems = queue.filter((item) => item.status !== "COMPLETED" && item.status !== "CANCELLED" && new Date(item.dueDate) < todayStart);
+  const completedToday = queue.filter((item) => {
+    if (!item.completedAt) return false;
+    const completedAt = new Date(item.completedAt);
+    return completedAt >= todayStart && completedAt <= todayEnd;
+  });
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <Badge tone="green">Today / Work Queue</Badge>
+            <h2 className="mt-2 text-2xl font-semibold tracking-normal">Here&apos;s the work that can move today.</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Ready work first, blocked work clearly separated, approvals visible.</p>
+          </div>
+          <Button onClick={() => onCreate("executionItems")}>
+            <Plus className="h-4 w-4" />
+            Execution Item
+          </Button>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <FocusRow label="Today" value={String(todayWork.length)} />
+          <FocusRow label="Ready" value={String(readyItems.length)} />
+          <FocusRow label="Blocked" value={String(blockedItems.length)} />
+          <FocusRow label="Approvals" value={String(approvalNeeded.length)} />
+          <FocusRow label="Overdue" value={String(overdueItems.length)} />
+          <FocusRow label="Done today" value={String(completedToday.length)} />
+        </CardContent>
+      </Card>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <WorkQueueSection
+          title="Today's Work"
+          description="Items due today or earlier."
+          items={todayWork}
+          onEdit={onEdit}
+          onStartExecution={onStartExecution}
+          onCompleteExecution={onCompleteExecution}
+          onAddEvidence={onAddEvidence}
+          onAddBlocker={onAddBlocker}
+          onRequestApproval={onRequestApproval}
+          onBlockExecution={onBlockExecution}
+          onSnoozeExecution={onSnoozeExecution}
+        />
+        <WorkQueueSection
+          title="Ready Items"
+          description="Work that can start without another dependency."
+          items={readyItems}
+          onEdit={onEdit}
+          onStartExecution={onStartExecution}
+          onCompleteExecution={onCompleteExecution}
+          onAddEvidence={onAddEvidence}
+          onAddBlocker={onAddBlocker}
+          onRequestApproval={onRequestApproval}
+          onBlockExecution={onBlockExecution}
+          onSnoozeExecution={onSnoozeExecution}
+        />
+        <WorkQueueSection
+          title="Blocked Items"
+          description="This is blocked because a dependency, asset, approval, or decision is missing."
+          items={blockedItems}
+          onEdit={onEdit}
+          onStartExecution={onStartExecution}
+          onCompleteExecution={onCompleteExecution}
+          onAddEvidence={onAddEvidence}
+          onAddBlocker={onAddBlocker}
+          onRequestApproval={onRequestApproval}
+          onBlockExecution={onBlockExecution}
+          onSnoozeExecution={onSnoozeExecution}
+        />
+        <WorkQueueSection
+          title="Approval Needed"
+          description="Work waiting on founder, brand, SEO, product, or publishing review."
+          items={approvalNeeded}
+          onEdit={onEdit}
+          onStartExecution={onStartExecution}
+          onCompleteExecution={onCompleteExecution}
+          onAddEvidence={onAddEvidence}
+          onAddBlocker={onAddBlocker}
+          onRequestApproval={onRequestApproval}
+          onBlockExecution={onBlockExecution}
+          onSnoozeExecution={onSnoozeExecution}
+        />
+        <WorkQueueSection
+          title="Overdue Items"
+          description="Items past due that still need a decision."
+          items={overdueItems}
+          onEdit={onEdit}
+          onStartExecution={onStartExecution}
+          onCompleteExecution={onCompleteExecution}
+          onAddEvidence={onAddEvidence}
+          onAddBlocker={onAddBlocker}
+          onRequestApproval={onRequestApproval}
+          onBlockExecution={onBlockExecution}
+          onSnoozeExecution={onSnoozeExecution}
+        />
+        <WorkQueueSection
+          title="Completed Today"
+          description="Finished execution items with impact ready for results review."
+          items={completedToday}
+          onEdit={onEdit}
+          onStartExecution={onStartExecution}
+          onCompleteExecution={onCompleteExecution}
+          onAddEvidence={onAddEvidence}
+          onAddBlocker={onAddBlocker}
+          onRequestApproval={onRequestApproval}
+          onBlockExecution={onBlockExecution}
+          onSnoozeExecution={onSnoozeExecution}
+        />
+      </section>
+    </div>
+  );
+}
+
+function WorkQueueSection({
+  title,
+  description,
+  items,
+  onEdit,
+  onStartExecution,
+  onCompleteExecution,
+  onAddEvidence,
+  onAddBlocker,
+  onRequestApproval,
+  onBlockExecution,
+  onSnoozeExecution
+}: {
+  title: string;
+  description: string;
+  items: ExecutionItem[];
+  onEdit: (collection: EditableCollection, item: AnyRecord) => void;
+  onStartExecution: (item: AnyRecord) => void;
+  onCompleteExecution: (item: AnyRecord) => void;
+  onAddEvidence: (item: AnyRecord) => void;
+  onAddBlocker: (item: AnyRecord) => void;
+  onRequestApproval: (item: AnyRecord) => void;
+  onBlockExecution: (item: AnyRecord) => void;
+  onSnoozeExecution: (item: AnyRecord) => void;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {items.slice(0, 8).map((item) => (
+          <div key={item.id} className="rounded-md border border-border bg-background p-3">
+            <div className="flex flex-wrap gap-2">
+              <Badge tone={statusTone(item.status)}>{formatEnum(item.status)}</Badge>
+              <Badge tone={priorityTone(item.priority)}>{formatEnum(item.priority)}</Badge>
+            </div>
+            <p className="mt-2 text-sm font-semibold">{item.title}</p>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{item.expectedImpact}</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <FocusRow label="Owner" value={item.owner} />
+              <FocusRow label="Due" value={formatDate(item.dueDate)} />
+              <FocusRow label="Impact" value={item.actualImpact ? "Captured" : "Expected"} />
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={() => onEdit("executionItems", item)}>
+                <Edit3 className="h-4 w-4" />
+                Open
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => onStartExecution(item)} disabled={item.status === "COMPLETED" || item.status === "IN_PROGRESS"}>
+                <Play className="h-4 w-4" />
+                Start
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => onCompleteExecution(item)} disabled={item.status === "COMPLETED"}>
+                <CheckCircle2 className="h-4 w-4" />
+                Complete
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => onAddEvidence(item)}>
+                <Plus className="h-4 w-4" />
+                Add Evidence
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => onRequestApproval(item)}>
+                <CircleHelp className="h-4 w-4" />
+                Request Approval
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  onBlockExecution(item);
+                  onAddBlocker(item);
+                }}
+                disabled={item.status === "BLOCKED" || item.status === "COMPLETED"}
+              >
+                <Ban className="h-4 w-4" />
+                Block
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => onSnoozeExecution(item)} disabled={item.status === "COMPLETED"}>
+                <CalendarClock className="h-4 w-4" />
+                Snooze
+              </Button>
+            </div>
+          </div>
+        ))}
+        {items.length === 0 ? (
+          <div className="flex min-h-32 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
+            Nothing in this lane.
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ExecutiveResultsPage({
+  state,
+  activeWorkspaceId,
+  onNavigate,
+  onEdit,
+  onCreate
+}: {
+  state: PlatformState;
+  activeWorkspaceId: string;
+  onNavigate: (page: PageId) => void;
+  onEdit: (collection: EditableCollection, item: AnyRecord) => void;
+  onCreate: (collection: EditableCollection) => void;
+}) {
+  const weeklyReview = useMemo(() => generateWeeklyReview(state, activeWorkspaceId), [state, activeWorkspaceId]);
+  const monthlyReview = useMemo(() => generateMonthlyReview(state, activeWorkspaceId), [state, activeWorkspaceId]);
+  const context = useMemo(() => buildAdvisorContext(state, activeWorkspaceId), [state, activeWorkspaceId]);
+  const completedExecutions = state.executionItems.filter((item) => item.workspaceId === activeWorkspaceId && item.status === "COMPLETED");
+  const results = state.executionResults.filter((item) => item.workspaceId === activeWorkspaceId);
+  const adjustments = state.strategyAdjustments.filter((item) => item.workspaceId === activeWorkspaceId);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <Badge tone="green">Results</Badge>
+            <h2 className="mt-2 text-2xl font-semibold tracking-normal">What shipped, what changed, what VGOS learned.</h2>
+            <p className="mt-1 max-w-4xl text-sm leading-6 text-muted-foreground">{weeklyReview.summary}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => onCreate("executionResults")}>
+              <Plus className="h-4 w-4" />
+              Result
+            </Button>
+            <Button onClick={() => onNavigate("workQueue")}>
+              <ArrowRight className="h-4 w-4" />
+              Work Queue
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <FocusRow label="Completed" value={String(completedExecutions.length)} />
+          <FocusRow label="Results" value={String(results.length)} />
+          <FocusRow label="Learnings" value={String(context.learnings.length)} />
+          <FocusRow label="Adjustments" value={String(adjustments.length)} />
+          <FocusRow label="Monthly read" value={monthlyReview.period} />
+        </CardContent>
+      </Card>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Plain-Language Results</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">Wins, learnings, and strategic adjustments before metrics.</p>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2">
+            <InlineList title="Completed executions" items={completedExecutions.slice(0, 6).map((item) => item.title)} />
+            <InlineList title="Recent wins" items={weeklyReview.wins} />
+            <InlineList title="Learnings" items={weeklyReview.learning.length ? weeklyReview.learning : context.learnings.map((item) => item.title)} />
+            <InlineList title="Strategy adjustments" items={adjustments.slice(0, 5).map((item) => item.title)} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Mission Progress</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">Progress that should shape the next review.</p>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {context.missionHealth.slice(0, 5).map((item) => (
+              <button
+                key={item.mission.id}
+                className="w-full rounded-md border border-border bg-background p-3 text-left hover:bg-muted/45"
+                onClick={() => onEdit("missions", item.mission)}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{item.mission.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{item.explanation}</p>
+                  </div>
+                  <Badge tone={item.plainStatus === "on track" ? "green" : item.plainStatus === "completed" ? "green" : item.plainStatus === "at risk" ? "amber" : "red"}>
+                    {item.plainStatus}
+                  </Badge>
+                </div>
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Measurements</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">Metrics are secondary here, but still visible for validation.</p>
+          </CardHeader>
+          <CardContent className="grid gap-2 md:grid-cols-2">
+            {context.measurements.slice(0, 8).map((measurement) => {
+              const metric = state.metrics.find((item) => item.id === measurement.metricId);
+              return (
+                <button
+                  key={measurement.id}
+                  className="rounded-md border border-border bg-background p-3 text-left hover:bg-muted/45"
+                  onClick={() => onEdit("measurements", measurement)}
+                >
+                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                  <p className="mt-2 text-sm font-semibold">{metric?.name ?? measurement.metricId}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {measurement.value} {metric?.unit ?? ""} {measurement.changePercent !== undefined ? `(${measurement.changePercent}%)` : ""}
+                  </p>
+                </button>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Review Narrative</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="rounded-md border border-border bg-background p-3 text-sm leading-6">{monthlyReview.summary}</p>
+            <p className="rounded-md border border-border bg-background p-3 text-sm leading-6">{monthlyReview.recommendedAdjustment}</p>
+          </CardContent>
+        </Card>
+      </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Execution Results</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">Detailed result records remain available for inspection.</p>
+        </CardHeader>
+        <CardContent>
+          <RecordTable items={results} collection="executionResults" onEdit={onEdit} showOpportunity={false} />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function MissionControl({
   state,
   activeWorkspaceId,
@@ -2957,9 +3771,9 @@ function MissionControl({
   return (
     <div className="space-y-4">
       <PageIntro
-        title="Mission Control"
-        description="A daily operating view for priorities, changed work, approvals, blockers, recommendations, mission risk, and connected intelligence."
-        whyItMatters="VGOS keeps diagnostics out of the daily flow and puts the operator's next decisions at the top of the workspace."
+        title="System Mission Control"
+        description="A technical operating view for priorities, changed work, approvals, blockers, recommendations, mission risk, and connected intelligence."
+        whyItMatters="VGOS keeps this system view available for deeper operational inspection while Executive Brief handles the primary daily experience."
         nextActionLabel="Review Priorities"
         nextAction={() => onNavigate("priorities")}
       />
@@ -3076,7 +3890,7 @@ function MissionControl({
               description="Create a mission to give VGOS a strategic outcome to operate against today."
               actionLabel="Create Mission"
               onAction={() => onCreate("missions")}
-              secondaryText="Mission Control becomes most useful once a mission connects to plans and executions."
+              secondaryText="System Mission Control becomes most useful once a mission connects to plans and executions."
             />
           ) : null}
         </div>
@@ -3402,7 +4216,7 @@ function OnboardingPage({
                 <InlineList title="Selected missions" items={answers.selectedMissions} />
                 <InlineList title="Connector setup" items={answers.selectedConnectors} />
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" onClick={() => onNavigate("missionControl")}>
+                  <Button variant="outline" onClick={() => onNavigate("executiveBrief")}>
                     <ArrowRight className="h-4 w-4" />
                     Skip
                   </Button>
