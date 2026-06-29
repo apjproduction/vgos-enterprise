@@ -43,6 +43,36 @@ import {
   generatePlanFromRecommendedActions
 } from "@/kernel/planning/planning-engine";
 import {
+  archiveMission,
+  completeMission,
+  getMissionOverview
+} from "@/kernel/missions/mission-engine";
+import {
+  createMissionFromObjective,
+  createMissionFromPlans
+} from "@/kernel/missions/mission-builder";
+import {
+  generateExecutiveSummary,
+  generateFounderBrief,
+  generateMissionSummary
+} from "@/kernel/missions/mission-summary";
+import {
+  generateMissionInsights,
+  generateMissionRecommendations
+} from "@/kernel/missions/mission-intelligence";
+import { getHealthColor } from "@/kernel/missions/mission-health";
+import { calculateRecommendationConfidence } from "@/kernel/quality/confidence-engine";
+import { assessDuplicateRisk } from "@/kernel/quality/duplicate-detection";
+import { createAuditLogEntry } from "@/lib/observability/audit-log";
+import { connectorRegistry } from "@/kernel/connectors/connector-registry";
+import {
+  createConnector,
+  getConnectorHealth,
+  getConnectorSyncHistory,
+  runConnectorSync,
+  updateConnectorStatus
+} from "@/kernel/connectors/connector-engine";
+import {
   completeExecution,
   getExecutionHealth,
   getExecutionQueue,
@@ -85,6 +115,10 @@ import {
   workspaceId,
   type ActionStatus,
   type CollectionKey,
+  type AuthType,
+  type Connector,
+  type ConnectorStatus,
+  type ConnectorType,
   type EventSeverity,
   type EventStatus,
   type ExecutionItem,
@@ -94,6 +128,9 @@ import {
   type Measurement,
   type Metric,
   type MetricStatus,
+  type Mission,
+  type MissionStatus,
+  type MissionType,
   type Objective,
   type PageDefinition,
   type PageId,
@@ -101,10 +138,14 @@ import {
   type PlanItem,
   type PlatformState,
   type Priority,
+  type RawSignal,
+  type RawSignalStatus,
   type RecommendationType,
   type RelationshipType,
+  type SignalType,
   type StrategyAdjustment,
-  type Status
+  type Status,
+  type SyncStatus
 } from "@/lib/vgos-data";
 
 type AnyRecord = Record<string, any>;
@@ -264,6 +305,59 @@ const planTypeOptions = [
 ];
 
 const planStatusOptions = ["DRAFT", "ACTIVE", "PAUSED", "COMPLETED", "ARCHIVED"];
+
+const missionTypeOptions: MissionType[] = [
+  "AUTHORITY",
+  "SEO",
+  "AEO",
+  "GEO",
+  "CONTENT",
+  "COMMUNITY",
+  "PRODUCT",
+  "LAUNCH",
+  "GROWTH",
+  "REVENUE",
+  "CUSTOM"
+];
+
+const missionStatusOptions: MissionStatus[] = ["DRAFT", "ACTIVE", "PAUSED", "BLOCKED", "AT_RISK", "COMPLETED", "ARCHIVED"];
+
+const connectorTypeOptions: ConnectorType[] = [
+  "GOOGLE_SEARCH_CONSOLE",
+  "GOOGLE_ANALYTICS",
+  "GITHUB",
+  "PRODUCT_HUNT",
+  "REDDIT",
+  "LINKEDIN",
+  "X",
+  "YOUTUBE",
+  "NEWSLETTER",
+  "CMS",
+  "MANUAL_IMPORT",
+  "CUSTOM"
+];
+
+const connectorStatusOptions: ConnectorStatus[] = ["DRAFT", "CONNECTED", "DISCONNECTED", "ERROR", "PAUSED", "MOCK"];
+const authTypeOptions: AuthType[] = ["NONE", "API_KEY", "OAUTH", "WEBHOOK", "MANUAL"];
+const rawSignalStatusOptions: RawSignalStatus[] = ["RECEIVED", "NORMALIZED", "ROUTED", "FAILED", "IGNORED"];
+const signalTypeOptions: SignalType[] = [
+  "SEARCH_QUERY",
+  "TRAFFIC_CHANGE",
+  "REFERRAL_TRAFFIC",
+  "SOCIAL_POST",
+  "SOCIAL_COMMENT",
+  "COMMUNITY_THREAD",
+  "COMMUNITY_REPLY",
+  "PRODUCT_HUNT_COMMENT",
+  "GITHUB_ISSUE",
+  "GITHUB_RELEASE",
+  "NEWSLETTER_METRIC",
+  "CMS_ARTICLE",
+  "DIRECTORY_STATUS",
+  "BACKLINK_FOUND",
+  "CUSTOM_SIGNAL"
+];
+const syncStatusOptions: SyncStatus[] = ["STARTED", "COMPLETED", "FAILED", "PARTIAL", "CANCELLED"];
 
 const planItemTypeOptions = [
   "BLOG",
@@ -449,11 +543,11 @@ function priorityTone(priority?: Priority) {
 }
 
 function statusTone(status?: string) {
-  if (status === "LIVE" || status === "PUBLISHED" || status === "ACTIVE" || status === "COMPLETED" || status === "APPROVED" || status === "RESOLVED" || status === "HEALTHY" || status === "IMPROVING" || status === "ACCEPTED" || status === "IMPLEMENTED") return "green";
-  if (status === "IN_PROGRESS" || status === "RESEARCHING" || status === "DRAFT" || status === "READY" || status === "IN_REVIEW") return "blue";
-  if (status === "BLOCKED" || status === "FAILED" || status === "REJECTED" || status === "DECLINING") return "red";
-  if (status === "SUBMITTED" || status === "QUEUED") return "teal";
-  if (status === "ARCHIVED" || status === "PAUSED" || status === "CANCELLED" || status === "IGNORED" || status === "STALLED") return "slate";
+  if (status === "LIVE" || status === "PUBLISHED" || status === "ACTIVE" || status === "COMPLETED" || status === "APPROVED" || status === "RESOLVED" || status === "HEALTHY" || status === "IMPROVING" || status === "ACCEPTED" || status === "IMPLEMENTED" || status === "CONNECTED" || status === "MOCK" || status === "ROUTED") return "green";
+  if (status === "IN_PROGRESS" || status === "RESEARCHING" || status === "DRAFT" || status === "READY" || status === "IN_REVIEW" || status === "STARTED" || status === "RECEIVED" || status === "NORMALIZED") return "blue";
+  if (status === "BLOCKED" || status === "FAILED" || status === "REJECTED" || status === "DECLINING" || status === "AT_RISK" || status === "ERROR") return "red";
+  if (status === "SUBMITTED" || status === "QUEUED" || status === "PARTIAL") return "teal";
+  if (status === "ARCHIVED" || status === "PAUSED" || status === "CANCELLED" || status === "IGNORED" || status === "STALLED" || status === "DISCONNECTED") return "slate";
   return "amber";
 }
 
@@ -503,6 +597,17 @@ function sourceTypeToCollection(sourceType: string): EditableCollection {
     Learning: "learnings",
     Attribution: "attributions",
     StrategyAdjustment: "strategyAdjustments",
+    Mission: "missions",
+    MissionObjective: "missionObjectives",
+    MissionPlan: "missionPlans",
+    MissionExecution: "missionExecutions",
+    MissionLearning: "missionLearnings",
+    MissionMetric: "missionMetrics",
+    MissionSummary: "missionSummaries",
+    Connector: "connectors",
+    RawSignal: "rawSignals",
+    NormalizedSignal: "normalizedSignals",
+    ConnectorSyncRun: "connectorSyncRuns",
     Experiment: "experiments",
     Observation: "observations",
     Insight: "insights",
@@ -554,6 +659,17 @@ function collectionToSourceType(collection: EditableCollection) {
     learnings: "Learning",
     attributions: "Attribution",
     strategyAdjustments: "StrategyAdjustment",
+    missions: "Mission",
+    missionObjectives: "MissionObjective",
+    missionPlans: "MissionPlan",
+    missionExecutions: "MissionExecution",
+    missionLearnings: "MissionLearning",
+    missionMetrics: "MissionMetric",
+    missionSummaries: "MissionSummary",
+    connectors: "Connector",
+    rawSignals: "RawSignal",
+    normalizedSignals: "NormalizedSignal",
+    connectorSyncRuns: "ConnectorSyncRun",
     experiments: "Experiment",
     insights: "Insight",
     hypotheses: "Hypothesis"
@@ -594,7 +710,13 @@ function eventTypeForCollection(collection: EditableCollection) {
     measurements: "MEASUREMENT_CREATED",
     learnings: "LEARNING_CREATED",
     attributions: "ATTRIBUTION_CREATED",
-    strategyAdjustments: "STRATEGY_ADJUSTMENT_PROPOSED"
+    strategyAdjustments: "STRATEGY_ADJUSTMENT_PROPOSED",
+    missions: "MISSION_CREATED",
+    missionSummaries: "MISSION_SUMMARY_GENERATED",
+    connectors: "CONNECTOR_CREATED",
+    rawSignals: "RAW_SIGNAL_RECEIVED",
+    normalizedSignals: "SIGNAL_NORMALIZED",
+    connectorSyncRuns: "CONNECTOR_SYNC_STARTED"
   };
   return map[collection] ?? null;
 }
@@ -647,11 +769,95 @@ function createActionFromSource(item: AnyRecord, activeWorkspaceId: string) {
     owner: item.owner ?? "Growth",
     reasoning: "Created from a VGOS conversion action.",
     expectedImpact: "Moves this intelligence object into active execution.",
+    confidenceScore: Number(item.confidenceScore ?? 0.7),
+    qualityScore: 0,
+    evidenceStrength: 0,
+    missingEvidence: [],
+    duplicateRisk: 0,
+    confidenceExplanation: "Created from conversion and awaiting quality review.",
     createdAt: now,
     updatedAt: now
   };
 }
 
+
+const qualityPreflightCollections = new Set<EditableCollection>([
+  "observations",
+  "insights",
+  "patterns",
+  "aiRecommendations",
+  "recommendedActions",
+  "knowledgeObjects"
+]);
+
+function metadataOf(item: AnyRecord) {
+  return item.metadata && typeof item.metadata === "object" && !Array.isArray(item.metadata)
+    ? item.metadata
+    : {};
+}
+
+function enrichQualityForSave(
+  collection: EditableCollection,
+  item: AnyRecord,
+  existing: AnyRecord[],
+  isNew: boolean
+) {
+  if (!isNew || !qualityPreflightCollections.has(collection)) return item;
+  const duplicate = assessDuplicateRisk(item, existing.filter((candidate) => candidate.id !== item.id));
+  const now = new Date().toISOString();
+
+  if (collection === "aiRecommendations" || collection === "recommendedActions") {
+    const quality = calculateRecommendationConfidence({
+      ...item,
+      summary: item.summary ?? item.description,
+      sourceType: item.sourceType ?? item.targetEntityType,
+      sourceId: item.sourceId ?? item.targetEntityId,
+      sourceUrl: item.sourceUrl,
+      url: item.url,
+      suggestedAction: item.suggestedAction,
+      expectedImpact: item.expectedImpact,
+      actionType: item.actionType,
+      recommendationType: item.recommendationType,
+      priority: item.priority,
+      confidenceScore: Number(item.confidenceScore ?? 0.7),
+      duplicateRisk: duplicate.duplicateRisk
+    });
+
+    return {
+      ...item,
+      confidenceScore: quality.confidenceScore,
+      qualityScore: quality.qualityScore,
+      evidenceStrength: quality.evidenceStrength,
+      missingEvidence: quality.missingEvidence,
+      duplicateRisk: quality.duplicateRisk,
+      confidenceExplanation: quality.confidenceExplanation,
+      reviewedAt: item.reviewedAt ?? now,
+      reviewedBy: item.reviewedBy ?? "VGOS Quality Layer"
+    };
+  }
+
+  return {
+    ...item,
+    duplicateRisk: duplicate.duplicateRisk,
+    metadata: {
+      ...metadataOf(item),
+      qualityCheckedAt: now,
+      duplicateRisk: duplicate.duplicateRisk,
+      duplicateOf: duplicate.duplicateOf?.id,
+      duplicateReasons: duplicate.duplicateReasons
+    }
+  };
+}
+
+function auditActionForSave(collection: EditableCollection, isNew: boolean) {
+  if (!isNew) return "MANUAL_EDIT";
+  if (collection === "aiRecommendations" || collection === "recommendedActions") return "RECOMMENDATION_CREATED";
+  if (collection === "connectors") return "CONNECTOR_STATUS_CHANGED";
+  if (collection === "plans") return "PLAN_CHANGED";
+  if (collection === "executionItems") return "EXECUTION_CHANGED";
+  if (collection === "missions") return "MISSION_CHANGED";
+  return "MANUAL_CREATE";
+}
 function getCollection(state: PlatformState, collection: EditableCollection): AnyRecord[] {
   return (state as unknown as Record<EditableCollection, AnyRecord[]>)[collection] ?? [];
 }
@@ -727,21 +933,42 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
 
   function saveDraft() {
     if (!draft) return;
-    const nextItem = {
-  ...draft.item,
-  updatedAt: new Date().toISOString(),
-} as (typeof draft.item & { id: string; updatedAt: string });
-
+    const baseItem = {
+      ...draft.item,
+      updatedAt: new Date().toISOString()
+    } as (typeof draft.item & { id: string; updatedAt: string });
     const current = getCollection(state, draft.collection);
+    const existingBefore = current.find((item) => item.id === baseItem.id);
+    const nextItem = enrichQualityForSave(draft.collection, baseItem, current, draft.isNew);
     const exists = current.some((item) => item.id === nextItem.id);
     const nextRecords = exists
       ? current.map((item) => (item.id === nextItem.id ? nextItem : item))
       : [nextItem, ...current];
+
     setState((currentState) => {
       const nextState = setCollection(currentState, draft.collection, nextRecords);
+      const auditLog = createAuditLogEntry({
+        workspaceId: activeWorkspaceId,
+        actor: draft.isNew ? "VGOS Quality Layer" : "VGOS Operator",
+        action: auditActionForSave(draft.collection, draft.isNew),
+        entityType: collectionToSourceType(draft.collection),
+        entityId: nextItem.id,
+        before: draft.isNew ? null : existingBefore ?? null,
+        after: nextItem,
+        metadata: {
+          collection: draft.collection,
+          qualityScore: nextItem.qualityScore,
+          duplicateRisk: nextItem.duplicateRisk,
+          source: "Mission Control"
+        }
+      });
+      const auditedState = {
+        ...nextState,
+        auditLogs: [auditLog, ...nextState.auditLogs]
+      };
       return draft.isNew
-        ? addGeneratedEvent(nextState, draft.collection, nextItem, activeWorkspaceId)
-        : nextState;
+        ? addGeneratedEvent(auditedState, draft.collection, nextItem, activeWorkspaceId)
+        : auditedState;
     });
     setDraft({ ...draft, item: nextItem, isNew: false });
   }
@@ -1546,6 +1773,100 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
     }));
   }
 
+  function addConnectorFromDefinition(definitionId: string) {
+    const definition = connectorRegistry.find((item) => item.id === definitionId);
+    if (!definition) return;
+    const now = new Date().toISOString();
+    const connector = createConnector(definition, {
+      workspaceId: activeWorkspaceId,
+      organizationId: orgId,
+      now
+    });
+    setState((currentState) => ({
+      ...currentState,
+      connectors: [connector, ...currentState.connectors],
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: "CONNECTOR_CREATED" as any,
+          sourceType: "Connector",
+          sourceId: connector.id,
+          title: `${connector.name} created`,
+          description: connector.description,
+          metadata: { generatedBy: "connector-registry", connectorType: connector.connectorType },
+          severity: "MEDIUM" as EventSeverity,
+          status: "PROCESSED" as EventStatus,
+          createdAt: now,
+          processedAt: now
+        },
+        ...currentState.events
+      ]
+    }));
+    setActivePage("connectors");
+  }
+
+  function runConnectorSyncRecord(connector: Connector) {
+    const now = new Date().toISOString();
+    const result = runConnectorSync(
+      { connector },
+      {
+        workspaceId: activeWorkspaceId,
+        organizationId: orgId,
+        now
+      }
+    );
+    const routed = result.routed;
+    setState((currentState) => ({
+      ...currentState,
+      connectors: currentState.connectors.map((item) => (item.id === connector.id ? result.connector : item)),
+      connectorSyncRuns: [result.run, ...currentState.connectorSyncRuns],
+      rawSignals: [...result.rawSignals, ...currentState.rawSignals],
+      normalizedSignals: [...result.normalizedSignals, ...currentState.normalizedSignals],
+      events: [...result.events, ...currentState.events],
+      observations: [...routed.flatMap((item) => item.observations), ...currentState.observations],
+      conversations: [...routed.flatMap((item) => item.conversations), ...currentState.conversations],
+      questions: [...routed.flatMap((item) => item.questions), ...currentState.questions],
+      keywords: [...routed.flatMap((item) => item.keywords), ...currentState.keywords],
+      intelligenceObjects: [...routed.flatMap((item) => item.intelligenceObjects), ...currentState.intelligenceObjects],
+      memories: [...routed.flatMap((item) => item.memories), ...currentState.memories],
+      metrics: [...routed.flatMap((item) => item.metrics), ...currentState.metrics],
+      measurements: [...routed.flatMap((item) => item.measurements), ...currentState.measurements],
+      attributions: [...routed.flatMap((item) => item.attributions), ...currentState.attributions],
+      backlinks: [...routed.flatMap((item) => item.backlinks), ...currentState.backlinks],
+      contentAssets: [...routed.flatMap((item) => item.contentAssets), ...currentState.contentAssets],
+      knowledgeObjects: [...routed.flatMap((item) => item.knowledgeObjects), ...currentState.knowledgeObjects]
+    }));
+  }
+
+  function updateConnectorStatusRecord(connector: Connector, status: ConnectorStatus) {
+    const now = new Date().toISOString();
+    const nextConnector = updateConnectorStatus(connector, status, { now });
+    setState((currentState) => ({
+      ...currentState,
+      connectors: currentState.connectors.map((item) => (item.id === connector.id ? nextConnector : item)),
+      events: [
+        {
+          id: createScopedId("event"),
+          organizationId: orgId,
+          workspaceId: activeWorkspaceId,
+          eventType: status === "CONNECTED" ? "CONNECTOR_CONNECTED" as any : "CONNECTOR_HEALTH_CHANGED" as any,
+          sourceType: "Connector",
+          sourceId: connector.id,
+          title: `${connector.name} ${formatEnum(status).toLowerCase()}`,
+          description: `${connector.name} status changed to ${formatEnum(status)}.`,
+          metadata: { generatedBy: "connector-engine", status },
+          severity: status === "ERROR" ? "HIGH" as EventSeverity : "MEDIUM" as EventSeverity,
+          status: "PROCESSED" as EventStatus,
+          createdAt: now,
+          processedAt: now
+        },
+        ...currentState.events
+      ]
+    }));
+  }
+
   function handleConversion(conversion: string, item: AnyRecord, collection?: EditableCollection) {
     const now = new Date().toISOString();
     if (conversion === "ProcessIntelligence") {
@@ -1613,6 +1934,48 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
       generatePlanFromObjectiveRecord(item);
       return;
     }
+    if (conversion === "ObjectiveToMission") {
+      const result = createMissionFromObjective(item as Objective, {
+        workspaceId: activeWorkspaceId,
+        organizationId: orgId,
+        now
+      });
+      const missionObjective = {
+        id: createScopedId("mission-objective"),
+        missionId: result.mission.id,
+        objectiveId: item.id,
+        workspaceId: activeWorkspaceId,
+        weight: 1,
+        createdAt: now
+      };
+      setState((currentState) => ({
+        ...currentState,
+        missions: [result.mission, ...currentState.missions],
+        missionObjectives: [missionObjective, ...currentState.missionObjectives],
+        events: [
+          {
+            id: createScopedId("event"),
+            organizationId: orgId,
+            workspaceId: activeWorkspaceId,
+            eventType: "MISSION_CREATED" as any,
+            sourceType: "Mission",
+            sourceId: result.mission.id,
+            title: `${result.mission.title} created`,
+            description: result.mission.description,
+            metadata: { generatedBy: "mission-builder", objectiveId: item.id },
+            severity: result.mission.priority === "CRITICAL" ? "CRITICAL" as EventSeverity : "HIGH" as EventSeverity,
+            status: "PROCESSED" as EventStatus,
+            createdAt: now,
+            processedAt: now
+          },
+          ...currentState.events
+        ]
+      }));
+      setActivePage("missions");
+      setDraft(null);
+      resetFilters();
+      return;
+    }
     if (conversion === "RecommendedActionToPlan") {
       generatePlanFromRecommendedActionQueue(item);
       return;
@@ -1627,6 +1990,48 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
     }
     if (conversion === "PlanToExecutions") {
       convertPlanToExecutions(item);
+      return;
+    }
+    if (conversion === "PlanToMission") {
+      const result = createMissionFromPlans([item as Plan], {
+        workspaceId: activeWorkspaceId,
+        organizationId: orgId,
+        now
+      });
+      const missionPlan = {
+        id: createScopedId("mission-plan"),
+        missionId: result.mission.id,
+        planId: item.id,
+        workspaceId: activeWorkspaceId,
+        weight: 1,
+        createdAt: now
+      };
+      setState((currentState) => ({
+        ...currentState,
+        missions: [result.mission, ...currentState.missions],
+        missionPlans: [missionPlan, ...currentState.missionPlans],
+        events: [
+          {
+            id: createScopedId("event"),
+            organizationId: orgId,
+            workspaceId: activeWorkspaceId,
+            eventType: "MISSION_CREATED" as any,
+            sourceType: "Mission",
+            sourceId: result.mission.id,
+            title: `${result.mission.title} created`,
+            description: result.mission.description,
+            metadata: { generatedBy: "mission-builder", planId: item.id },
+            severity: result.mission.priority === "CRITICAL" ? "CRITICAL" as EventSeverity : "HIGH" as EventSeverity,
+            status: "PROCESSED" as EventStatus,
+            createdAt: now,
+            processedAt: now
+          },
+          ...currentState.events
+        ]
+      }));
+      setActivePage("missions");
+      setDraft(null);
+      resetFilters();
       return;
     }
     if (conversion === "ActivatePlan") {
@@ -1659,6 +2064,89 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
     }
     if (conversion === "AddExecutionEvidence") {
       addEvidenceForExecution(item);
+      return;
+    }
+    if (conversion === "RunConnectorSync") {
+      runConnectorSyncRecord(item as Connector);
+      setActivePage("signals");
+      return;
+    }
+    if (conversion === "PauseConnector") {
+      updateConnectorStatusRecord(item as Connector, "PAUSED");
+      return;
+    }
+    if (conversion === "ResumeConnector") {
+      updateConnectorStatusRecord(item as Connector, "CONNECTED");
+      return;
+    }
+    if (conversion === "GenerateMissionSummary") {
+      setState((currentState) => {
+        const overview = getMissionOverview(currentState, item.id);
+        if (!overview) return currentState;
+        const summary = generateMissionSummary(overview, {
+          workspaceId: activeWorkspaceId,
+          organizationId: orgId,
+          now
+        });
+        return {
+          ...currentState,
+          missionSummaries: [summary, ...currentState.missionSummaries],
+          events: [
+            {
+              id: createScopedId("event"),
+              organizationId: orgId,
+              workspaceId: activeWorkspaceId,
+              eventType: "MISSION_SUMMARY_GENERATED" as any,
+              sourceType: "Mission",
+              sourceId: item.id,
+              title: `${item.title} summary generated`,
+              description: summary.summary,
+              metadata: { generatedBy: "mission-summary" },
+              severity: "HIGH" as EventSeverity,
+              status: "PROCESSED" as EventStatus,
+              createdAt: now,
+              processedAt: now
+            },
+            ...currentState.events
+          ]
+        };
+      });
+      setActivePage("missions");
+      setDraft(null);
+      resetFilters();
+      return;
+    }
+    if (conversion === "CompleteMission" || conversion === "ArchiveMission") {
+      const nextMission =
+        conversion === "CompleteMission"
+          ? completeMission(item as Mission, { now })
+          : archiveMission(item as Mission, { now });
+      const eventType = conversion === "CompleteMission" ? "MISSION_COMPLETED" : "MISSION_UPDATED";
+      setState((currentState) => ({
+        ...currentState,
+        missions: currentState.missions.map((mission) => (mission.id === item.id ? nextMission : mission)),
+        events: [
+          {
+            id: createScopedId("event"),
+            organizationId: orgId,
+            workspaceId: activeWorkspaceId,
+            eventType: eventType as any,
+            sourceType: "Mission",
+            sourceId: item.id,
+            title: `${item.title} ${conversion === "CompleteMission" ? "completed" : "archived"}`,
+            description: nextMission.notes,
+            metadata: { generatedBy: "mission-engine" },
+            severity: conversion === "CompleteMission" ? "HIGH" as EventSeverity : "MEDIUM" as EventSeverity,
+            status: "PROCESSED" as EventStatus,
+            createdAt: now,
+            processedAt: now
+          },
+          ...currentState.events
+        ]
+      }));
+      setActivePage("missions");
+      setDraft(null);
+      resetFilters();
       return;
     }
     if (conversion === "PlanAddDependency") {
@@ -1897,7 +2385,59 @@ export function VgosApp({ initialPage = "missionControl" }: { initialPage?: Page
             onConvertPlanToExecutions={convertPlanToExecutions}
             markActionCompleted={markActionCompleted}
             convertActionToTask={convertActionToTask}
+            onRunConnectorSync={() => {
+              const connector = state.connectors.find((item) => item.workspaceId === activeWorkspaceId && ["MOCK", "CONNECTED"].includes(item.status));
+              if (connector) runConnectorSyncRecord(connector);
+            }}
           />
+          ) : activePage === "missions" ? (
+            <MissionsPage
+              state={state}
+              page={page}
+              activeWorkspaceId={activeWorkspaceId}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              priorityFilter={priorityFilter}
+              setPriorityFilter={setPriorityFilter}
+              onCreate={openCreate}
+              onEdit={openEdit}
+              onConvert={(conversion, item) => handleConversion(conversion, item, "missions")}
+            />
+          ) : activePage === "connectors" ? (
+            <ConnectorsPage
+              state={state}
+              page={page}
+              activeWorkspaceId={activeWorkspaceId}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              priorityFilter={priorityFilter}
+              setPriorityFilter={setPriorityFilter}
+              onCreate={openCreate}
+              onEdit={openEdit}
+              onRunSync={runConnectorSyncRecord}
+              onPause={(connector) => updateConnectorStatusRecord(connector, "PAUSED")}
+              onResume={(connector) => updateConnectorStatusRecord(connector, "CONNECTED")}
+              onCreateFromDefinition={addConnectorFromDefinition}
+              onNavigate={navigateTo}
+            />
+          ) : activePage === "signals" ? (
+            <SignalsPage
+              state={state}
+              page={page}
+              activeWorkspaceId={activeWorkspaceId}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              priorityFilter={priorityFilter}
+              setPriorityFilter={setPriorityFilter}
+              onCreate={openCreate}
+              onEdit={openEdit}
+            />
           ) : activePage === "briefing" ? (
             <BriefingPage state={state} activeWorkspaceId={activeWorkspaceId} />
           ) : activePage === "intelligencePipeline" ? (
@@ -2136,7 +2676,8 @@ function MissionControl({
   onGeneratePlan,
   onConvertPlanToExecutions,
   markActionCompleted,
-  convertActionToTask
+  convertActionToTask,
+  onRunConnectorSync
 }: {
   state: PlatformState;
   activeWorkspaceId: string;
@@ -2149,6 +2690,7 @@ function MissionControl({
   onConvertPlanToExecutions: (plan: AnyRecord) => void;
   markActionCompleted: (id: string) => void;
   convertActionToTask: (action: AnyRecord) => void;
+  onRunConnectorSync: () => void;
 }) {
   const queue = buildOpportunityQueue(state, activeWorkspaceId);
   const actions = state.recommendedActions
@@ -2249,9 +2791,175 @@ function MissionControl({
     .filter((item) => item.workspaceId === activeWorkspaceId)
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 5);
-
+  const activeMissionOverviews = state.missions
+    .filter((item) => item.workspaceId === activeWorkspaceId && ["ACTIVE", "AT_RISK", "BLOCKED"].includes(item.status))
+    .map((mission) => getMissionOverview(state, mission.id))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .sort((a, b) => b.mission.priority.localeCompare(a.mission.priority) || b.riskScore - a.riskScore)
+    .slice(0, 6);
+  const recentSignals = state.normalizedSignals
+    .filter((item) => item.workspaceId === activeWorkspaceId)
+    .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())
+    .slice(0, 5);
+  const connectorErrors = state.connectorSyncRuns
+    .filter((item) => item.workspaceId === activeWorkspaceId && item.status === "FAILED")
+    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+    .slice(0, 5);
+  const routedIntelligence = state.intelligenceObjects
+    .filter((item) => item.workspaceId === activeWorkspaceId && item.sourceType === "NormalizedSignal")
+    .slice(0, 5);
+  const externalOpportunities = state.normalizedSignals
+    .filter((item) => item.workspaceId === activeWorkspaceId && (item.priority === "CRITICAL" || item.confidenceScore >= 0.85))
+    .slice(0, 5);
+  const qualityRecommendations = [...state.aiRecommendations, ...state.recommendedActions]
+    .filter((item) => item.workspaceId === activeWorkspaceId)
+    .sort((a, b) => (b.qualityScore ?? 0) - (a.qualityScore ?? 0));
+  const highConfidenceRecommendations = qualityRecommendations
+    .filter((item) => item.confidenceScore >= 0.8 && (item.qualityScore ?? 0) >= 75)
+    .slice(0, 5);
+  const lowConfidenceRecommendations = qualityRecommendations
+    .filter((item) => item.confidenceScore < 0.65 || (item.qualityScore ?? 100) < 65)
+    .sort((a, b) => a.confidenceScore - b.confidenceScore || (a.qualityScore ?? 0) - (b.qualityScore ?? 0))
+    .slice(0, 5);
+  const duplicateRiskRecommendations = qualityRecommendations
+    .filter((item) => (item.duplicateRisk ?? 0) >= 0.5)
+    .sort((a, b) => (b.duplicateRisk ?? 0) - (a.duplicateRisk ?? 0))
+    .slice(0, 5);
+  const missingEvidenceRecommendations = qualityRecommendations
+    .filter((item) => (item.missingEvidence ?? []).length > 0)
+    .sort((a, b) => (b.missingEvidence ?? []).length - (a.missingEvidence ?? []).length)
+    .slice(0, 5);
   return (
     <div className="space-y-4">
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <MetricCard label="Active Missions" value={metrics.activeMissions} />
+        <MetricCard label="Mission Health" value={`${metrics.averageMissionHealth}%`} />
+        <MetricCard label="Mission Velocity" value={`${metrics.averageMissionVelocity}%`} />
+        <MetricCard label="Mission Risk" value={`${metrics.averageMissionRisk}%`} />
+        <MetricCard label="Mission Confidence" value={`${metrics.averageMissionConfidence}%`} />
+        <MetricCard label="Mission Completion" value={`${metrics.averageMissionCompletion}%`} />
+      </section>
+      <section className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Enterprise Health</h2>
+            <p className="text-sm text-muted-foreground">
+              Quality, confidence, duplicate risk, audit activity, and kernel reliability across the active workspace.
+            </p>
+          </div>
+          <Badge tone="green">VGOS v5.3</Badge>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard label="Signal Quality" value={`${metrics.averageSignalQuality}%`} />
+          <MetricCard label="Recommendation Quality" value={`${metrics.averageRecommendationQuality}%`} />
+          <MetricCard label="Duplicate Risk" value={metrics.duplicateRiskRecommendations} />
+          <MetricCard label="Connector Health" value={`${metrics.averageConnectorHealth}%`} />
+          <MetricCard label="Kernel Errors" value={metrics.kernelErrors} />
+          <MetricCard label="Audit Events" value={metrics.auditEvents} />
+          <MetricCard label="Test Coverage Placeholder" value={metrics.testCoveragePlaceholder} />
+          <MetricCard label="Low Confidence Items" value={metrics.lowConfidenceRecommendations} />
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <BriefingCard
+            title="High-confidence recommendations"
+            items={highConfidenceRecommendations.map((item) => `${item.title} (${Math.round(item.confidenceScore * 100)}%)`)}
+          />
+          <BriefingCard
+            title="Low-confidence recommendations"
+            items={lowConfidenceRecommendations.map((item) => `${item.title} (${Math.round(item.confidenceScore * 100)}%)`)}
+          />
+          <BriefingCard
+            title="Duplicate-risk recommendations"
+            items={duplicateRiskRecommendations.map((item) => `${item.title} (${Math.round((item.duplicateRisk ?? 0) * 100)}%)`)}
+          />
+          <BriefingCard
+            title="Recommendations missing evidence"
+            items={missingEvidenceRecommendations.map((item) => `${item.title}: ${(item.missingEvidence ?? []).join(", ")}`)}
+          />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Connected Intelligence</h2>
+            <p className="text-sm text-muted-foreground">
+              External sources enter VGOS through connectors, raw signals, normalized signals, events, and the kernel router.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => onCreate("connectors")}>
+              Add Connector
+            </Button>
+            <Button variant="secondary" size="sm" onClick={onRunConnectorSync}>
+              Run Sync
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onNavigate("signals")}>
+              View Signals
+            </Button>
+            <Button size="sm" onClick={() => onNavigate("connectors")}>
+              Review Failed Signals
+            </Button>
+          </div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <MetricCard label="Active Connectors" value={metrics.activeConnectors} />
+          <MetricCard label="Signals Received" value={metrics.signalsReceived} />
+          <MetricCard label="Signals Routed" value={metrics.signalsRouted} />
+          <MetricCard label="Failed Signals" value={metrics.failedSignals} />
+          <MetricCard label="Last Sync" value={metrics.lastConnectorSync ? formatDate(metrics.lastConnectorSync) : "None"} />
+          <MetricCard label="Connector Health" value={`${metrics.averageConnectorHealth}%`} />
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <BriefingCard title="Recent Signals" items={recentSignals.map((item) => item.title)} />
+          <BriefingCard title="Connector Errors" items={connectorErrors.map((item) => item.error ?? `${item.connectorId} failed`)} />
+          <BriefingCard title="Routed Intelligence" items={routedIntelligence.map((item) => item.summary)} />
+          <BriefingCard title="New External Opportunities" items={externalOpportunities.map((item) => item.title)} />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Active Missions</h2>
+            <p className="text-sm text-muted-foreground">
+              Business-level outcomes tying objectives, plans, execution, metrics, and learning together.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" onClick={() => onNavigate("missions")}>
+              Open Missions
+            </Button>
+            <Button size="sm" onClick={() => onCreate("missions")}>
+              New Mission
+            </Button>
+          </div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {activeMissionOverviews.map((overview) => (
+            <button
+              key={overview.mission.id}
+              className="rounded-md border border-border bg-card p-4 text-left shadow-sm transition-colors hover:border-primary/40"
+              onClick={() => onEdit("missions", overview.mission)}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{overview.mission.title}</p>
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{overview.mission.description}</p>
+                </div>
+                <Badge tone={statusTone(overview.mission.status)}>{formatEnum(overview.mission.status)}</Badge>
+              </div>
+              <div className="mt-3 grid grid-cols-4 gap-2">
+                <FocusRow label="Health" value={`${overview.healthScore}%`} />
+                <FocusRow label="Done" value={`${overview.completionScore}%`} />
+                <FocusRow label="Risk" value={`${overview.riskScore}%`} />
+                <FocusRow label="Velocity" value={`${overview.velocityScore}%`} />
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
+
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         <MetricCard label="Active Memories" value={metrics.activeMemories} />
         <MetricCard label="Detected Patterns" value={metrics.detectedPatterns} />
@@ -3415,7 +4123,10 @@ function getConversionOptions(collection: EditableCollection) {
     conversations: [{ label: "Process Intelligence", value: "ProcessIntelligence" }],
     insights: [{ label: "Create hypothesis", value: "InsightToHypothesis" }],
     hypotheses: [{ label: "Create experiment", value: "HypothesisToExperiment" }],
-    objectives: [{ label: "Generate plan", value: "ObjectiveToPlan" }],
+    objectives: [
+      { label: "Generate plan", value: "ObjectiveToPlan" },
+      { label: "Create mission", value: "ObjectiveToMission" }
+    ],
     patterns: [{ label: "Generate plan", value: "PatternToPlan" }],
     aiRecommendations: [{ label: "Create action", value: "AIRecommendationToRecommendedAction" }],
     recommendedActions: [
@@ -3426,6 +4137,7 @@ function getConversionOptions(collection: EditableCollection) {
     plans: [
       { label: "Activate plan", value: "ActivatePlan" },
       { label: "Batch executions", value: "PlanToExecutions" },
+      { label: "Create mission", value: "PlanToMission" },
       { label: "Complete plan", value: "CompletePlan" },
       { label: "Add dependency", value: "PlanAddDependency" },
       { label: "Add constraint", value: "PlanAddConstraint" }
@@ -3453,6 +4165,16 @@ function getConversionOptions(collection: EditableCollection) {
       { label: "Accept", value: "AcceptStrategyAdjustment" },
       { label: "Implement", value: "ImplementStrategyAdjustment" },
       { label: "Reject", value: "RejectStrategyAdjustment" }
+    ],
+    missions: [
+      { label: "Generate summary", value: "GenerateMissionSummary" },
+      { label: "Complete mission", value: "CompleteMission" },
+      { label: "Archive mission", value: "ArchiveMission" }
+    ],
+    connectors: [
+      { label: "Run mock sync", value: "RunConnectorSync" },
+      { label: "Pause connector", value: "PauseConnector" },
+      { label: "Resume connector", value: "ResumeConnector" }
     ]
   };
   return options[collection] ?? [];
@@ -3596,6 +4318,532 @@ function Dashboard({
         </section>
       </div>
     </>
+  );
+}
+
+function MissionsPage({
+  state,
+  page,
+  activeWorkspaceId,
+  searchQuery,
+  setSearchQuery,
+  statusFilter,
+  setStatusFilter,
+  priorityFilter,
+  setPriorityFilter,
+  onCreate,
+  onEdit,
+  onConvert
+}: {
+  state: PlatformState;
+  page: PageDefinition;
+  activeWorkspaceId: string;
+  searchQuery: string;
+  setSearchQuery: (value: string) => void;
+  statusFilter: FilterValue<string>;
+  setStatusFilter: (value: FilterValue<string>) => void;
+  priorityFilter: FilterValue<Priority>;
+  setPriorityFilter: (value: FilterValue<Priority>) => void;
+  onCreate: (collection: EditableCollection) => void;
+  onEdit: (collection: EditableCollection, item: AnyRecord) => void;
+  onConvert: (conversion: string, item: AnyRecord) => void;
+}) {
+  const missions = state.missions
+    .filter((item) => item.workspaceId === activeWorkspaceId)
+    .filter((item) => itemMatchesFilters(item, searchQuery, statusFilter, priorityFilter))
+    .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || b.riskScore - a.riskScore);
+  const [selectedMissionId, setSelectedMissionId] = useState<string | null>(missions[0]?.id ?? null);
+  const selectedMission = missions.find((item) => item.id === selectedMissionId) ?? missions[0];
+  const overview = selectedMission ? getMissionOverview(state, selectedMission.id) : null;
+  const insights = overview ? generateMissionInsights(overview) : [];
+  const recommendations = overview ? generateMissionRecommendations(overview) : [];
+  const missionEvents = selectedMission
+    ? state.events
+        .filter((item) => item.workspaceId === activeWorkspaceId && item.sourceType === "Mission" && item.sourceId === selectedMission.id)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 8)
+    : [];
+  const healthHistory = overview
+    ? [...overview.summaries]
+        .sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime())
+        .slice(0, 6)
+    : [];
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <CardTitle>{page.label}</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">{page.description}</p>
+          </div>
+          <Button onClick={() => onCreate("missions")}>
+            <Plus className="h-4 w-4" />
+            Create
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <TableFilters
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            priorityFilter={priorityFilter}
+            setPriorityFilter={setPriorityFilter}
+            hasStatus
+            hasPriority
+          />
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
+        <section className="space-y-3">
+          {missions.map((mission) => {
+            const missionOverview = getMissionOverview(state, mission.id);
+            const active = selectedMission?.id === mission.id;
+            return (
+              <button
+                key={mission.id}
+                className={cn(
+                  "w-full rounded-md border bg-card p-4 text-left shadow-sm transition-colors",
+                  active ? "border-primary/50" : "border-border hover:border-primary/30"
+                )}
+                onClick={() => setSelectedMissionId(mission.id)}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{mission.title}</p>
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{mission.description}</p>
+                  </div>
+                  <Badge tone={statusTone(mission.status)}>{formatEnum(mission.status)}</Badge>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Badge tone="blue">{formatEnum(mission.missionType)}</Badge>
+                  <Badge tone={priorityTone(mission.priority)}>{formatEnum(mission.priority)}</Badge>
+                  <Badge tone={getHealthColor(missionOverview?.healthScore ?? mission.healthScore) as any}>
+                    {missionOverview?.healthScore ?? mission.healthScore}% health
+                  </Badge>
+                </div>
+                <div className="mt-3 grid grid-cols-4 gap-2">
+                  <FocusRow label="Done" value={`${missionOverview?.completionScore ?? mission.completionScore}%`} />
+                  <FocusRow label="Risk" value={`${missionOverview?.riskScore ?? mission.riskScore}%`} />
+                  <FocusRow label="Velocity" value={`${missionOverview?.velocityScore ?? mission.velocityScore}%`} />
+                  <FocusRow label="Conf." value={`${missionOverview?.confidenceScore ?? Math.round(mission.confidenceScore * 100)}%`} />
+                </div>
+              </button>
+            );
+          })}
+        </section>
+
+        {overview ? (
+          <section className="space-y-4">
+            <Card>
+              <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge tone={statusTone(overview.mission.status)}>{formatEnum(overview.mission.status)}</Badge>
+                    <Badge tone="blue">{formatEnum(overview.mission.missionType)}</Badge>
+                    <Badge tone={getHealthColor(overview.healthScore) as any}>{overview.healthScore}% health</Badge>
+                  </div>
+                  <CardTitle className="mt-3">{overview.mission.title}</CardTitle>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{overview.mission.description}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => onEdit("missions", overview.mission)}>
+                    <Edit3 className="h-4 w-4" />
+                    Edit
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => onConvert("GenerateMissionSummary", overview.mission)}>
+                    Summary
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => onConvert("CompleteMission", overview.mission)}>
+                    Complete
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+                  <MetricCard label="Completion" value={`${overview.completionScore}%`} />
+                  <MetricCard label="Health" value={`${overview.healthScore}%`} />
+                  <MetricCard label="Velocity" value={`${overview.velocityScore}%`} />
+                  <MetricCard label="Risk" value={`${overview.riskScore}%`} />
+                  <MetricCard label="Confidence" value={`${overview.confidenceScore}%`} />
+                  <MetricCard label="Target" value={formatDate(overview.mission.targetDate)} />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <InlineList title="Executive summary" items={[generateExecutiveSummary(overview)]} />
+                  <InlineList title="Founder brief" items={[generateFounderBrief(overview)]} />
+                </div>
+                {overview.latestSummary ? (
+                  <div className="rounded-md border border-border bg-background p-3">
+                    <p className="text-xs font-semibold uppercase text-muted-foreground">Latest summary</p>
+                    <p className="mt-2 text-sm leading-6">{overview.latestSummary.summary}</p>
+                    <p className="mt-2 text-xs leading-5 text-muted-foreground">{overview.latestSummary.reasoning}</p>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              <MissionRelationPanel title="Objectives" items={overview.objectives} collection="objectives" onEdit={onEdit} />
+              <MissionRelationPanel title="Plans" items={overview.plans} collection="plans" onEdit={onEdit} />
+              <MissionRelationPanel title="Executions" items={overview.executions} collection="executionItems" onEdit={onEdit} />
+              <MissionRelationPanel title="Measurements" items={overview.measurements} collection="measurements" onEdit={onEdit} />
+              <MissionRelationPanel title="Learnings" items={overview.learnings} collection="learnings" onEdit={onEdit} />
+              <MissionRelationPanel title="Strategy Adjustments" items={overview.strategyAdjustments} collection="strategyAdjustments" onEdit={onEdit} />
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              <InlineList title="Mission insights" items={insights.map((item) => `${item.title}: ${item.description}`)} />
+              <InlineList title="Recommended changes" items={recommendations.map((item) => `${item.title}: ${item.action}`)} />
+              <InlineList title="Timeline" items={missionEvents.map((item) => `${formatDate(item.createdAt)} - ${item.title}`)} />
+              <InlineList
+                title="Health history"
+                items={healthHistory.map((item) => `${formatDate(item.generatedAt)} - ${item.summary}`)}
+              />
+            </div>
+          </section>
+        ) : (
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              No missions match the current filters.
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MissionRelationPanel({
+  title,
+  items,
+  collection,
+  onEdit
+}: {
+  title: string;
+  items: AnyRecord[];
+  collection: EditableCollection;
+  onEdit: (collection: EditableCollection, item: AnyRecord) => void;
+}) {
+  return (
+    <div className="rounded-md border border-border bg-card p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <Badge tone="slate">{items.length}</Badge>
+      </div>
+      <div className="mt-3 space-y-2">
+        {(items.length ? items : [{ id: `${title}-empty`, title: "No linked records yet" }]).slice(0, 6).map((item) => (
+          <button
+            key={item.id}
+            className={cn(
+              "w-full rounded-md border border-border bg-background px-3 py-2 text-left text-xs leading-5",
+              items.length ? "hover:border-primary/30" : "cursor-default text-muted-foreground"
+            )}
+            onClick={() => items.length && onEdit(collection, item)}
+          >
+            <span className="font-medium">{getTitle(item)}</span>
+            {"status" in item ? (
+              <span className="ml-2 text-muted-foreground">{formatEnum(String(item.status))}</span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ConnectorsPage({
+  state,
+  page,
+  activeWorkspaceId,
+  searchQuery,
+  setSearchQuery,
+  statusFilter,
+  setStatusFilter,
+  priorityFilter,
+  setPriorityFilter,
+  onCreate,
+  onEdit,
+  onRunSync,
+  onPause,
+  onResume,
+  onCreateFromDefinition,
+  onNavigate
+}: {
+  state: PlatformState;
+  page: PageDefinition;
+  activeWorkspaceId: string;
+  searchQuery: string;
+  setSearchQuery: (value: string) => void;
+  statusFilter: FilterValue<string>;
+  setStatusFilter: (value: FilterValue<string>) => void;
+  priorityFilter: FilterValue<Priority>;
+  setPriorityFilter: (value: FilterValue<Priority>) => void;
+  onCreate: (collection: EditableCollection) => void;
+  onEdit: (collection: EditableCollection, item: AnyRecord) => void;
+  onRunSync: (connector: Connector) => void;
+  onPause: (connector: Connector) => void;
+  onResume: (connector: Connector) => void;
+  onCreateFromDefinition: (definitionId: string) => void;
+  onNavigate: (page: PageId) => void;
+}) {
+  const connectors = state.connectors
+    .filter((item) => item.workspaceId === activeWorkspaceId)
+    .filter((item) => itemMatchesFilters(item, searchQuery, statusFilter, priorityFilter))
+    .sort((a, b) => b.healthScore - a.healthScore);
+  const [selectedConnectorId, setSelectedConnectorId] = useState<string | null>(connectors[0]?.id ?? null);
+  const selectedConnector = connectors.find((item) => item.id === selectedConnectorId) ?? connectors[0];
+  const syncHistory = selectedConnector ? getConnectorSyncHistory(selectedConnector.id, state.connectorSyncRuns) : [];
+  const health = selectedConnector ? getConnectorHealth(selectedConnector, syncHistory) : null;
+  const rawSignals = selectedConnector
+    ? state.rawSignals.filter((item) => item.connectorId === selectedConnector.id).slice(0, 8)
+    : [];
+  const normalizedSignalsForConnector = selectedConnector
+    ? state.normalizedSignals.filter((item) => item.connectorId === selectedConnector.id).slice(0, 8)
+    : [];
+  const routedEvents = selectedConnector
+    ? state.events.filter(
+        (item) =>
+          item.workspaceId === activeWorkspaceId &&
+          (item.sourceId === selectedConnector.id ||
+            normalizedSignalsForConnector.some((signal) => signal.id === item.sourceId))
+      )
+    : [];
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <CardTitle>{page.label}</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">{page.description}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => onNavigate("signals")}>
+              View Signals
+            </Button>
+            <Button onClick={() => onCreate("connectors")}>
+              <Plus className="h-4 w-4" />
+              Create
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <TableFilters
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            priorityFilter={priorityFilter}
+            setPriorityFilter={setPriorityFilter}
+            hasStatus
+            hasPriority={false}
+          />
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+            {connectorRegistry.slice(0, 8).map((definition) => (
+              <button
+                key={definition.id}
+                className="rounded-md border border-border bg-background p-3 text-left text-xs hover:border-primary/30"
+                onClick={() => onCreateFromDefinition(definition.id)}
+              >
+                <span className="block font-semibold">{definition.name}</span>
+                <span className="mt-1 block text-muted-foreground">{formatEnum(definition.type)}</span>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
+        <section className="space-y-3">
+          {connectors.map((connector) => {
+            const connectorHealth = getConnectorHealth(connector, state.connectorSyncRuns);
+            return (
+              <button
+                key={connector.id}
+                className={cn(
+                  "w-full rounded-md border bg-card p-4 text-left shadow-sm transition-colors",
+                  selectedConnector?.id === connector.id ? "border-primary/50" : "border-border hover:border-primary/30"
+                )}
+                onClick={() => setSelectedConnectorId(connector.id)}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{connector.name}</p>
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{connector.description}</p>
+                  </div>
+                  <Badge tone={statusTone(connector.status)}>{formatEnum(connector.status)}</Badge>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <FocusRow label="Health" value={`${connectorHealth.score}%`} />
+                  <FocusRow label="Signals" value={String(state.rawSignals.filter((item) => item.connectorId === connector.id).length)} />
+                  <FocusRow label="Runs" value={String(state.connectorSyncRuns.filter((item) => item.connectorId === connector.id).length)} />
+                </div>
+              </button>
+            );
+          })}
+        </section>
+
+        {selectedConnector ? (
+          <section className="space-y-4">
+            <Card>
+              <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge tone={statusTone(selectedConnector.status)}>{formatEnum(selectedConnector.status)}</Badge>
+                    <Badge tone="blue">{formatEnum(selectedConnector.connectorType)}</Badge>
+                    <Badge tone={getHealthColor(health?.score ?? selectedConnector.healthScore) as any}>
+                      {health?.score ?? selectedConnector.healthScore}% health
+                    </Badge>
+                  </div>
+                  <CardTitle className="mt-3">{selectedConnector.name}</CardTitle>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{selectedConnector.description}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => onEdit("connectors", selectedConnector)}>
+                    <Edit3 className="h-4 w-4" />
+                    Edit
+                  </Button>
+                  <Button size="sm" onClick={() => onRunSync(selectedConnector)}>
+                    Run Sync
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => onPause(selectedConnector)}>
+                    Pause
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => onResume(selectedConnector)}>
+                    Resume
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+                  <MetricCard label="Raw Signals" value={rawSignals.length} />
+                  <MetricCard label="Normalized" value={normalizedSignalsForConnector.length} />
+                  <MetricCard label="Routed Events" value={routedEvents.length} />
+                  <MetricCard label="Sync Runs" value={syncHistory.length} />
+                  <MetricCard label="Last Sync" value={selectedConnector.lastSyncAt ? formatDate(selectedConnector.lastSyncAt) : "Never"} />
+                  <MetricCard label="Auth" value={formatEnum(selectedConnector.authType)} />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <InlineList title="Config Summary" items={Object.entries(selectedConnector.config).map(([key, value]) => `${key}: ${String(value)}`)} />
+                  <InlineList title="Health Reasons" items={health?.reasons ?? []} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              <MissionRelationPanel title="Sync History" items={syncHistory} collection="connectorSyncRuns" onEdit={onEdit} />
+              <MissionRelationPanel title="Raw Signals" items={rawSignals} collection="rawSignals" onEdit={onEdit} />
+              <MissionRelationPanel title="Normalized Signals" items={normalizedSignalsForConnector} collection="normalizedSignals" onEdit={onEdit} />
+              <InlineList title="Routed Objects" items={routedEvents.map((event) => event.title)} />
+            </div>
+          </section>
+        ) : (
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              No connectors match the current filters.
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SignalsPage({
+  state,
+  page,
+  activeWorkspaceId,
+  searchQuery,
+  setSearchQuery,
+  statusFilter,
+  setStatusFilter,
+  priorityFilter,
+  setPriorityFilter,
+  onCreate,
+  onEdit
+}: {
+  state: PlatformState;
+  page: PageDefinition;
+  activeWorkspaceId: string;
+  searchQuery: string;
+  setSearchQuery: (value: string) => void;
+  statusFilter: FilterValue<string>;
+  setStatusFilter: (value: FilterValue<string>) => void;
+  priorityFilter: FilterValue<Priority>;
+  setPriorityFilter: (value: FilterValue<Priority>) => void;
+  onCreate: (collection: EditableCollection) => void;
+  onEdit: (collection: EditableCollection, item: AnyRecord) => void;
+}) {
+  const rawSignals = state.rawSignals
+    .filter((item) => item.workspaceId === activeWorkspaceId)
+    .filter((item) => itemMatchesFilters(item, searchQuery, statusFilter, priorityFilter));
+  const normalized = state.normalizedSignals
+    .filter((item) => item.workspaceId === activeWorkspaceId)
+    .filter((item) => itemMatchesFilters(item, searchQuery, statusFilter, priorityFilter));
+  const routedIntelligence = state.intelligenceObjects.filter(
+    (item) => item.workspaceId === activeWorkspaceId && item.sourceType === "NormalizedSignal"
+  );
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <CardTitle>{page.label}</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">{page.description}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => onCreate("rawSignals")}>
+              Raw Signal
+            </Button>
+            <Button onClick={() => onCreate("normalizedSignals")}>
+              Normalized Signal
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <TableFilters
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            priorityFilter={priorityFilter}
+            setPriorityFilter={setPriorityFilter}
+            hasStatus
+            hasPriority
+          />
+        </CardContent>
+      </Card>
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Raw Signals" value={rawSignals.length} />
+        <MetricCard label="Normalized Signals" value={normalized.length} />
+        <MetricCard label="Failed Signals" value={rawSignals.filter((item) => item.status === "FAILED").length} />
+        <MetricCard label="Routed Intelligence" value={routedIntelligence.length} />
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Raw Signals</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RecordTable items={rawSignals} collection="rawSignals" onEdit={onEdit} showOpportunity={false} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Normalized Signals</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RecordTable items={normalized} collection="normalizedSignals" onEdit={onEdit} showOpportunity={false} />
+          </CardContent>
+        </Card>
+      </div>
+      <InlineList title="Routed Intelligence" items={routedIntelligence.slice(0, 8).map((item) => item.summary)} />
+    </div>
   );
 }
 
@@ -5565,6 +6813,9 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
   const learningOptions = state.learnings.map((learning) => learning.id);
   const campaignOptions = state.campaigns.map((campaign) => campaign.id);
   const objectiveOptions = state.objectives.map((objective) => objective.id);
+  const missionOptions = state.missions.map((mission) => mission.id);
+  const connectorOptions = state.connectors.map((connector) => connector.id);
+  const rawSignalOptions = state.rawSignals.map((signal) => signal.id);
   const commonCore: FieldConfig[] = [
     { key: "title", label: "Title" },
     { key: "description", label: "Description", kind: "textarea" },
@@ -5574,6 +6825,132 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
     { key: "priority", label: "Priority", kind: "select", options: priorityOptions },
     { key: "owner", label: "Owner" }
   ];
+
+  if (collection === "missions") {
+    return [
+      { key: "title", label: "Title" },
+      { key: "description", label: "Description", kind: "textarea" },
+      { key: "missionType", label: "Mission Type", kind: "select", options: missionTypeOptions },
+      { key: "status", label: "Status", kind: "select", options: missionStatusOptions },
+      { key: "priority", label: "Priority", kind: "select", options: priorityOptions },
+      { key: "owner", label: "Owner" },
+      { key: "healthScore", label: "Health Score", kind: "number" },
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" },
+      { key: "velocityScore", label: "Velocity Score", kind: "number" },
+      { key: "completionScore", label: "Completion Score", kind: "number" },
+      { key: "riskScore", label: "Risk Score", kind: "number" },
+      { key: "startDate", label: "Start Date" },
+      { key: "targetDate", label: "Target Date" },
+      { key: "completedDate", label: "Completed Date" },
+      { key: "notes", label: "Notes", kind: "textarea" }
+    ];
+  }
+
+  if (collection === "missionObjectives") {
+    return [
+      { key: "missionId", label: "Mission", kind: "select", options: missionOptions },
+      { key: "objectiveId", label: "Objective", kind: "select", options: objectiveOptions },
+      { key: "weight", label: "Weight", kind: "number" }
+    ];
+  }
+
+  if (collection === "missionPlans") {
+    return [
+      { key: "missionId", label: "Mission", kind: "select", options: missionOptions },
+      { key: "planId", label: "Plan", kind: "select", options: planOptions },
+      { key: "weight", label: "Weight", kind: "number" }
+    ];
+  }
+
+  if (collection === "missionExecutions") {
+    return [
+      { key: "missionId", label: "Mission", kind: "select", options: missionOptions },
+      { key: "executionItemId", label: "Execution Item", kind: "select", options: executionItemOptions },
+      { key: "importance", label: "Importance", kind: "number" }
+    ];
+  }
+
+  if (collection === "missionLearnings") {
+    return [
+      { key: "missionId", label: "Mission", kind: "select", options: missionOptions },
+      { key: "learningId", label: "Learning", kind: "select", options: learningOptions },
+      { key: "confidence", label: "Confidence", kind: "number" }
+    ];
+  }
+
+  if (collection === "missionMetrics") {
+    return [
+      { key: "missionId", label: "Mission", kind: "select", options: missionOptions },
+      { key: "metricId", label: "Metric", kind: "select", options: metricOptions },
+      { key: "weight", label: "Weight", kind: "number" }
+    ];
+  }
+
+  if (collection === "missionSummaries") {
+    return [
+      { key: "missionId", label: "Mission", kind: "select", options: missionOptions },
+      { key: "summary", label: "Summary", kind: "textarea" },
+      { key: "reasoning", label: "Reasoning", kind: "textarea" },
+      { key: "generatedAt", label: "Generated At" },
+      { key: "confidence", label: "Confidence", kind: "number" }
+    ];
+  }
+
+  if (collection === "connectors") {
+    return [
+      { key: "name", label: "Name" },
+      { key: "connectorType", label: "Connector Type", kind: "select", options: connectorTypeOptions },
+      { key: "status", label: "Status", kind: "select", options: connectorStatusOptions },
+      { key: "provider", label: "Provider" },
+      { key: "description", label: "Description", kind: "textarea" },
+      { key: "authType", label: "Auth Type", kind: "select", options: authTypeOptions },
+      { key: "lastSyncAt", label: "Last Sync" },
+      { key: "nextSyncAt", label: "Next Sync" },
+      { key: "healthScore", label: "Health Score", kind: "number" }
+    ];
+  }
+
+  if (collection === "rawSignals") {
+    return [
+      { key: "connectorId", label: "Connector", kind: "select", options: connectorOptions },
+      { key: "source", label: "Source" },
+      { key: "sourceType", label: "Source Type" },
+      { key: "externalId", label: "External ID" },
+      { key: "receivedAt", label: "Received At" },
+      { key: "processedAt", label: "Processed At" },
+      { key: "status", label: "Status", kind: "select", options: rawSignalStatusOptions },
+      { key: "error", label: "Error", kind: "textarea" }
+    ];
+  }
+
+  if (collection === "normalizedSignals") {
+    return [
+      { key: "rawSignalId", label: "Raw Signal", kind: "select", options: rawSignalOptions },
+      { key: "connectorId", label: "Connector", kind: "select", options: connectorOptions },
+      { key: "signalType", label: "Signal Type", kind: "select", options: signalTypeOptions },
+      { key: "title", label: "Title" },
+      { key: "summary", label: "Summary", kind: "textarea" },
+      { key: "sourceUrl", label: "Source URL" },
+      { key: "author", label: "Author" },
+      { key: "platform", label: "Platform" },
+      { key: "occurredAt", label: "Occurred At" },
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" },
+      { key: "priority", label: "Priority", kind: "select", options: priorityOptions }
+    ];
+  }
+
+  if (collection === "connectorSyncRuns") {
+    return [
+      { key: "connectorId", label: "Connector", kind: "select", options: connectorOptions },
+      { key: "status", label: "Status", kind: "select", options: syncStatusOptions },
+      { key: "startedAt", label: "Started At" },
+      { key: "completedAt", label: "Completed At" },
+      { key: "recordsFetched", label: "Records Fetched", kind: "number" },
+      { key: "recordsNormalized", label: "Records Normalized", kind: "number" },
+      { key: "recordsRouted", label: "Records Routed", kind: "number" },
+      { key: "error", label: "Error", kind: "textarea" }
+    ];
+  }
 
   if (collection === "observations") {
     return [
@@ -5725,7 +7102,15 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
       { key: "dueDate", label: "Due Date" },
       { key: "owner", label: "Owner" },
       { key: "reasoning", label: "Reasoning", kind: "textarea" },
-      { key: "expectedImpact", label: "Expected Impact", kind: "textarea" }
+      { key: "expectedImpact", label: "Expected Impact", kind: "textarea" },
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" },
+      { key: "qualityScore", label: "Quality Score", kind: "number" },
+      { key: "evidenceStrength", label: "Evidence Strength", kind: "number" },
+      { key: "missingEvidence", label: "Missing Evidence", kind: "tags" },
+      { key: "duplicateRisk", label: "Duplicate Risk", kind: "number" },
+      { key: "confidenceExplanation", label: "Confidence Explanation", kind: "textarea" },
+      { key: "reviewedAt", label: "Reviewed At" },
+      { key: "reviewedBy", label: "Reviewed By" }
     ];
   }
 
@@ -6202,6 +7587,13 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
       { key: "suggestedAction", label: "Suggested Action", kind: "textarea" },
       { key: "reasoning", label: "Reasoning", kind: "textarea" },
       { key: "confidenceScore", label: "Confidence Score", kind: "number" },
+      { key: "qualityScore", label: "Quality Score", kind: "number" },
+      { key: "evidenceStrength", label: "Evidence Strength", kind: "number" },
+      { key: "missingEvidence", label: "Missing Evidence", kind: "tags" },
+      { key: "duplicateRisk", label: "Duplicate Risk", kind: "number" },
+      { key: "confidenceExplanation", label: "Confidence Explanation", kind: "textarea" },
+      { key: "reviewedAt", label: "Reviewed At" },
+      { key: "reviewedBy", label: "Reviewed By" },
       { key: "generatedBy", label: "Generated By" }
     ];
   }

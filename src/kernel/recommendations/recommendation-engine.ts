@@ -6,6 +6,7 @@ import {
   type RecommendedAction
 } from "@/lib/vgos-data";
 import { createReasoningTrace } from "@/kernel/reasoning/reasoning-engine";
+import { calculateRecommendationConfidence } from "@/kernel/quality/confidence-engine";
 
 function recommendationTypeFromPattern(pattern: Pattern): AIRecommendation["recommendationType"] {
   if (pattern.patternType === "AUTHORITY_OPPORTUNITY") return "DIRECTORY_SUBMISSION";
@@ -26,7 +27,9 @@ function actionTypeFromPattern(pattern: Pattern): RecommendedAction["actionType"
 
 export function createRecommendationFromPattern(pattern: Pattern): AIRecommendation {
   const now = new Date().toISOString();
-  return {
+  const priority: AIRecommendation["priority"] =
+    pattern.importanceScore >= 90 ? "CRITICAL" : pattern.importanceScore >= 75 ? "HIGH" : "MEDIUM";
+  const candidate = {
     id: createScopedId("ai-rec"),
     organizationId: pattern.organizationId ?? orgId,
     workspaceId: pattern.workspaceId,
@@ -34,8 +37,8 @@ export function createRecommendationFromPattern(pattern: Pattern): AIRecommendat
     description: pattern.description,
     source: "Pattern Engine",
     url: "https://vidmaker.com",
-    status: "RESEARCHING",
-    priority: pattern.importanceScore >= 90 ? "CRITICAL" : pattern.importanceScore >= 75 ? "HIGH" : "MEDIUM",
+    status: "RESEARCHING" as const,
+    priority,
     owner: "Growth Intelligence",
     recommendationType: recommendationTypeFromPattern(pattern),
     targetEntityType: "Pattern",
@@ -43,9 +46,33 @@ export function createRecommendationFromPattern(pattern: Pattern): AIRecommendat
     suggestedAction: `Create the highest-leverage response to ${pattern.title}.`,
     reasoning: `The pattern has ${pattern.frequency} supporting signals, ${Math.round(pattern.confidenceScore * 100)}% confidence, and ${pattern.importanceScore}/100 importance.`,
     confidenceScore: pattern.confidenceScore,
+    qualityScore: 0,
+    evidenceStrength: 0,
+    missingEvidence: [],
+    duplicateRisk: 0,
+    confidenceExplanation: "",
     generatedBy: "VGOS Intelligence Kernel",
     createdAt: now,
     updatedAt: now
+  };
+  const quality = calculateRecommendationConfidence({
+    ...candidate,
+    sourceType: "Pattern",
+    sourceId: pattern.id,
+    detectedEntities: [pattern.relatedEntity].filter(Boolean) as string[],
+    detectedKeywords: [pattern.patternType, pattern.trendDirection]
+  });
+
+  return {
+    ...candidate,
+    confidenceScore: quality.confidenceScore,
+    qualityScore: quality.qualityScore,
+    evidenceStrength: quality.evidenceStrength,
+    missingEvidence: quality.missingEvidence,
+    duplicateRisk: quality.duplicateRisk,
+    confidenceExplanation: quality.confidenceExplanation,
+    reviewedAt: now,
+    reviewedBy: "VGOS Intelligence Kernel"
   };
 }
 
@@ -53,7 +80,9 @@ export function createActionFromPattern(pattern: Pattern, objectiveId?: string):
   const now = new Date().toISOString();
   const due = new Date(now);
   due.setDate(due.getDate() + 3);
-  return {
+  const priority: RecommendedAction["priority"] =
+    pattern.importanceScore >= 90 ? "CRITICAL" : pattern.importanceScore >= 75 ? "HIGH" : "MEDIUM";
+  const candidate = {
     id: createScopedId("kernel-action"),
     organizationId: pattern.organizationId ?? orgId,
     workspaceId: pattern.workspaceId,
@@ -62,16 +91,43 @@ export function createActionFromPattern(pattern: Pattern, objectiveId?: string):
     sourceType: "Pattern",
     sourceId: pattern.id,
     actionType: actionTypeFromPattern(pattern),
-    priority: pattern.importanceScore >= 90 ? "CRITICAL" : pattern.importanceScore >= 75 ? "HIGH" : "MEDIUM",
-    status: "PENDING",
+    priority,
+    status: "PENDING" as const,
     dueDate: due.toISOString(),
     owner: "Growth Intelligence",
     reasoning: `Selected from ${pattern.patternType} with ${pattern.trendDirection.toLowerCase()} trend.`,
     expectedImpact: "Improves VidMaker memory-to-action velocity through a concrete growth move.",
+    confidenceScore: pattern.confidenceScore,
+    qualityScore: 0,
+    evidenceStrength: 0,
+    missingEvidence: [],
+    duplicateRisk: 0,
+    confidenceExplanation: "",
     objectiveId,
     patternId: pattern.id,
     createdAt: now,
     updatedAt: now
+  };
+  const quality = calculateRecommendationConfidence({
+    ...candidate,
+    source: "Pattern Engine",
+    sourceType: "Pattern",
+    sourceId: pattern.id,
+    sourceUrl: "https://vidmaker.com",
+    detectedEntities: [pattern.relatedEntity].filter(Boolean) as string[],
+    detectedKeywords: [pattern.patternType, pattern.trendDirection]
+  });
+
+  return {
+    ...candidate,
+    confidenceScore: quality.confidenceScore,
+    qualityScore: quality.qualityScore,
+    evidenceStrength: quality.evidenceStrength,
+    missingEvidence: quality.missingEvidence,
+    duplicateRisk: quality.duplicateRisk,
+    confidenceExplanation: quality.confidenceExplanation,
+    reviewedAt: now,
+    reviewedBy: "VGOS Intelligence Kernel"
   };
 }
 

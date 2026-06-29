@@ -127,6 +127,26 @@ enum EventType {
   STRATEGY_ADJUSTMENT_ACCEPTED
   STRATEGY_ADJUSTMENT_REJECTED
   STRATEGY_ADJUSTMENT_IMPLEMENTED
+  MISSION_CREATED
+  MISSION_STARTED
+  MISSION_COMPLETED
+  MISSION_BLOCKED
+  MISSION_AT_RISK
+  MISSION_UPDATED
+  MISSION_SUMMARY_GENERATED
+  MISSION_RECOMMENDATION_CREATED
+  MISSION_HEALTH_CHANGED
+  MISSION_PROGRESS_UPDATED
+  CONNECTOR_CREATED
+  CONNECTOR_CONNECTED
+  CONNECTOR_SYNC_STARTED
+  CONNECTOR_SYNC_COMPLETED
+  CONNECTOR_SYNC_FAILED
+  RAW_SIGNAL_RECEIVED
+  SIGNAL_NORMALIZED
+  SIGNAL_ROUTED
+  SIGNAL_FAILED
+  CONNECTOR_HEALTH_CHANGED
 }
 
 enum EventSeverity {
@@ -530,6 +550,96 @@ enum StrategyAdjustmentStatus {
   ARCHIVED
 }
 
+enum MissionType {
+  AUTHORITY
+  SEO
+  AEO
+  GEO
+  CONTENT
+  COMMUNITY
+  PRODUCT
+  LAUNCH
+  GROWTH
+  REVENUE
+  CUSTOM
+}
+
+enum MissionStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  BLOCKED
+  AT_RISK
+  COMPLETED
+  ARCHIVED
+}
+
+enum ConnectorType {
+  GOOGLE_SEARCH_CONSOLE
+  GOOGLE_ANALYTICS
+  GITHUB
+  PRODUCT_HUNT
+  REDDIT
+  LINKEDIN
+  X
+  YOUTUBE
+  NEWSLETTER
+  CMS
+  MANUAL_IMPORT
+  CUSTOM
+}
+
+enum ConnectorStatus {
+  DRAFT
+  CONNECTED
+  DISCONNECTED
+  ERROR
+  PAUSED
+  MOCK
+}
+
+enum AuthType {
+  NONE
+  API_KEY
+  OAUTH
+  WEBHOOK
+  MANUAL
+}
+
+enum RawSignalStatus {
+  RECEIVED
+  NORMALIZED
+  ROUTED
+  FAILED
+  IGNORED
+}
+
+enum SignalType {
+  SEARCH_QUERY
+  TRAFFIC_CHANGE
+  REFERRAL_TRAFFIC
+  SOCIAL_POST
+  SOCIAL_COMMENT
+  COMMUNITY_THREAD
+  COMMUNITY_REPLY
+  PRODUCT_HUNT_COMMENT
+  GITHUB_ISSUE
+  GITHUB_RELEASE
+  NEWSLETTER_METRIC
+  CMS_ARTICLE
+  DIRECTORY_STATUS
+  BACKLINK_FOUND
+  CUSTOM_SIGNAL
+}
+
+enum SyncStatus {
+  STARTED
+  COMPLETED
+  FAILED
+  PARTIAL
+  CANCELLED
+}
+
 model Organization {
   id                   String                @id @default(cuid())
   name                 String
@@ -589,6 +699,11 @@ model Organization {
   learnings            Learning[]
   attributions         Attribution[]
   strategyAdjustments  StrategyAdjustment[]
+  missions             Mission[]
+  connectors           Connector[]
+  rawSignals           RawSignal[]
+  normalizedSignals    NormalizedSignal[]
+  connectorSyncRuns    ConnectorSyncRun[]
   events               Event[]
   recommendedActions   RecommendedAction[]
   createdAt            DateTime              @default(now())
@@ -653,8 +768,20 @@ model Workspace {
   learnings            Learning[]
   attributions         Attribution[]
   strategyAdjustments  StrategyAdjustment[]
+  missions             Mission[]
+  missionObjectives    MissionObjective[]
+  missionPlans         MissionPlan[]
+  missionExecutions    MissionExecution[]
+  missionLearnings     MissionLearning[]
+  missionMetrics       MissionMetric[]
+  missionSummaries     MissionSummary[]
+  connectors           Connector[]
+  rawSignals           RawSignal[]
+  normalizedSignals    NormalizedSignal[]
+  connectorSyncRuns    ConnectorSyncRun[]
   events               Event[]
   recommendedActions   RecommendedAction[]
+  auditLogs            AuditLog[]
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
 
@@ -1257,6 +1384,13 @@ model AIRecommendation {
   suggestedAction    String             @db.Text
   reasoning          String             @db.Text
   confidenceScore    Float              @default(0)
+  qualityScore       Float              @default(0)
+  evidenceStrength   Float              @default(0)
+  missingEvidence    Json               @default("[]")
+  duplicateRisk      Float              @default(0)
+  confidenceExplanation String           @default("") @db.Text
+  reviewedAt         DateTime?
+  reviewedBy         String?
   priority           Priority           @default(MEDIUM)
   status             Status             @default(RESEARCHING)
   generatedBy        String
@@ -1420,6 +1554,7 @@ model Objective {
   measurements       Measurement[]
   learnings          Learning[]
   strategyAdjustments StrategyAdjustment[]
+  missionObjectives  MissionObjective[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -1711,6 +1846,7 @@ model Plan {
   measurements      Measurement[]
   learnings         Learning[]
   strategyAdjustments StrategyAdjustment[]
+  missionPlans      MissionPlan[]
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
@@ -1918,6 +2054,7 @@ model ExecutionItem {
   results             ExecutionResult[]
   measurements         Measurement[]
   learnings            Learning[]
+  missionExecutions    MissionExecution[]
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 
@@ -2061,6 +2198,7 @@ model Metric {
   workspace       Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   measurements    Measurement[]
   learnings       Learning[]
+  missionMetrics  MissionMetric[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -2136,6 +2274,7 @@ model Learning {
   plan                  Plan?         @relation(fields: [planId], references: [id], onDelete: SetNull)
   objective             Objective?    @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
   strategyAdjustments   StrategyAdjustment[]
+  missionLearnings      MissionLearning[]
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
 
@@ -2206,6 +2345,267 @@ model StrategyAdjustment {
   @@index([priority])
 }
 
+model Mission {
+  id              String             @id @default(cuid())
+  organizationId  String
+  workspaceId     String
+  title           String
+  description     String             @db.Text
+  missionType     MissionType
+  owner           String
+  priority        Priority           @default(MEDIUM)
+  status          MissionStatus      @default(DRAFT)
+  healthScore     Float              @default(0)
+  confidenceScore Float              @default(0)
+  velocityScore   Float              @default(0)
+  completionScore Float              @default(0)
+  riskScore       Float              @default(0)
+  startDate       DateTime
+  targetDate      DateTime
+  completedDate   DateTime?
+  notes           String             @db.Text
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  objectives      MissionObjective[]
+  plans           MissionPlan[]
+  executions      MissionExecution[]
+  learnings       MissionLearning[]
+  metrics         MissionMetric[]
+  summaries       MissionSummary[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([missionType])
+  @@index([priority])
+  @@index([status])
+  @@index([owner])
+  @@index([healthScore])
+  @@index([targetDate])
+}
+
+model MissionObjective {
+  id          String    @id @default(cuid())
+  missionId   String
+  objectiveId String
+  workspaceId String
+  weight      Float     @default(1)
+  mission     Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  objective   Objective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([missionId, objectiveId])
+  @@index([missionId])
+  @@index([objectiveId])
+  @@index([workspaceId])
+}
+
+model MissionPlan {
+  id          String    @id @default(cuid())
+  missionId   String
+  planId      String
+  workspaceId String
+  weight      Float     @default(1)
+  mission     Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  plan        Plan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([missionId, planId])
+  @@index([missionId])
+  @@index([planId])
+  @@index([workspaceId])
+}
+
+model MissionExecution {
+  id              String        @id @default(cuid())
+  missionId       String
+  executionItemId String
+  workspaceId     String
+  importance      Float         @default(1)
+  mission         Mission       @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  executionItem   ExecutionItem @relation(fields: [executionItemId], references: [id], onDelete: Cascade)
+  workspace       Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+
+  @@unique([missionId, executionItemId])
+  @@index([missionId])
+  @@index([executionItemId])
+  @@index([workspaceId])
+}
+
+model MissionLearning {
+  id          String    @id @default(cuid())
+  missionId   String
+  learningId  String
+  workspaceId String
+  confidence  Float     @default(0)
+  mission     Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  learning    Learning  @relation(fields: [learningId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([missionId, learningId])
+  @@index([missionId])
+  @@index([learningId])
+  @@index([workspaceId])
+  @@index([confidence])
+}
+
+model MissionMetric {
+  id          String    @id @default(cuid())
+  missionId   String
+  metricId    String
+  workspaceId String
+  weight      Float     @default(1)
+  mission     Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  metric      Metric    @relation(fields: [metricId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([missionId, metricId])
+  @@index([missionId])
+  @@index([metricId])
+  @@index([workspaceId])
+}
+
+model MissionSummary {
+  id          String    @id @default(cuid())
+  missionId   String
+  workspaceId String
+  summary     String    @db.Text
+  reasoning   String    @db.Text
+  generatedAt DateTime
+  confidence  Float     @default(0)
+  mission     Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([missionId])
+  @@index([workspaceId])
+  @@index([generatedAt])
+  @@index([confidence])
+}
+
+model Connector {
+  id                String              @id @default(cuid())
+  organizationId    String
+  workspaceId       String
+  name              String
+  connectorType     ConnectorType
+  status            ConnectorStatus     @default(DRAFT)
+  provider          String
+  description       String              @db.Text
+  authType          AuthType            @default(NONE)
+  config            Json
+  lastSyncAt        DateTime?
+  nextSyncAt        DateTime?
+  healthScore       Float               @default(0)
+  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  rawSignals        RawSignal[]
+  normalizedSignals NormalizedSignal[]
+  syncRuns          ConnectorSyncRun[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([connectorType])
+  @@index([status])
+  @@index([provider])
+  @@index([lastSyncAt])
+  @@index([healthScore])
+}
+
+model RawSignal {
+  id                String             @id @default(cuid())
+  organizationId    String
+  workspaceId       String
+  connectorId       String
+  source            String
+  sourceType        String
+  externalId        String?
+  rawPayload        Json
+  receivedAt        DateTime
+  processedAt       DateTime?
+  status            RawSignalStatus    @default(RECEIVED)
+  error             String?            @db.Text
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connector         Connector          @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  normalizedSignals NormalizedSignal[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([connectorId])
+  @@index([sourceType])
+  @@index([externalId])
+  @@index([status])
+  @@index([receivedAt])
+}
+
+model NormalizedSignal {
+  id              String        @id @default(cuid())
+  organizationId  String
+  workspaceId     String
+  rawSignalId     String
+  connectorId     String
+  signalType      SignalType
+  title           String
+  summary         String        @db.Text
+  sourceUrl       String?       @db.Text
+  author          String?
+  platform        String?
+  occurredAt      DateTime
+  confidenceScore Float         @default(0)
+  priority        Priority      @default(MEDIUM)
+  metadata        Json
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace       Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  rawSignal       RawSignal     @relation(fields: [rawSignalId], references: [id], onDelete: Cascade)
+  connector       Connector     @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([rawSignalId])
+  @@index([connectorId])
+  @@index([signalType])
+  @@index([priority])
+  @@index([occurredAt])
+}
+
+model ConnectorSyncRun {
+  id                String       @id @default(cuid())
+  organizationId    String
+  workspaceId       String
+  connectorId       String
+  status            SyncStatus
+  startedAt         DateTime
+  completedAt       DateTime?
+  recordsFetched    Int          @default(0)
+  recordsNormalized Int          @default(0)
+  recordsRouted     Int          @default(0)
+  error             String?      @db.Text
+  logs              Json
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connector         Connector    @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([connectorId])
+  @@index([status])
+  @@index([startedAt])
+}
+
 model Event {
   id             String        @id @default(cuid())
   workspaceId    String
@@ -2245,6 +2645,14 @@ model RecommendedAction {
   owner                 String
   reasoning             String               @db.Text
   expectedImpact        String               @db.Text
+  confidenceScore       Float                @default(0)
+  qualityScore          Float                @default(0)
+  evidenceStrength      Float                @default(0)
+  missingEvidence       Json                 @default("[]")
+  duplicateRisk         Float                @default(0)
+  confidenceExplanation String               @default("") @db.Text
+  reviewedAt            DateTime?
+  reviewedBy            String?
   completedAt           DateTime?
   organizationId        String
   questionId            String?
@@ -2284,6 +2692,26 @@ model RecommendedAction {
   @@index([dueDate])
   @@index([objectiveId])
   @@index([patternId])
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  workspaceId String
+  actor       String
+  action      String
+  entityType  String
+  entityId    String
+  before      Json?
+  after       Json?
+  metadata    Json?
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId])
+  @@index([actor])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
 }
 
 model QuestionContentAsset {

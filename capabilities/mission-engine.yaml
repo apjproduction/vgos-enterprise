@@ -1,0 +1,49 @@
+id: mission-engine
+name: Mission Engine
+version: 5.1-enterprise
+owner: VidMaker Growth Intelligence
+status: beta
+description: Highest-level business operating layer that ties objectives, plans, execution, measurement, learning, and strategy together.
+depends_on:
+  - planning-engine
+  - execution-engine
+  - measurement-engine
+  - reasoning-engine
+produces:
+  - Mission
+  - MissionSummary
+  - MissionRecommendation
+  - MissionEvent
+consumes:
+  - Objective
+  - Plan
+  - ExecutionItem
+  - Measurement
+  - Learning
+  - StrategyAdjustment
+eventsProduced:
+  - MISSION_CREATED
+  - MISSION_STARTED
+  - MISSION_COMPLETED
+  - MISSION_BLOCKED
+  - MISSION_AT_RISK
+  - MISSION_UPDATED
+  - MISSION_SUMMARY_GENERATED
+  - MISSION_RECOMMENDATION_CREATED
+  - MISSION_HEALTH_CHANGED
+  - MISSION_PROGRESS_UPDATED
+eventsConsumed:
+  - OBJECTIVE_CREATED
+  - PLAN_CREATED
+  - EXECUTION_COMPLETED
+  - MEASUREMENT_CREATED
+  - LEARNING_CREATED
+  - STRATEGY_ADJUSTMENT_PROPOSED
+publicApi:
+  - createMission
+  - updateMission
+  - archiveMission
+  - completeMission
+  - getMissionOverview
+  - generateMissionSummary
+documentation: architecture/ADR-009-Mission-Engine.md

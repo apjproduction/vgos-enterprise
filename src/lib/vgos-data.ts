@@ -12,7 +12,7 @@ import {
   Target,
   UsersRound
 } from "lucide-react";
-
+import { calculateSignalQuality } from "@/kernel/quality/signal-quality";
 export type Status =
   | "NOT_STARTED"
   | "RESEARCHING"
@@ -118,7 +118,27 @@ export type EventType =
   | "STRATEGY_ADJUSTMENT_PROPOSED"
   | "STRATEGY_ADJUSTMENT_ACCEPTED"
   | "STRATEGY_ADJUSTMENT_REJECTED"
-  | "STRATEGY_ADJUSTMENT_IMPLEMENTED";
+  | "STRATEGY_ADJUSTMENT_IMPLEMENTED"
+  | "MISSION_CREATED"
+  | "MISSION_STARTED"
+  | "MISSION_COMPLETED"
+  | "MISSION_BLOCKED"
+  | "MISSION_AT_RISK"
+  | "MISSION_UPDATED"
+  | "MISSION_SUMMARY_GENERATED"
+  | "MISSION_RECOMMENDATION_CREATED"
+  | "MISSION_HEALTH_CHANGED"
+  | "MISSION_PROGRESS_UPDATED"
+  | "CONNECTOR_CREATED"
+  | "CONNECTOR_CONNECTED"
+  | "CONNECTOR_SYNC_STARTED"
+  | "CONNECTOR_SYNC_COMPLETED"
+  | "CONNECTOR_SYNC_FAILED"
+  | "RAW_SIGNAL_RECEIVED"
+  | "SIGNAL_NORMALIZED"
+  | "SIGNAL_ROUTED"
+  | "SIGNAL_FAILED"
+  | "CONNECTOR_HEALTH_CHANGED";
 
 export type EventSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type EventStatus = "PENDING" | "PROCESSED" | "DISMISSED";
@@ -419,6 +439,60 @@ export type StrategyAdjustmentType =
 
 export type StrategyAdjustmentStatus = "PROPOSED" | "ACCEPTED" | "REJECTED" | "IMPLEMENTED" | "ARCHIVED";
 
+export type MissionType =
+  | "AUTHORITY"
+  | "SEO"
+  | "AEO"
+  | "GEO"
+  | "CONTENT"
+  | "COMMUNITY"
+  | "PRODUCT"
+  | "LAUNCH"
+  | "GROWTH"
+  | "REVENUE"
+  | "CUSTOM";
+
+export type MissionStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "BLOCKED" | "AT_RISK" | "COMPLETED" | "ARCHIVED";
+
+export type ConnectorType =
+  | "GOOGLE_SEARCH_CONSOLE"
+  | "GOOGLE_ANALYTICS"
+  | "GITHUB"
+  | "PRODUCT_HUNT"
+  | "REDDIT"
+  | "LINKEDIN"
+  | "X"
+  | "YOUTUBE"
+  | "NEWSLETTER"
+  | "CMS"
+  | "MANUAL_IMPORT"
+  | "CUSTOM";
+
+export type ConnectorStatus = "DRAFT" | "CONNECTED" | "DISCONNECTED" | "ERROR" | "PAUSED" | "MOCK";
+
+export type AuthType = "NONE" | "API_KEY" | "OAUTH" | "WEBHOOK" | "MANUAL";
+
+export type RawSignalStatus = "RECEIVED" | "NORMALIZED" | "ROUTED" | "FAILED" | "IGNORED";
+
+export type SignalType =
+  | "SEARCH_QUERY"
+  | "TRAFFIC_CHANGE"
+  | "REFERRAL_TRAFFIC"
+  | "SOCIAL_POST"
+  | "SOCIAL_COMMENT"
+  | "COMMUNITY_THREAD"
+  | "COMMUNITY_REPLY"
+  | "PRODUCT_HUNT_COMMENT"
+  | "GITHUB_ISSUE"
+  | "GITHUB_RELEASE"
+  | "NEWSLETTER_METRIC"
+  | "CMS_ARTICLE"
+  | "DIRECTORY_STATUS"
+  | "BACKLINK_FOUND"
+  | "CUSTOM_SIGNAL";
+
+export type SyncStatus = "STARTED" | "COMPLETED" | "FAILED" | "PARTIAL" | "CANCELLED";
+
 export type Organization = {
   id: string;
   name: string;
@@ -627,7 +701,14 @@ export type AIRecommendation = CoreRecord & {
   suggestedAction: string;
   reasoning: string;
   confidenceScore: number;
+  qualityScore: number;
+  evidenceStrength: number;
+  missingEvidence: string[];
+  duplicateRisk: number;
+  confidenceExplanation: string;
   generatedBy: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
   acceptedAt?: string;
   rejectedAt?: string;
 };
@@ -675,9 +756,30 @@ export type RecommendedAction = ScopedRecord & {
   owner: string;
   reasoning: string;
   expectedImpact: string;
+  confidenceScore: number;
+  qualityScore: number;
+  evidenceStrength: number;
+  missingEvidence: string[];
+  duplicateRisk: number;
+  confidenceExplanation: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
   completedAt?: string;
   objectiveId?: string;
   patternId?: string;
+};
+
+export type AuditLog = {
+  id: string;
+  workspaceId: string;
+  actor: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
+  createdAt: string;
 };
 
 export type Memory = ScopedRecord & {
@@ -1080,6 +1182,141 @@ export type StrategyAdjustment = ScopedRecord & {
   reasoning: string;
 };
 
+export type Mission = ScopedRecord & {
+  title: string;
+  description: string;
+  missionType: MissionType;
+  owner: string;
+  priority: Priority;
+  status: MissionStatus;
+  healthScore: number;
+  confidenceScore: number;
+  velocityScore: number;
+  completionScore: number;
+  riskScore: number;
+  startDate: string;
+  targetDate: string;
+  completedDate?: string;
+  notes: string;
+};
+
+export type MissionObjective = {
+  id: string;
+  missionId: string;
+  objectiveId: string;
+  workspaceId: string;
+  weight: number;
+  createdAt: string;
+};
+
+export type MissionPlan = {
+  id: string;
+  missionId: string;
+  planId: string;
+  workspaceId: string;
+  weight: number;
+  createdAt: string;
+};
+
+export type MissionExecution = {
+  id: string;
+  missionId: string;
+  executionItemId: string;
+  workspaceId: string;
+  importance: number;
+  createdAt: string;
+};
+
+export type MissionLearning = {
+  id: string;
+  missionId: string;
+  learningId: string;
+  workspaceId: string;
+  confidence: number;
+  createdAt: string;
+};
+
+export type MissionMetric = {
+  id: string;
+  missionId: string;
+  metricId: string;
+  workspaceId: string;
+  weight: number;
+  createdAt: string;
+};
+
+export type MissionSummary = {
+  id: string;
+  missionId: string;
+  workspaceId: string;
+  summary: string;
+  reasoning: string;
+  generatedAt: string;
+  confidence: number;
+};
+
+export type MissionTemplate = {
+  id: string;
+  title: string;
+  missionType: MissionType;
+  description: string;
+  defaultOwner: string;
+  recommendedMetrics: string[];
+  recommendedPlanTypes: string[];
+};
+
+export type Connector = ScopedRecord & {
+  name: string;
+  connectorType: ConnectorType;
+  status: ConnectorStatus;
+  provider: string;
+  description: string;
+  authType: AuthType;
+  config: Record<string, unknown>;
+  lastSyncAt?: string;
+  nextSyncAt?: string;
+  healthScore: number;
+};
+
+export type RawSignal = ScopedRecord & {
+  connectorId: string;
+  source: string;
+  sourceType: string;
+  externalId?: string;
+  rawPayload: Record<string, unknown>;
+  receivedAt: string;
+  processedAt?: string;
+  status: RawSignalStatus;
+  error?: string;
+};
+
+export type NormalizedSignal = ScopedRecord & {
+  rawSignalId: string;
+  connectorId: string;
+  signalType: SignalType;
+  title: string;
+  summary: string;
+  sourceUrl?: string;
+  author?: string;
+  platform?: string;
+  occurredAt: string;
+  confidenceScore: number;
+  priority: Priority;
+  metadata: Record<string, unknown>;
+};
+
+export type ConnectorSyncRun = ScopedRecord & {
+  connectorId: string;
+  status: SyncStatus;
+  startedAt: string;
+  completedAt?: string;
+  recordsFetched: number;
+  recordsNormalized: number;
+  recordsRouted: number;
+  error?: string;
+  logs: Record<string, unknown>;
+};
+
 export type BriefingSection = {
   id: string;
   title: string;
@@ -1144,13 +1381,30 @@ export type PlatformState = {
   learnings: Learning[];
   attributions: Attribution[];
   strategyAdjustments: StrategyAdjustment[];
+  missions: Mission[];
+  missionObjectives: MissionObjective[];
+  missionPlans: MissionPlan[];
+  missionExecutions: MissionExecution[];
+  missionLearnings: MissionLearning[];
+  missionMetrics: MissionMetric[];
+  missionSummaries: MissionSummary[];
+  missionTemplates: MissionTemplate[];
+  connectors: Connector[];
+  rawSignals: RawSignal[];
+  normalizedSignals: NormalizedSignal[];
+  connectorSyncRuns: ConnectorSyncRun[];
   events: Event[];
   recommendedActions: RecommendedAction[];
+  auditLogs: AuditLog[];
   briefingSections: BriefingSection[];
 };
 
 export type PageId =
   | "missionControl"
+  | "missions"
+  | "connectors"
+  | "signals"
+  | "syncRuns"
   | "briefing"
   | "intelligencePipeline"
   | "memory"
@@ -1225,6 +1479,17 @@ export type CollectionKey =
   | "learnings"
   | "attributions"
   | "strategyAdjustments"
+  | "missions"
+  | "missionObjectives"
+  | "missionPlans"
+  | "missionExecutions"
+  | "missionLearnings"
+  | "missionMetrics"
+  | "missionSummaries"
+  | "connectors"
+  | "rawSignals"
+  | "normalizedSignals"
+  | "connectorSyncRuns"
   | "recommendedActions"
   | "events"
   | "contentAssets"
@@ -1283,6 +1548,33 @@ export const pageDefinitions: PageDefinition[] = [
     label: "Mission Control",
     description: "Executive command center for what the VidMaker team should do next.",
     icon: Activity
+  },
+  {
+    id: "missions",
+    label: "Missions",
+    description: "Highest-level business missions tying objectives, plans, execution, measurements, and learning together.",
+    icon: Target,
+    collection: "missions"
+  },
+  {
+    id: "connectors",
+    label: "Connectors",
+    description: "Live-ready source adapters that bring external data into the VGOS intelligence kernel.",
+    icon: Database,
+    collection: "connectors"
+  },
+  {
+    id: "signals",
+    label: "Signals",
+    description: "Raw and normalized external signals routed through the Connected Intelligence foundation.",
+    icon: Activity
+  },
+  {
+    id: "syncRuns",
+    label: "Sync Runs",
+    description: "Connector sync history, fetched records, normalized signals, routed objects, and failures.",
+    icon: CheckCircle2,
+    collection: "connectorSyncRuns"
   },
   {
     id: "briefing",
@@ -1983,7 +2275,17 @@ const aiRecommendations: AIRecommendation[] = [
   reasoning:
     "Market observations, opportunity scores, and knowledge graph relationships indicate this action can improve growth outcomes.",
   confidenceScore: Number((0.74 + index * 0.02).toFixed(2)),
+  qualityScore: index < 4 ? 90 + index : index < 8 ? 78 + index : 64 + index,
+  evidenceStrength: Number((0.68 + Math.min(index, 8) * 0.03).toFixed(2)),
+  missingEvidence: index % 4 === 0 ? ["Recent performance evidence"] : [],
+  duplicateRisk: Number((index % 5 === 0 ? 0.56 : 0.14 + index * 0.01).toFixed(2)),
+  confidenceExplanation:
+    index % 4 === 0
+      ? "Confidence is limited by missing recent performance evidence, but the recommendation has strong source context."
+      : "Confidence is supported by source traceability, clear reasoning, and workspace intelligence context.",
   generatedBy: "VGOS Intelligence Engine",
+  reviewedAt: index < 3 ? daysAgo(index + 1) : undefined,
+  reviewedBy: index < 3 ? "Growth Intelligence Lead" : undefined,
   ...scoped(index)
 }));
 
@@ -2936,10 +3238,515 @@ const recommendedActions: RecommendedAction[] = [
     "VGOS detected this as a high-value next move from opportunity scores, events, and intelligence graph context.",
   expectedImpact:
     "Improves VidMaker proof, authority, answer coverage, community engagement, or experiment velocity.",
+  confidenceScore: Number((0.7 + Math.min(index, 12) * 0.015).toFixed(2)),
+  qualityScore: index % 8 === 0 ? 58 : index < 10 ? 88 - index : 72,
+  evidenceStrength: Number((index % 7 === 0 ? 0.42 : 0.7 + Math.min(index, 10) * 0.02).toFixed(2)),
+  missingEvidence:
+    index % 7 === 0
+      ? ["Owner confirmation", "Recent source citation"]
+      : index % 6 === 0
+        ? ["Recent source citation"]
+        : [],
+  duplicateRisk: Number((index % 9 === 0 ? 0.64 : index % 5 === 0 ? 0.48 : 0.16).toFixed(2)),
+  confidenceExplanation:
+    index % 7 === 0
+      ? "Action is promising but needs owner confirmation and a fresher source citation before execution."
+      : "Action has enough source context, reasoning, and expected impact to enter the execution queue.",
+  reviewedAt: index < 5 ? daysAgo(index + 1) : undefined,
+  reviewedBy: index < 5 ? "Mission Control" : undefined,
   objectiveId,
   patternId,
   ...scoped(index)
 }));
+
+const auditLogs: AuditLog[] = [
+  ["MISSION_CREATED", "Mission", "mission-product-page-to-video-proof", "Growth Lead"],
+  ["PLAN_GENERATED", "Plan", "plan-product-page-demo-sprint", "Planning Engine"],
+  ["EXECUTION_COMPLETED", "ExecutionItem", "execution-product-page-demo", "Execution Engine"],
+  ["MEASUREMENT_CREATED", "Measurement", "measurement-demo-signups-week-1", "Measurement Engine"],
+  ["RECOMMENDATION_REVIEWED", "AIRecommendation", "ai-rec-01", "Growth Intelligence Lead"],
+  ["RECOMMENDATION_CREATED", "AIRecommendation", "quality-rec-high-01", "VGOS Quality Layer"],
+  ["RECOMMENDATION_CREATED", "AIRecommendation", "quality-rec-low-01", "VGOS Quality Layer"],
+  ["DUPLICATE_RISK_FLAGGED", "RecommendedAction", "action-01", "VGOS Quality Layer"],
+  ["MISSING_EVIDENCE_FLAGGED", "RecommendedAction", "action-07", "VGOS Quality Layer"],
+  ["CONNECTOR_SYNC_COMPLETED", "ConnectorSyncRun", "sync-run-product-hunt-01", "Connector Engine"],
+  ["SIGNAL_NORMALIZED", "NormalizedSignal", "normalized-signal-product-hunt-url-video", "Normalization Engine"],
+  ["SIGNAL_ROUTED", "NormalizedSignal", "normalized-signal-product-hunt-url-video", "Signal Router"],
+  ["INTELLIGENCE_PROCESSED", "IntelligenceObject", "intelligence-product-page-to-video-demo", "Intelligence Pipeline"],
+  ["KNOWLEDGE_OBJECT_CREATED", "KnowledgeObject", "knowledge-product-page-to-video", "Knowledge Layer"],
+  ["STRATEGY_ADJUSTMENT_PROPOSED", "StrategyAdjustment", "strategy-adjustment-demo-proof", "Learning Engine"],
+  ["MISSION_HEALTH_CALCULATED", "Mission", "mission-product-page-to-video-proof", "Mission Engine"],
+  ["MANUAL_EDIT", "ContentAsset", "content-blog-004", "Content Lead"],
+  ["MANUAL_EDIT", "DirectorySubmission", "directory-ai-video-tools", "Authority Lead"],
+  ["PLAN_ACTIVATED", "Plan", "plan-product-page-demo-sprint", "Planning Engine"],
+  ["RECOMMENDATION_REVIEWED", "RecommendedAction", "action-03", "Mission Control"]
+].map(([action, entityType, entityId, actor], index) => ({
+  id: `audit-log-${String(index + 1).padStart(2, "0")}`,
+  workspaceId,
+  actor,
+  action,
+  entityType,
+  entityId,
+  before: index % 4 === 0 ? { status: "RESEARCHING" } : null,
+  after: { status: index % 5 === 0 ? "IN_PROGRESS" : "REVIEWED" },
+  metadata: {
+    release: "v5.3",
+    surface: index < 6 ? "Mission Control" : "Quality Layer",
+    summary: `${action} recorded for ${entityType}.`
+  },
+  createdAt: daysAgo(index)
+}));
+
+const missionTemplates: MissionTemplate[] = [
+  {
+    id: "mission-template-authority",
+    title: "Authority Mission",
+    missionType: "AUTHORITY",
+    description: "Build defensible category authority through content, directories, backlinks, and founder proof.",
+    defaultOwner: "Authority",
+    recommendedMetrics: ["Referring domains", "AI mentions", "Organic traffic"],
+    recommendedPlanTypes: ["Authority content", "Directory submissions", "Backlink follow-up"]
+  },
+  {
+    id: "mission-template-product-launch",
+    title: "Product Launch Mission",
+    missionType: "LAUNCH",
+    description: "Coordinate launch proof, community replies, demos, measurement, and weekly learning.",
+    defaultOwner: "Growth",
+    recommendedMetrics: ["Qualified signups", "Product Hunt referrals", "Community replies"],
+    recommendedPlanTypes: ["Launch follow-up", "Demo creation", "Community response"]
+  },
+  {
+    id: "mission-template-aeo",
+    title: "AEO Mission",
+    missionType: "AEO",
+    description: "Create answer-ready pages, FAQs, and question coverage for AI and search surfaces.",
+    defaultOwner: "Search",
+    recommendedMetrics: ["Search impressions", "AI mentions", "Answer coverage"],
+    recommendedPlanTypes: ["FAQ creation", "Question bank coverage", "Entity reinforcement"]
+  },
+  {
+    id: "mission-template-community",
+    title: "Community Mission",
+    missionType: "COMMUNITY",
+    description: "Turn community questions, objections, and proof requests into response loops.",
+    defaultOwner: "Community",
+    recommendedMetrics: ["Community replies", "Qualified signups", "Sentiment"],
+    recommendedPlanTypes: ["Community replies", "Founder posts", "Proof assets"]
+  },
+  {
+    id: "mission-template-seo",
+    title: "SEO Mission",
+    missionType: "SEO",
+    description: "Grow organic visibility through keyword clusters, internal links, and measurable content.",
+    defaultOwner: "Content",
+    recommendedMetrics: ["Organic traffic", "Search clicks", "Search impressions"],
+    recommendedPlanTypes: ["Content cluster", "Internal linking", "SERP refresh"]
+  },
+  {
+    id: "mission-template-content-cluster",
+    title: "Content Cluster Mission",
+    missionType: "CONTENT",
+    description: "Ship related assets around one category narrative and keep them linked together.",
+    defaultOwner: "Content",
+    recommendedMetrics: ["Published assets", "Organic traffic", "AI mentions"],
+    recommendedPlanTypes: ["Blog cluster", "FAQ cluster", "Social repurposing"]
+  },
+  {
+    id: "mission-template-directory",
+    title: "Directory Mission",
+    missionType: "AUTHORITY",
+    description: "Submit, track, and follow up on directory listings that create authority and backlinks.",
+    defaultOwner: "Authority",
+    recommendedMetrics: ["Directory approvals", "Backlinks", "Referring domains"],
+    recommendedPlanTypes: ["Submission batch", "Copy bank", "Backlink monitoring"]
+  },
+  {
+    id: "mission-template-founder-brand",
+    title: "Founder Brand Mission",
+    missionType: "GROWTH",
+    description: "Build founder-led authority around VidMaker's category, point of view, and proof.",
+    defaultOwner: "Founder",
+    recommendedMetrics: ["LinkedIn impressions", "Community replies", "Qualified signups"],
+    recommendedPlanTypes: ["Founder posts", "Narrative testing", "Proof stories"]
+  },
+  {
+    id: "mission-template-product-education",
+    title: "Product Education Mission",
+    missionType: "PRODUCT",
+    description: "Use content and demos to explain product workflows, use cases, and trust-building proof.",
+    defaultOwner: "Product",
+    recommendedMetrics: ["Qualified signups", "Demo completion", "Feature demand"],
+    recommendedPlanTypes: ["Demo content", "FAQ content", "Landing page updates"]
+  }
+];
+
+const missions: Mission[] = ([
+  [
+    "mission-own-vpi",
+    "Own Video Production Intelligence",
+    "Make VidMaker the clearest source for Video Production Intelligence across content, AI answers, and authority surfaces.",
+    "AUTHORITY",
+    "Founder",
+    "CRITICAL",
+    "ACTIVE",
+    84,
+    0.86,
+    78,
+    64,
+    22,
+    28,
+    "Category ownership depends on consistent entity language, internal links, and proof-led founder/company distribution."
+  ],
+  [
+    "mission-product-hunt-momentum",
+    "Product Hunt Momentum",
+    "Convert launch attention into community replies, demos, proof assets, and measurable qualified signup movement.",
+    "LAUNCH",
+    "Growth",
+    "CRITICAL",
+    "ACTIVE",
+    76,
+    0.8,
+    82,
+    58,
+    34,
+    14,
+    "Launch signal is strong, but proof assets need to keep pace with commercial questions."
+  ],
+  [
+    "mission-purpose-specific-ai",
+    "Purpose-Specific AI",
+    "Establish Purpose-Specific AI and Purpose Engines as the strategic language behind VidMaker workflows.",
+    "AEO",
+    "Content",
+    "HIGH",
+    "ACTIVE",
+    79,
+    0.82,
+    66,
+    52,
+    28,
+    35,
+    "Answer-ready content and entity reinforcement should reduce ambiguity around the category."
+  ],
+  [
+    "mission-ai-search-visibility",
+    "AI Search Visibility",
+    "Increase answer-engine and search visibility for high-intent questions around AI video production workflows.",
+    "GEO",
+    "Search",
+    "HIGH",
+    "AT_RISK",
+    62,
+    0.74,
+    45,
+    41,
+    48,
+    45,
+    "Visibility work is producing signals, but execution velocity and answer coverage are behind target."
+  ],
+  [
+    "mission-founder-authority",
+    "Founder Authority",
+    "Use founder-led posts to sharpen VidMaker's point of view and create trusted distribution loops.",
+    "GROWTH",
+    "Founder",
+    "HIGH",
+    "ACTIVE",
+    72,
+    0.78,
+    61,
+    46,
+    31,
+    21,
+    "Founder content is generating qualitative signal and needs a repeatable cadence."
+  ],
+  [
+    "mission-product-page-to-video",
+    "Product Page to Video",
+    "Prove that VidMaker can transform a product page URL into a ready-to-post video workflow.",
+    "PRODUCT",
+    "Product",
+    "CRITICAL",
+    "ACTIVE",
+    81,
+    0.84,
+    74,
+    57,
+    26,
+    18,
+    "This is the strongest commercial-demand loop and should connect product proof, demos, FAQ, and landing pages."
+  ]
+] as const).map(
+  ([id, title, description, missionType, owner, priority, status, healthScore, confidenceScore, velocityScore, completionScore, riskScore, targetOffset, notes], index) => ({
+    id,
+    title,
+    description,
+    missionType: missionType as MissionType,
+    owner,
+    priority: priority as Priority,
+    status: status as MissionStatus,
+    healthScore,
+    confidenceScore,
+    velocityScore,
+    completionScore,
+    riskScore,
+    startDate: daysAgo(index + 9),
+    targetDate: daysFromNow(targetOffset),
+    notes,
+    ...scoped(index)
+  })
+);
+
+const missionObjectives: MissionObjective[] = [
+  ["mission-own-vpi-objective-own-vpi", "mission-own-vpi", "objective-own-vpi", 1],
+  ["mission-own-vpi-objective-authority", "mission-own-vpi", "objective-authority", 0.8],
+  ["mission-product-hunt-objective-product-hunt", "mission-product-hunt-momentum", "objective-product-hunt", 1],
+  ["mission-product-hunt-objective-demo-assets", "mission-product-hunt-momentum", "objective-demo-assets", 0.9],
+  ["mission-purpose-ai-objective-aeo", "mission-purpose-specific-ai", "objective-aeo-geo", 0.85],
+  ["mission-ai-search-objective-aeo", "mission-ai-search-visibility", "objective-aeo-geo", 1],
+  ["mission-founder-authority-objective-own-vpi", "mission-founder-authority", "objective-own-vpi", 0.75],
+  ["mission-product-page-objective-demo", "mission-product-page-to-video", "objective-demo-assets", 1],
+  ["mission-product-page-objective-product-hunt", "mission-product-page-to-video", "objective-product-hunt", 0.6]
+].map(([id, missionId, objectiveId, weight], index) => ({
+  id: id as string,
+  missionId: missionId as string,
+  objectiveId: objectiveId as string,
+  workspaceId,
+  weight: weight as number,
+  createdAt: daysAgo(index + 2)
+}));
+
+const missionPlans: MissionPlan[] = [
+  ["mission-own-vpi-plan-vpi-authority", "mission-own-vpi", "plan-vpi-authority", 1],
+  ["mission-own-vpi-plan-blog-cluster", "mission-own-vpi", "plan-blog-004-010-content", 0.85],
+  ["mission-product-hunt-plan-follow-up", "mission-product-hunt-momentum", "plan-product-hunt-follow-up", 1],
+  ["mission-purpose-ai-plan-aeo", "mission-purpose-specific-ai", "plan-aeo-geo-visibility", 0.9],
+  ["mission-ai-search-plan-aeo", "mission-ai-search-visibility", "plan-aeo-geo-visibility", 1],
+  ["mission-founder-plan-authority", "mission-founder-authority", "plan-vpi-authority", 0.8],
+  ["mission-product-page-plan-follow-up", "mission-product-page-to-video", "plan-product-hunt-follow-up", 1],
+  ["mission-product-page-plan-blog", "mission-product-page-to-video", "plan-blog-004-010-content", 0.7],
+  ["mission-directory-plan-submission", "mission-own-vpi", "plan-directory-submission", 0.7]
+].map(([id, missionId, planId, weight], index) => ({
+  id: id as string,
+  missionId: missionId as string,
+  planId: planId as string,
+  workspaceId,
+  weight: weight as number,
+  createdAt: daysAgo(index + 1)
+}));
+
+const missionExecutions: MissionExecution[] = [
+  ["mission-own-vpi-execution-internal-links", "mission-own-vpi", "execution-blog-004-internal-links", 0.9],
+  ["mission-own-vpi-execution-landing-section", "mission-own-vpi", "execution-vpi-landing-section", 0.8],
+  ["mission-product-hunt-execution-reply", "mission-product-hunt-momentum", "execution-product-hunt-reply", 1],
+  ["mission-product-hunt-execution-proof", "mission-product-hunt-momentum", "execution-ph-proof-screenshot", 0.85],
+  ["mission-purpose-ai-execution-faq", "mission-purpose-specific-ai", "execution-purpose-specific-faq", 0.9],
+  ["mission-purpose-ai-execution-post", "mission-purpose-specific-ai", "execution-purpose-engines-company-post", 0.75],
+  ["mission-ai-search-execution-coverage", "mission-ai-search-visibility", "execution-answer-coverage-experiment", 0.9],
+  ["mission-founder-execution-boundaries", "mission-founder-authority", "execution-founder-boundaries", 0.85],
+  ["mission-founder-execution-vpi-post", "mission-founder-authority", "execution-founder-vpi-post", 0.8],
+  ["mission-product-page-execution-demo", "mission-product-page-to-video", "execution-product-page-demo", 1],
+  ["mission-product-page-execution-entity", "mission-product-page-to-video", "execution-product-page-entity", 0.8],
+  ["mission-product-page-execution-4k", "mission-product-page-to-video", "execution-4k-proof-asset", 0.7]
+].map(([id, missionId, executionItemId, importance], index) => ({
+  id: id as string,
+  missionId: missionId as string,
+  executionItemId: executionItemId as string,
+  workspaceId,
+  importance: importance as number,
+  createdAt: daysAgo(index + 1)
+}));
+
+const missionLearnings: MissionLearning[] = [
+  ["mission-own-vpi-learning-05", "mission-own-vpi", "learning-05", 0.84],
+  ["mission-own-vpi-learning-15", "mission-own-vpi", "learning-15", 0.8],
+  ["mission-product-hunt-learning-02", "mission-product-hunt-momentum", "learning-02", 0.86],
+  ["mission-product-hunt-learning-06", "mission-product-hunt-momentum", "learning-06", 0.82],
+  ["mission-purpose-ai-learning-14", "mission-purpose-specific-ai", "learning-14", 0.78],
+  ["mission-ai-search-learning-08", "mission-ai-search-visibility", "learning-08", 0.76],
+  ["mission-founder-learning-05", "mission-founder-authority", "learning-05", 0.81],
+  ["mission-product-page-learning-13", "mission-product-page-to-video", "learning-13", 0.83],
+  ["mission-product-page-learning-06", "mission-product-page-to-video", "learning-06", 0.82]
+].map(([id, missionId, learningId, confidence], index) => ({
+  id: id as string,
+  missionId: missionId as string,
+  learningId: learningId as string,
+  workspaceId,
+  confidence: confidence as number,
+  createdAt: daysAgo(index + 1)
+}));
+
+const missionMetrics: MissionMetric[] = [
+  ["mission-own-vpi-metric-ai-mentions", "mission-own-vpi", "metric-ai-mentions", 1],
+  ["mission-own-vpi-metric-organic-traffic", "mission-own-vpi", "metric-organic-traffic", 0.8],
+  ["mission-product-hunt-metric-referrals", "mission-product-hunt-momentum", "metric-product-hunt-referrals", 1],
+  ["mission-product-hunt-metric-replies", "mission-product-hunt-momentum", "metric-community-replies", 0.85],
+  ["mission-purpose-ai-metric-ai-mentions", "mission-purpose-specific-ai", "metric-ai-mentions", 0.9],
+  ["mission-ai-search-metric-search-impressions", "mission-ai-search-visibility", "metric-search-impressions", 1],
+  ["mission-ai-search-metric-search-clicks", "mission-ai-search-visibility", "metric-search-clicks", 0.85],
+  ["mission-founder-metric-linkedin", "mission-founder-authority", "metric-linkedin-impressions", 1],
+  ["mission-product-page-metric-signups", "mission-product-page-to-video", "metric-qualified-signups", 1]
+].map(([id, missionId, metricId, weight], index) => ({
+  id: id as string,
+  missionId: missionId as string,
+  metricId: metricId as string,
+  workspaceId,
+  weight: weight as number,
+  createdAt: daysAgo(index + 1)
+}));
+
+const missionSummaries: MissionSummary[] = missions.map((mission, index) => ({
+  id: `${mission.id}-summary-01`,
+  missionId: mission.id,
+  workspaceId,
+  summary: `${mission.title} is ${Math.round(mission.completionScore)}% complete with ${Math.round(mission.healthScore)} health and ${Math.round(mission.velocityScore)} velocity.`,
+  reasoning:
+    mission.status === "AT_RISK"
+      ? "Mission progress is behind plan and needs a tighter execution loop."
+      : "Mission has active objectives, plans, execution items, measurements, and learnings connected.",
+  generatedAt: daysAgo(index),
+  confidence: mission.confidenceScore
+}));
+
+const connectors: Connector[] = ([
+  ["connector-gsc", "Google Search Console Mock Connector", "GOOGLE_SEARCH_CONSOLE", "Google", "MOCK", "NONE", "Search query and answer visibility signals.", 89, 1],
+  ["connector-ga", "Google Analytics Mock Connector", "GOOGLE_ANALYTICS", "Google", "MOCK", "NONE", "Traffic, referral, and conversion movement signals.", 84, 2],
+  ["connector-github", "GitHub Mock Connector", "GITHUB", "GitHub", "MOCK", "NONE", "Release, issue, and workflow change signals.", 82, 3],
+  ["connector-product-hunt", "Product Hunt Mock Connector", "PRODUCT_HUNT", "Product Hunt", "MOCK", "NONE", "Launch comments, referrals, and proof requests.", 87, 1],
+  ["connector-reddit", "Reddit Mock Connector", "REDDIT", "Reddit", "MOCK", "NONE", "Community threads and objections from AI video discussions.", 74, 4],
+  ["connector-linkedin", "LinkedIn Mock Connector", "LINKEDIN", "LinkedIn", "MOCK", "NONE", "Founder, company, and comment intelligence.", 81, 2],
+  ["connector-x", "X Mock Connector", "X", "X", "MOCK", "NONE", "Thread, reply, and category-language signals.", 76, 5],
+  ["connector-youtube", "YouTube Mock Connector", "YOUTUBE", "YouTube", "MOCK", "NONE", "Video script, comment, and watch-interest signals.", 71, 6],
+  ["connector-newsletter", "Newsletter Mock Connector", "NEWSLETTER", "Newsletter", "MOCK", "NONE", "Newsletter opens, clicks, and subscriber intent.", 86, 2],
+  ["connector-cms", "CMS Mock Connector", "CMS", "VidMaker CMS", "MOCK", "NONE", "Published content and article metadata.", 90, 1],
+  ["connector-manual-import", "Manual Import Connector", "MANUAL_IMPORT", "Manual", "CONNECTED", "MANUAL", "CSV and hand-entered market intelligence imports.", 79, 7]
+] as const).map(([id, name, connectorType, provider, status, authType, description, healthScore, days], index) => ({
+  id,
+  name,
+  connectorType: connectorType as ConnectorType,
+  provider,
+  status: status as ConnectorStatus,
+  description,
+  authType: authType as AuthType,
+  config: {
+    mode: "mock",
+    kernelFirst: true,
+    requiredConfigComplete: true,
+    refreshCadence: index < 4 ? "daily" : "weekly"
+  },
+  lastSyncAt: daysAgo(days),
+  nextSyncAt: daysFromNow(index < 4 ? 1 : 7),
+  healthScore,
+  ...scoped(index)
+}));
+
+const normalizedSignalSeedData = ([
+  ["gsc-01", "connector-gsc", "SEARCH_QUERY", "what is video production intelligence", "Search query asking for the Video Production Intelligence category.", "https://search.google.com/search-console", "Google Search", "Search Console", "CRITICAL", 0.91],
+  ["gsc-02", "connector-gsc", "SEARCH_QUERY", "product page to video", "Commercial search query for product page to video workflows.", "https://search.google.com/search-console", "Google Search", "Search Console", "CRITICAL", 0.9],
+  ["gsc-03", "connector-gsc", "SEARCH_QUERY", "purpose specific ai video tool", "Search query connecting Purpose-Specific AI to video production.", "https://search.google.com/search-console", "Google Search", "Search Console", "HIGH", 0.84],
+  ["ga-01", "connector-ga", "REFERRAL_TRAFFIC", "Product Hunt referral traffic increased", "Google Analytics referral signal from Product Hunt launch traffic.", "https://analytics.google.com", "Google Analytics", "GA4", "HIGH", 0.86],
+  ["ga-02", "connector-ga", "TRAFFIC_CHANGE", "BLOG-004 organic traffic lift", "Traffic change after BLOG-004 internal links were added.", "https://analytics.google.com", "Google Analytics", "GA4", "HIGH", 0.82],
+  ["ga-03", "connector-ga", "REFERRAL_TRAFFIC", "AI directory referral visit", "Referral traffic from an AI tools directory listing.", "https://analytics.google.com", "Google Analytics", "GA4", "MEDIUM", 0.76],
+  ["github-01", "connector-github", "GITHUB_RELEASE", "VidMaker generation workflow release", "GitHub release shipped improvements to VidMaker generation workflow orchestration.", "https://github.com/apjproduction/vgos-enterprise/releases", "APJ Production", "GitHub", "HIGH", 0.88],
+  ["github-02", "connector-github", "GITHUB_ISSUE", "Output coherence issue tagged", "GitHub issue tagged around source-to-scene coherence.", "https://github.com/apjproduction/vgos-enterprise/issues", "Product Team", "GitHub", "HIGH", 0.8],
+  ["ph-01", "connector-product-hunt", "PRODUCT_HUNT_COMMENT", "URL-to-video example requested", "Product Hunt comment asks for a URL-to-video example from a product page.", "https://producthunt.com/posts/vidmaker", "Launch visitor", "Product Hunt", "CRITICAL", 0.93],
+  ["ph-02", "connector-product-hunt", "PRODUCT_HUNT_COMMENT", "Asked about ready-to-post output", "Product Hunt commenter asks whether VidMaker creates ready-to-post videos.", "https://producthunt.com/posts/vidmaker", "Ecommerce operator", "Product Hunt", "HIGH", 0.86],
+  ["ph-03", "connector-product-hunt", "REFERRAL_TRAFFIC", "Product Hunt referral conversion", "Referral signal shows launch visitors reaching the product page to video page.", "https://producthunt.com/posts/vidmaker", "Product Hunt", "Product Hunt", "HIGH", 0.81],
+  ["reddit-01", "connector-reddit", "COMMUNITY_THREAD", "Generic AI video tools feel templated", "Reddit thread complains that generic AI video tools feel templated and hard to control.", "https://reddit.com/r/aivideo", "Reddit user", "Reddit", "HIGH", 0.84],
+  ["reddit-02", "connector-reddit", "COMMUNITY_REPLY", "Need source-aware editing", "Community reply asks for source-aware editing instead of prompt-only generation.", "https://reddit.com/r/aivideo", "Creator", "Reddit", "HIGH", 0.79],
+  ["reddit-03", "connector-reddit", "COMMUNITY_THREAD", "AI product video workflow discussion", "Community thread discusses automating product video creation from store pages.", "https://reddit.com/r/ecommerce", "Ecommerce founder", "Reddit", "CRITICAL", 0.87],
+  ["linkedin-01", "connector-linkedin", "SOCIAL_COMMENT", "Purpose-Specific AI language resonated", "LinkedIn comment says Purpose-Specific AI is clearer than generic AI positioning.", "https://linkedin.com/company/vidmaker", "Marketing lead", "LinkedIn", "HIGH", 0.85],
+  ["linkedin-02", "connector-linkedin", "SOCIAL_POST", "Founder post on Video Production Intelligence", "Founder post introduces Video Production Intelligence and Purpose Engines.", "https://linkedin.com/in/founder", "Founder", "LinkedIn", "HIGH", 0.82],
+  ["linkedin-03", "connector-linkedin", "SOCIAL_COMMENT", "Asked for enterprise workflow controls", "LinkedIn comment asks whether VidMaker supports enterprise review workflows.", "https://linkedin.com/company/vidmaker", "Enterprise marketer", "LinkedIn", "MEDIUM", 0.75],
+  ["x-01", "connector-x", "SOCIAL_COMMENT", "X reply asks for product URL demo", "X reply asks to see a product URL become a short social video.", "https://x.com/vidmaker", "Creator", "X", "HIGH", 0.8],
+  ["x-02", "connector-x", "SOCIAL_POST", "X thread about product page to video", "X thread summarizes the product-page-to-video workflow.", "https://x.com/vidmaker/status/1", "VidMaker", "X", "MEDIUM", 0.72],
+  ["youtube-01", "connector-youtube", "SOCIAL_COMMENT", "YouTube comment asks about 4K proof", "YouTube viewer asks whether VidMaker output can support 4K product proof.", "https://youtube.com/watch?v=vidmaker", "Video marketer", "YouTube", "HIGH", 0.78],
+  ["youtube-02", "connector-youtube", "CUSTOM_SIGNAL", "YouTube script topic suggested", "YouTube audience signal suggests a script on AI video workflow automation.", "https://youtube.com/@vidmaker", "Creator audience", "YouTube", "MEDIUM", 0.7],
+  ["newsletter-01", "connector-newsletter", "NEWSLETTER_METRIC", "Newsletter click on BLOG-004", "Newsletter audience clicked the BLOG-004 Video Production Intelligence article.", "https://vidmaker.com/blog/video-production-intelligence", "Newsletter", "Email", "HIGH", 0.86],
+  ["newsletter-02", "connector-newsletter", "NEWSLETTER_METRIC", "Purpose-Specific AI click cluster", "Newsletter clicks clustered around Purpose-Specific AI explanation links.", "https://vidmaker.com/blog/purpose-specific-ai", "Newsletter", "Email", "HIGH", 0.8],
+  ["cms-01", "connector-cms", "CMS_ARTICLE", "BLOG-004 published", "CMS article published for BLOG-004: What Is Video Production Intelligence?", "https://vidmaker.com/blog/video-production-intelligence", "VidMaker CMS", "CMS", "CRITICAL", 0.94],
+  ["cms-02", "connector-cms", "CMS_ARTICLE", "Product page to video landing update", "CMS page update adds source-to-output proof for product page to video.", "https://vidmaker.com/product-page-to-video", "VidMaker CMS", "CMS", "HIGH", 0.84],
+  ["manual-01", "connector-manual-import", "BACKLINK_FOUND", "Backlink found from AI directory", "Manual import found a backlink from an AI video tools directory.", "https://example.com/ai-video-tools/vidmaker", "Authority", "Manual Import", "HIGH", 0.83],
+  ["manual-02", "connector-manual-import", "DIRECTORY_STATUS", "Futurepedia submission moved to review", "Manual status update shows Futurepedia submission in review.", "https://futurepedia.io", "Authority", "Manual Import", "MEDIUM", 0.72],
+  ["manual-03", "connector-manual-import", "CUSTOM_SIGNAL", "Sales note requests ecommerce demo", "Manual import from sales notes requests a product-page-to-video ecommerce demo.", "https://vidmaker.com", "Sales", "Manual Import", "CRITICAL", 0.88],
+  ["gsc-04", "connector-gsc", "SEARCH_QUERY", "ai video production workflow automation", "Search query around AI video production workflow automation.", "https://search.google.com/search-console", "Google Search", "Search Console", "HIGH", 0.82],
+  ["ga-04", "connector-ga", "TRAFFIC_CHANGE", "Landing page scroll depth improved", "Analytics signal shows better scroll depth on product-page-to-video page.", "https://analytics.google.com", "Google Analytics", "GA4", "MEDIUM", 0.73]
+] as const);
+
+const rawSignals: RawSignal[] = normalizedSignalSeedData.map(
+  ([externalId, connectorId, signalType, title, summary, sourceUrl, author, platform, priority, confidenceScore], index) => ({
+    id: `raw-signal-${String(index + 1).padStart(2, "0")}`,
+    connectorId,
+    source: platform,
+    sourceType: signalType,
+    externalId,
+    rawPayload: {
+      externalId,
+      title,
+      body: summary,
+      url: sourceUrl,
+      author,
+      platform,
+      priority,
+      confidenceScore
+    },
+    receivedAt: daysAgo(index % 12),
+    processedAt: daysAgo(index % 12),
+    status: "ROUTED",
+    ...scoped(index)
+  })
+);
+
+const normalizedSignals: NormalizedSignal[] = normalizedSignalSeedData.map(
+  ([externalId, connectorId, signalType, title, summary, sourceUrl, author, platform, priority, confidenceScore], index) => ({
+    id: `normalized-signal-${String(index + 1).padStart(2, "0")}`,
+    rawSignalId: `raw-signal-${String(index + 1).padStart(2, "0")}`,
+    connectorId,
+    signalType: signalType as SignalType,
+    title,
+    summary,
+    sourceUrl,
+    author,
+    platform,
+    occurredAt: daysAgo(index % 12),
+    confidenceScore,
+    priority: priority as Priority,
+    metadata: {
+      externalId,
+      routed: true,
+      kernelPath: "Connector -> RawSignal -> NormalizedSignal -> Event -> Intelligence Pipeline"
+    },
+    ...scoped(index)
+  })
+);
+
+const connectorSyncRuns: ConnectorSyncRun[] = Array.from({ length: 15 }, (_, index) => {
+  const connector = connectors[index % connectors.length];
+  const failed = index === 6 || index === 13;
+  const partial = index === 9;
+  return {
+    id: `connector-sync-run-${String(index + 1).padStart(2, "0")}`,
+    connectorId: connector.id,
+    status: failed ? "FAILED" : partial ? "PARTIAL" : "COMPLETED",
+    startedAt: daysAgo(index + 1),
+    completedAt: failed ? undefined : daysAgo(index + 1),
+    recordsFetched: failed ? 0 : 3 + (index % 5),
+    recordsNormalized: failed ? 0 : 3 + (index % 4),
+    recordsRouted: failed ? 0 : 2 + (index % 4),
+    error: failed ? "Mock connector timeout while reading provider payload." : undefined,
+    logs: {
+      connector: connector.name,
+      mode: "mock",
+      kernelFirst: true,
+      messages: failed
+        ? ["Sync started", "Provider payload unavailable", "Sync failed"]
+        : ["Sync started", "Raw signals received", "Signals normalized", "Signals routed"]
+    },
+    ...scoped(index)
+  };
+});
 
 const eventTypes: EventType[] = [
   "OBSERVATION_CREATED",
@@ -3047,7 +3854,93 @@ const growthEvents: Event[] = eventTitles.map((title, index) => ({
   processedAt: index < 6 ? undefined : daysAgo(index - 1)
 }));
 
-const events: Event[] = [...kernelEvents, ...growthEvents];
+const missionEvents: Event[] = missions.flatMap((mission, index) => [
+  {
+    id: `${mission.id}-event-created`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: "MISSION_CREATED" as EventType,
+    sourceType: "Mission",
+    sourceId: mission.id,
+    title: `${mission.title} mission created`,
+    description: mission.description,
+    metadata: { generatedBy: "mission-engine-seed", missionType: mission.missionType },
+    severity: mission.priority === "CRITICAL" ? "CRITICAL" : "HIGH" as EventSeverity,
+    status: "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index + 2),
+    processedAt: daysAgo(index + 1)
+  },
+  {
+    id: `${mission.id}-event-progress`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: mission.status === "AT_RISK" ? "MISSION_AT_RISK" as EventType : "MISSION_PROGRESS_UPDATED" as EventType,
+    sourceType: "Mission",
+    sourceId: mission.id,
+    title: `${mission.title} progress updated`,
+    description: `${mission.title} is at ${mission.completionScore}% completion with ${mission.healthScore}% health.`,
+    metadata: {
+      generatedBy: "mission-engine-seed",
+      healthScore: mission.healthScore,
+      completionScore: mission.completionScore,
+      riskScore: mission.riskScore
+    },
+    severity: mission.status === "AT_RISK" ? "CRITICAL" as EventSeverity : "HIGH" as EventSeverity,
+    status: mission.status === "AT_RISK" ? "PENDING" as EventStatus : "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index),
+    processedAt: mission.status === "AT_RISK" ? undefined : daysAgo(index)
+  }
+]);
+
+const connectorEvents: Event[] = [
+  ...connectors.slice(0, 11).map((connector, index) => ({
+    id: `${connector.id}-event-created`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: "CONNECTOR_CREATED" as EventType,
+    sourceType: "Connector",
+    sourceId: connector.id,
+    title: `${connector.name} registered`,
+    description: connector.description,
+    metadata: { connectorType: connector.connectorType, provider: connector.provider, generatedBy: "connected-intelligence-seed" },
+    severity: "MEDIUM" as EventSeverity,
+    status: "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index + 4),
+    processedAt: daysAgo(index + 4)
+  })),
+  ...connectorSyncRuns.slice(0, 15).map((run, index) => ({
+    id: `${run.id}-event`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: run.status === "FAILED" ? "CONNECTOR_SYNC_FAILED" as EventType : "CONNECTOR_SYNC_COMPLETED" as EventType,
+    sourceType: "ConnectorSyncRun",
+    sourceId: run.id,
+    title: `${connectors.find((connector) => connector.id === run.connectorId)?.name ?? "Connector"} sync ${formatEnum(run.status).toLowerCase()}`,
+    description: run.error ?? `Fetched ${run.recordsFetched}, normalized ${run.recordsNormalized}, and routed ${run.recordsRouted} records.`,
+    metadata: { connectorId: run.connectorId, generatedBy: "connected-intelligence-seed" },
+    severity: run.status === "FAILED" ? "HIGH" as EventSeverity : "MEDIUM" as EventSeverity,
+    status: run.status === "FAILED" ? "PENDING" as EventStatus : "PROCESSED" as EventStatus,
+    createdAt: run.startedAt,
+    processedAt: run.completedAt
+  })),
+  ...normalizedSignals.slice(0, 20).map((signal, index) => ({
+    id: `${signal.id}-event-routed`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: "SIGNAL_ROUTED" as EventType,
+    sourceType: "NormalizedSignal",
+    sourceId: signal.id,
+    title: `${signal.title} routed`,
+    description: signal.summary,
+    metadata: { connectorId: signal.connectorId, signalType: signal.signalType, generatedBy: "signal-router-seed" },
+    severity: signal.priority === "CRITICAL" ? "CRITICAL" as EventSeverity : "HIGH" as EventSeverity,
+    status: "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index % 8),
+    processedAt: daysAgo(index % 8)
+  }))
+];
+
+const events: Event[] = [...kernelEvents, ...growthEvents, ...missionEvents, ...connectorEvents];
 
 const briefingSections: BriefingSection[] = [
   {
@@ -3269,8 +4162,21 @@ export const initialPlatformState: PlatformState = {
   learnings,
   attributions,
   strategyAdjustments,
+  missions,
+  missionObjectives,
+  missionPlans,
+  missionExecutions,
+  missionLearnings,
+  missionMetrics,
+  missionSummaries,
+  missionTemplates,
+  connectors,
+  rawSignals,
+  normalizedSignals,
+  connectorSyncRuns,
   events,
   recommendedActions,
+  auditLogs,
   briefingSections
 };
 
@@ -3305,6 +4211,8 @@ export function getExecutiveMetrics(state: PlatformState, activeWorkspaceId: str
   const hypotheses = state.hypotheses.filter((item) => item.workspaceId === activeWorkspaceId);
   const experiments = state.experiments.filter((item) => item.workspaceId === activeWorkspaceId);
   const recommendations = state.aiRecommendations.filter((item) => item.workspaceId === activeWorkspaceId);
+  const recommendedActionRecords = state.recommendedActions.filter((item) => item.workspaceId === activeWorkspaceId);
+  const recommendationQualityRecords = [...recommendations, ...recommendedActionRecords];
   const intelligenceObjects = state.intelligenceObjects.filter((item) => item.workspaceId === activeWorkspaceId);
   const memories = state.memories.filter((item) => item.workspaceId === activeWorkspaceId);
   const patterns = state.patterns.filter((item) => item.workspaceId === activeWorkspaceId);
@@ -3330,9 +4238,32 @@ export function getExecutiveMetrics(state: PlatformState, activeWorkspaceId: str
   const learnings = state.learnings.filter((item) => item.workspaceId === activeWorkspaceId);
   const attributions = state.attributions.filter((item) => item.workspaceId === activeWorkspaceId);
   const strategyAdjustments = state.strategyAdjustments.filter((item) => item.workspaceId === activeWorkspaceId);
-  const highImpactActions = state.recommendedActions.filter(
-    (item) => item.workspaceId === activeWorkspaceId && ["HIGH", "CRITICAL"].includes(item.priority)
+  const missionRecords = state.missions.filter((item) => item.workspaceId === activeWorkspaceId);
+  const activeMissionRecords = missionRecords.filter((item) => item.status === "ACTIVE" || item.status === "AT_RISK");
+  const missionAverage = (values: number[]) =>
+    Math.round(values.reduce((total, value) => total + value, 0) / Math.max(values.length, 1));
+  const connectorRecords = state.connectors.filter((item) => item.workspaceId === activeWorkspaceId);
+  const rawSignalRecords = state.rawSignals.filter((item) => item.workspaceId === activeWorkspaceId);
+  const normalizedSignalRecords = state.normalizedSignals.filter((item) => item.workspaceId === activeWorkspaceId);
+  const syncRunRecords = state.connectorSyncRuns.filter((item) => item.workspaceId === activeWorkspaceId);
+  const auditLogRecords = state.auditLogs.filter((item) => item.workspaceId === activeWorkspaceId);
+  const signalQualityScores = normalizedSignalRecords.map((signal) =>
+    calculateSignalQuality({
+      title: signal.title,
+      summary: signal.summary,
+      sourceType: signal.signalType,
+      sourceId: signal.rawSignalId,
+      sourceUrl: signal.sourceUrl,
+      platform: signal.platform,
+      confidenceScore: signal.confidenceScore,
+      priority: signal.priority,
+      metadata: signal.metadata
+    }).score
   );
+  const latestSync = [...syncRunRecords].sort(
+    (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+  )[0];
+  const highImpactActions = recommendedActionRecords.filter((item) => ["HIGH", "CRITICAL"].includes(item.priority));
   const questions = state.questions.filter((item) => item.workspaceId === activeWorkspaceId);
   const painPoints = state.painPoints.filter((item) => item.workspaceId === activeWorkspaceId);
   const highPriorityOpportunities = [
@@ -3374,6 +4305,33 @@ export function getExecutiveMetrics(state: PlatformState, activeWorkspaceId: str
     Math.max(predictionComparisons.length, 1);
 
   return {
+    totalMissions: missionRecords.length,
+    activeMissions: activeMissionRecords.length,
+    atRiskMissions: missionRecords.filter((item) => item.status === "AT_RISK" || item.riskScore >= 45).length,
+    averageMissionHealth: missionAverage(activeMissionRecords.map((item) => item.healthScore)),
+    averageMissionVelocity: missionAverage(activeMissionRecords.map((item) => item.velocityScore)),
+    averageMissionRisk: missionAverage(activeMissionRecords.map((item) => item.riskScore)),
+    averageMissionConfidence: missionAverage(activeMissionRecords.map((item) => item.confidenceScore * 100)),
+    averageMissionCompletion: missionAverage(activeMissionRecords.map((item) => item.completionScore)),
+    activeConnectors: connectorRecords.filter((item) => item.status === "CONNECTED" || item.status === "MOCK").length,
+    totalConnectors: connectorRecords.length,
+    connectorErrors: connectorRecords.filter((item) => item.status === "ERROR").length + syncRunRecords.filter((item) => item.status === "FAILED").length,
+    signalsReceived: rawSignalRecords.length,
+    signalsRouted: rawSignalRecords.filter((item) => item.status === "ROUTED").length,
+    normalizedSignals: normalizedSignalRecords.length,
+    failedSignals: rawSignalRecords.filter((item) => item.status === "FAILED").length,
+    lastConnectorSync: latestSync?.startedAt,
+    averageConnectorHealth: missionAverage(connectorRecords.map((item) => item.healthScore)),
+    averageSignalQuality: missionAverage(signalQualityScores),
+    averageRecommendationQuality: missionAverage(recommendationQualityRecords.map((item) => item.qualityScore || Math.round(item.confidenceScore * 100))),
+    highConfidenceRecommendations: recommendationQualityRecords.filter((item) => item.confidenceScore >= 0.8 && (item.qualityScore ?? 0) >= 75).length,
+    lowConfidenceRecommendations: recommendationQualityRecords.filter((item) => item.confidenceScore < 0.65 || (item.qualityScore ?? 100) < 65).length,
+    duplicateRiskRecommendations: recommendationQualityRecords.filter((item) => (item.duplicateRisk ?? 0) >= 0.5).length,
+    recommendationsMissingEvidence: recommendationQualityRecords.filter((item) => (item.missingEvidence ?? []).length > 0).length,
+    kernelErrors: connectorRecords.filter((item) => item.status === "ERROR").length + syncRunRecords.filter((item) => item.status === "FAILED").length + rawSignalRecords.filter((item) => item.status === "FAILED").length + workflowRuns.filter((item) => item.status === "DISMISSED").length + executionItems.filter((item) => item.status === "FAILED").length,
+    auditEvents: auditLogRecords.length,
+    testCoveragePlaceholder: "Pending",
+    newExternalOpportunities: normalizedSignalRecords.filter((item) => item.priority === "CRITICAL" || item.confidenceScore >= 0.85).length,
     totalObservations: observations.length,
     totalInsights: insights.length,
     totalHypotheses: hypotheses.length,
@@ -3479,7 +4437,7 @@ export function createScopedId(prefix: string) {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return `${prefix}-${crypto.randomUUID()}`;
   }
-  return `${prefix}-${Date.now()}`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function createDefaultRecord(collection: CollectionKey, activeWorkspaceId: string): Record<string, unknown> {
@@ -3722,7 +4680,15 @@ export function createDefaultRecord(collection: CollectionKey, activeWorkspaceId
       dueDate: date,
       owner: "Growth",
       reasoning: "",
-      expectedImpact: ""
+      expectedImpact: "",
+      confidenceScore: 0.7,
+      qualityScore: 0,
+      evidenceStrength: 0,
+      missingEvidence: [],
+      duplicateRisk: 0,
+      confidenceExplanation: "Not reviewed yet.",
+      reviewedAt: undefined,
+      reviewedBy: undefined
     };
   }
 
@@ -4116,6 +5082,147 @@ export function createDefaultRecord(collection: CollectionKey, activeWorkspaceId
     };
   }
 
+  if (collection === "missions") {
+    return {
+      ...base,
+      title: "New mission",
+      description: "",
+      missionType: "GROWTH",
+      owner: "Growth",
+      priority: "HIGH",
+      status: "DRAFT",
+      healthScore: 70,
+      confidenceScore: 0.75,
+      velocityScore: 50,
+      completionScore: 0,
+      riskScore: 30,
+      startDate: date,
+      targetDate: daysFromNow(30),
+      completedDate: undefined,
+      notes: ""
+    };
+  }
+
+  if (collection === "missionObjectives") {
+    return {
+      ...base,
+      missionId: "",
+      objectiveId: "",
+      weight: 1
+    };
+  }
+
+  if (collection === "missionPlans") {
+    return {
+      ...base,
+      missionId: "",
+      planId: "",
+      weight: 1
+    };
+  }
+
+  if (collection === "missionExecutions") {
+    return {
+      ...base,
+      missionId: "",
+      executionItemId: "",
+      importance: 1
+    };
+  }
+
+  if (collection === "missionLearnings") {
+    return {
+      ...base,
+      missionId: "",
+      learningId: "",
+      confidence: 0.75
+    };
+  }
+
+  if (collection === "missionMetrics") {
+    return {
+      ...base,
+      missionId: "",
+      metricId: "",
+      weight: 1
+    };
+  }
+
+  if (collection === "missionSummaries") {
+    return {
+      ...base,
+      missionId: "",
+      summary: "",
+      reasoning: "",
+      generatedAt: date,
+      confidence: 0.75
+    };
+  }
+
+  if (collection === "connectors") {
+    return {
+      ...base,
+      name: "New connector",
+      connectorType: "CUSTOM",
+      status: "DRAFT",
+      provider: "Custom",
+      description: "",
+      authType: "NONE",
+      config: { mode: "mock", kernelFirst: true },
+      lastSyncAt: undefined,
+      nextSyncAt: undefined,
+      healthScore: 50
+    };
+  }
+
+  if (collection === "rawSignals") {
+    return {
+      ...base,
+      connectorId: "",
+      source: "Manual",
+      sourceType: "CUSTOM_SIGNAL",
+      externalId: "",
+      rawPayload: {},
+      receivedAt: date,
+      processedAt: undefined,
+      status: "RECEIVED",
+      error: ""
+    };
+  }
+
+  if (collection === "normalizedSignals") {
+    return {
+      ...base,
+      rawSignalId: "",
+      connectorId: "",
+      signalType: "CUSTOM_SIGNAL",
+      title: "New normalized signal",
+      summary: "",
+      sourceUrl: "https://vidmaker.com",
+      author: "",
+      platform: "Manual",
+      occurredAt: date,
+      confidenceScore: 0.75,
+      priority: "MEDIUM",
+      metadata: {}
+    };
+  }
+
+  if (collection === "connectorSyncRuns") {
+    return {
+      ...base,
+      connectorId: "",
+      status: "STARTED",
+      startedAt: date,
+      completedAt: undefined,
+      recordsFetched: 0,
+      recordsNormalized: 0,
+      recordsRouted: 0,
+      error: "",
+      logs: {}
+    };
+  }
+
   if (collection === "knowledgeObjects") {
     return {
       ...base,
@@ -4245,6 +5352,13 @@ export function createDefaultRecord(collection: CollectionKey, activeWorkspaceId
     suggestedAction: "",
     reasoning: "",
     confidenceScore: 0.7,
+    qualityScore: 0,
+    evidenceStrength: 0,
+    missingEvidence: [],
+    duplicateRisk: 0,
+    confidenceExplanation: "Not reviewed yet.",
+    reviewedAt: undefined,
+    reviewedBy: undefined,
     generatedBy: "VGOS Intelligence Engine"
   };
 }

@@ -1,0 +1,38 @@
+id: measurement-engine
+name: Measurement Engine
+version: 5.1-enterprise
+owner: VidMaker Growth Intelligence
+status: beta
+description: Converts execution results and metric movement into measurements, learnings, attribution, and strategy feedback.
+depends_on:
+  - execution-engine
+  - mission-engine
+  - reasoning-engine
+produces:
+  - Metric
+  - Measurement
+  - Learning
+  - Attribution
+  - StrategyAdjustment
+consumes:
+  - ExecutionResult
+  - PredictedOutcome
+  - Objective
+  - Mission
+eventsProduced:
+  - METRIC_CREATED
+  - MEASUREMENT_CREATED
+  - LEARNING_CREATED
+  - ATTRIBUTION_CREATED
+  - STRATEGY_ADJUSTMENT_PROPOSED
+eventsConsumed:
+  - EXECUTION_COMPLETED
+  - EXECUTION_RESULT_CREATED
+  - OUTCOME_PREDICTED
+  - MISSION_PROGRESS_UPDATED
+publicApi:
+  - createMeasurementFromExecutionResult
+  - generateLearningFromMeasurement
+  - inferAttribution
+  - suggestStrategyAdjustments
+documentation: architecture/data-flow.md

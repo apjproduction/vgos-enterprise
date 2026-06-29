@@ -163,6 +163,64 @@ export const capabilityRegistry: CapabilityDefinition[] = [
     status: "BETA"
   },
   {
+    id: "mission-engine",
+    name: "Mission Engine",
+    description: "Connects objectives, plans, execution, measurement, learning, and strategy into high-level business missions.",
+    version: "5.1-enterprise",
+    inputs: ["Objective", "Plan", "ExecutionItem", "Measurement", "Learning", "StrategyAdjustment"],
+    outputs: ["Mission", "MissionSummary", "MissionRecommendation", "Events"],
+    dependencies: ["Planning Engine", "Execution Engine", "Measurement & Learning Engine", "Decision Engine"],
+    eventsConsumed: [
+      "OBJECTIVE_CREATED",
+      "PLAN_CREATED",
+      "EXECUTION_COMPLETED",
+      "MEASUREMENT_CREATED",
+      "LEARNING_CREATED",
+      "STRATEGY_ADJUSTMENT_PROPOSED"
+    ],
+    eventsProduced: [
+      "MISSION_CREATED",
+      "MISSION_UPDATED",
+      "MISSION_PROGRESS_UPDATED",
+      "MISSION_HEALTH_CHANGED",
+      "MISSION_SUMMARY_GENERATED",
+      "MISSION_RECOMMENDATION_CREATED"
+    ],
+    status: "BETA"
+  },
+  {
+    id: "connected-intelligence",
+    name: "Connected Intelligence",
+    description: "Brings external APIs, manual imports, and future webhooks into VGOS through connectors, raw signals, normalized signals, events, and kernel routing.",
+    version: "1.0.0",
+    inputs: ["External APIs", "Manual Imports", "Webhooks", "Connector Config"],
+    outputs: ["RawSignal", "NormalizedSignal", "Event", "IntelligenceObject", "Measurement", "KnowledgeObject"],
+    dependencies: ["Event System", "Intelligence Pipeline", "Knowledge Layer", "Measurement & Learning Engine", "Mission Engine"],
+    eventsConsumed: ["CONNECTOR_SYNC_STARTED", "RAW_SIGNAL_RECEIVED", "SIGNAL_NORMALIZED"],
+    eventsProduced: [
+      "CONNECTOR_CREATED",
+      "CONNECTOR_CONNECTED",
+      "CONNECTOR_SYNC_COMPLETED",
+      "CONNECTOR_SYNC_FAILED",
+      "RAW_SIGNAL_RECEIVED",
+      "SIGNAL_NORMALIZED",
+      "SIGNAL_ROUTED",
+      "CONNECTOR_HEALTH_CHANGED"
+    ],
+    status: "BETA"
+  },
+  {
+    id: "intelligence-quality",
+    name: "Intelligence Quality Layer",
+    description: "Scores signal quality, recommendation confidence, evidence strength, duplicate risk, missing evidence, and audit readiness before enterprise workflows consume intelligence.",
+    version: "1.0.0",
+    inputs: ["Signals", "Recommendations", "Actions", "KnowledgeObjects", "Missions"],
+    outputs: ["Quality scores", "Confidence explanations", "Duplicate warnings", "Missing evidence reports", "Audit events"],
+    dependencies: ["Intelligence Pipeline", "Knowledge Layer", "Mission Engine", "Connected Intelligence", "Event System"],
+    eventsConsumed: ["RAW_SIGNAL_RECEIVED", "SIGNAL_NORMALIZED", "AI_RECOMMENDATION_CREATED", "MISSION_UPDATED"],
+    eventsProduced: ["SIGNAL_ROUTED", "MISSION_HEALTH_CHANGED"],
+    status: "ACTIVE"
+  },  {
     id: "event-system",
     name: "Event System",
     description: "Records workspace-scoped events that trigger workflows and kernel updates.",

@@ -1,6 +1,6 @@
 # VGOS v5.0 Enterprise Architecture
 
-VGOS is moving from a domain-driven tracking app into an Autonomous Intelligence Foundation for VidMaker. The latest capability release adds the Measurement & Learning Engine on top of Planning and Execution orchestration.
+VGOS is moving from a domain-driven tracking app into an Autonomous Intelligence Foundation for VidMaker. The latest capability release adds the Mission Engine as the highest-level business operating layer above Planning, Execution, Measurement, Learning, and Strategy.
 
 Phase Beta added three durable layers:
 
@@ -16,13 +16,17 @@ The Execution Engine turns plans, plan items, recommended actions, workflow outp
 
 The Measurement & Learning Engine turns execution results and metric movement into measurements, learnings, attributions, and proposed strategy adjustments, closing the loop between shipped work and better future recommendations.
 
+The Mission Engine turns objectives, plans, execution, measurement, learning, and strategy adjustments into business-level missions with health, velocity, risk, confidence, completion, summaries, and recommended changes.
+
+Connected Intelligence prepares VGOS for live external data sources by requiring every provider adapter to pass through connectors, raw signals, normalized signals, events, and kernel routing before creating intelligence, knowledge, mission, measurement, or learning records.
+
 ## Current Layers
 
-- Data foundation: Prisma models for domain entities, intelligence objects, knowledge objects, relationships, memory snapshots, workflows, workflow runs, handoffs, plans, milestones, plan items, dependencies, constraints, predicted outcomes, resource capacity, execution items, execution evidence, blockers, approvals, results, metrics, measurements, learnings, attributions, and strategy adjustments.
-- Kernel services: knowledge service, semantic search foundation, memory trend service, workflow engine, agent coordinator, decision engine, planning engine, execution engine, measurement engine, learning engine, attribution engine, strategy feedback engine, scheduling, dependency analysis, prediction, resource planning, and scoring utilities.
-- Product UI: Mission Control, Knowledge, Workflows, Intelligence Pipeline, Memory, Patterns, Objectives, Agents, Reasoning, Decisions, Plans, Executions, Approvals, Blockers, Evidence, Results, Metrics, Measurements, Learnings, Attributions, Strategy Adjustments, Capabilities, and operational engine pages.
+- Data foundation: Prisma models for domain entities, intelligence objects, knowledge objects, relationships, memory snapshots, workflows, workflow runs, handoffs, plans, milestones, plan items, dependencies, constraints, predicted outcomes, resource capacity, execution items, execution evidence, blockers, approvals, results, metrics, measurements, learnings, attributions, strategy adjustments, missions, mission links, mission summaries, connectors, raw signals, normalized signals, and connector sync runs.
+- Kernel services: knowledge service, semantic search foundation, memory trend service, workflow engine, agent coordinator, decision engine, planning engine, execution engine, measurement engine, learning engine, attribution engine, strategy feedback engine, mission engine, mission builder, mission health, mission progress, mission summaries, connector registry, connector engine, normalization engine, signal router, connector health, scheduling, dependency analysis, prediction, resource planning, and scoring utilities.
+- Product UI: Mission Control, Missions, Connectors, Signals, Sync Runs, Knowledge, Workflows, Intelligence Pipeline, Memory, Patterns, Objectives, Agents, Reasoning, Decisions, Plans, Executions, Approvals, Blockers, Evidence, Results, Metrics, Measurements, Learnings, Attributions, Strategy Adjustments, Capabilities, and operational engine pages.
 - Tenant boundary: all major records remain scoped by organization and workspace.
 
 ## Operating Principle
 
-VGOS should not only store work. It should remember market signals, connect them to entities and objectives, choose next actions, convert those actions into plans, execute them with proof, and learn from what happened.
+VGOS should not only store work. It should remember market signals, connect them to entities and objectives, organize them into missions, choose next actions, convert those actions into plans, execute them with proof, and learn from what happened.

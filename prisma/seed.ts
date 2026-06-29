@@ -306,6 +306,122 @@ const MeasurementEventType = {
   STRATEGY_ADJUSTMENT_IMPLEMENTED: "STRATEGY_ADJUSTMENT_IMPLEMENTED"
 } as const;
 
+const MissionType = {
+  AUTHORITY: "AUTHORITY",
+  SEO: "SEO",
+  AEO: "AEO",
+  GEO: "GEO",
+  CONTENT: "CONTENT",
+  COMMUNITY: "COMMUNITY",
+  PRODUCT: "PRODUCT",
+  LAUNCH: "LAUNCH",
+  GROWTH: "GROWTH",
+  REVENUE: "REVENUE",
+  CUSTOM: "CUSTOM"
+} as const;
+
+const MissionStatus = {
+  DRAFT: "DRAFT",
+  ACTIVE: "ACTIVE",
+  PAUSED: "PAUSED",
+  BLOCKED: "BLOCKED",
+  AT_RISK: "AT_RISK",
+  COMPLETED: "COMPLETED",
+  ARCHIVED: "ARCHIVED"
+} as const;
+
+const MissionEventType = {
+  MISSION_CREATED: "MISSION_CREATED",
+  MISSION_STARTED: "MISSION_STARTED",
+  MISSION_COMPLETED: "MISSION_COMPLETED",
+  MISSION_BLOCKED: "MISSION_BLOCKED",
+  MISSION_AT_RISK: "MISSION_AT_RISK",
+  MISSION_UPDATED: "MISSION_UPDATED",
+  MISSION_SUMMARY_GENERATED: "MISSION_SUMMARY_GENERATED",
+  MISSION_RECOMMENDATION_CREATED: "MISSION_RECOMMENDATION_CREATED",
+  MISSION_HEALTH_CHANGED: "MISSION_HEALTH_CHANGED",
+  MISSION_PROGRESS_UPDATED: "MISSION_PROGRESS_UPDATED"
+} as const;
+
+const ConnectorType = {
+  GOOGLE_SEARCH_CONSOLE: "GOOGLE_SEARCH_CONSOLE",
+  GOOGLE_ANALYTICS: "GOOGLE_ANALYTICS",
+  GITHUB: "GITHUB",
+  PRODUCT_HUNT: "PRODUCT_HUNT",
+  REDDIT: "REDDIT",
+  LINKEDIN: "LINKEDIN",
+  X: "X",
+  YOUTUBE: "YOUTUBE",
+  NEWSLETTER: "NEWSLETTER",
+  CMS: "CMS",
+  MANUAL_IMPORT: "MANUAL_IMPORT",
+  CUSTOM: "CUSTOM"
+} as const;
+
+const ConnectorStatus = {
+  DRAFT: "DRAFT",
+  CONNECTED: "CONNECTED",
+  DISCONNECTED: "DISCONNECTED",
+  ERROR: "ERROR",
+  PAUSED: "PAUSED",
+  MOCK: "MOCK"
+} as const;
+
+const AuthType = {
+  NONE: "NONE",
+  API_KEY: "API_KEY",
+  OAUTH: "OAUTH",
+  WEBHOOK: "WEBHOOK",
+  MANUAL: "MANUAL"
+} as const;
+
+const RawSignalStatus = {
+  RECEIVED: "RECEIVED",
+  NORMALIZED: "NORMALIZED",
+  ROUTED: "ROUTED",
+  FAILED: "FAILED",
+  IGNORED: "IGNORED"
+} as const;
+
+const SignalType = {
+  SEARCH_QUERY: "SEARCH_QUERY",
+  TRAFFIC_CHANGE: "TRAFFIC_CHANGE",
+  REFERRAL_TRAFFIC: "REFERRAL_TRAFFIC",
+  SOCIAL_POST: "SOCIAL_POST",
+  SOCIAL_COMMENT: "SOCIAL_COMMENT",
+  COMMUNITY_THREAD: "COMMUNITY_THREAD",
+  COMMUNITY_REPLY: "COMMUNITY_REPLY",
+  PRODUCT_HUNT_COMMENT: "PRODUCT_HUNT_COMMENT",
+  GITHUB_ISSUE: "GITHUB_ISSUE",
+  GITHUB_RELEASE: "GITHUB_RELEASE",
+  NEWSLETTER_METRIC: "NEWSLETTER_METRIC",
+  CMS_ARTICLE: "CMS_ARTICLE",
+  DIRECTORY_STATUS: "DIRECTORY_STATUS",
+  BACKLINK_FOUND: "BACKLINK_FOUND",
+  CUSTOM_SIGNAL: "CUSTOM_SIGNAL"
+} as const;
+
+const SyncStatus = {
+  STARTED: "STARTED",
+  COMPLETED: "COMPLETED",
+  FAILED: "FAILED",
+  PARTIAL: "PARTIAL",
+  CANCELLED: "CANCELLED"
+} as const;
+
+const ConnectedIntelligenceEventType = {
+  CONNECTOR_CREATED: "CONNECTOR_CREATED",
+  CONNECTOR_CONNECTED: "CONNECTOR_CONNECTED",
+  CONNECTOR_SYNC_STARTED: "CONNECTOR_SYNC_STARTED",
+  CONNECTOR_SYNC_COMPLETED: "CONNECTOR_SYNC_COMPLETED",
+  CONNECTOR_SYNC_FAILED: "CONNECTOR_SYNC_FAILED",
+  RAW_SIGNAL_RECEIVED: "RAW_SIGNAL_RECEIVED",
+  SIGNAL_NORMALIZED: "SIGNAL_NORMALIZED",
+  SIGNAL_ROUTED: "SIGNAL_ROUTED",
+  SIGNAL_FAILED: "SIGNAL_FAILED",
+  CONNECTOR_HEALTH_CHANGED: "CONNECTOR_HEALTH_CHANGED"
+} as const;
+
 const orgId = "org-apj-labs";
 const workspaceId = "workspace-vidmaker-growth-os";
 
@@ -3223,6 +3339,657 @@ async function seedMeasurementLearningEngine() {
   );
 }
 
+async function seedMissionEngine() {
+  const missionPrisma = prisma as PrismaClient & Record<
+    | "mission"
+    | "missionObjective"
+    | "missionPlan"
+    | "missionExecution"
+    | "missionLearning"
+    | "missionMetric"
+    | "missionSummary",
+    { upsert: (args: any) => Promise<unknown> }
+  >;
+
+  const missionSeeds = [
+    ["mission-own-vpi", "Own Video Production Intelligence", "Make Video Production Intelligence the category language that VidMaker owns across AI search, founder content, and proof-led assets.", MissionType.GEO, "Tom Promise", Priority.CRITICAL, MissionStatus.ACTIVE, 91, 0.88, 82, 63, 18, -28, 24, "Primary enterprise category ownership mission."],
+    ["mission-product-hunt-momentum", "Product Hunt Momentum", "Turn launch attention into community replies, demo proof, qualified signups, and follow-up content.", MissionType.LAUNCH, "Community Intelligence", Priority.CRITICAL, MissionStatus.ACTIVE, 84, 0.82, 76, 58, 24, -14, 18, "Launch momentum mission connected to demo and community proof."],
+    ["mission-purpose-specific-ai", "Purpose-Specific AI Awareness", "Build awareness around Purpose-Specific AI and Purpose Engines as differentiated VidMaker language.", MissionType.AEO, "Search Strategy", Priority.HIGH, MissionStatus.ACTIVE, 78, 0.76, 64, 42, 28, -21, 35, "AEO and GEO language reinforcement mission."],
+    ["mission-ai-search-visibility", "AI Search Visibility", "Increase VidMaker visibility in answer engines, AI mentions, search impressions, and entity-aware content.", MissionType.GEO, "SEO Strategy", Priority.CRITICAL, MissionStatus.ACTIVE, 86, 0.84, 71, 54, 21, -35, 42, "Search and AI surface visibility mission."],
+    ["mission-founder-authority", "Founder Authority", "Use founder-led narratives to build trust, authority, and differentiated language around VidMaker.", MissionType.AUTHORITY, "Tom Promise", Priority.HIGH, MissionStatus.ACTIVE, 80, 0.81, 68, 47, 22, -18, 28, "Founder brand and authority mission."],
+    ["mission-product-page-to-video", "Product Page to Video Category", "Establish product-page-to-video as a commercial category through demos, landing pages, content, and community replies.", MissionType.PRODUCT, "Growth", Priority.CRITICAL, MissionStatus.AT_RISK, 73, 0.79, 61, 39, 34, -10, 30, "Product category mission with proof-asset dependency risk."]
+  ] as const;
+
+  await Promise.all(
+    missionSeeds.map(([id, title, description, missionType, owner, priority, status, healthScore, confidenceScore, velocityScore, completionScore, riskScore, startOffset, targetOffset, notes]) =>
+      missionPrisma.mission.upsert({
+        where: { id },
+        update: {
+          title,
+          description,
+          missionType,
+          owner,
+          priority,
+          status,
+          healthScore,
+          confidenceScore,
+          velocityScore,
+          completionScore,
+          riskScore,
+          startDate: dateFromNow(startOffset),
+          targetDate: dateFromNow(targetOffset),
+          completedDate: null,
+          notes
+        },
+        create: {
+          ...tenant,
+          id,
+          title,
+          description,
+          missionType,
+          owner,
+          priority,
+          status,
+          healthScore,
+          confidenceScore,
+          velocityScore,
+          completionScore,
+          riskScore,
+          startDate: dateFromNow(startOffset),
+          targetDate: dateFromNow(targetOffset),
+          completedDate: null,
+          notes
+        } as any
+      })
+    )
+  );
+
+  const missionObjectives = [
+    ["mission-own-vpi", "objective-own-vpi", 1],
+    ["mission-own-vpi", "objective-aeo-geo", 0.8],
+    ["mission-product-hunt-momentum", "objective-product-hunt", 1],
+    ["mission-product-hunt-momentum", "objective-demo-assets", 0.9],
+    ["mission-purpose-specific-ai", "objective-aeo-geo", 1],
+    ["mission-ai-search-visibility", "objective-aeo-geo", 1],
+    ["mission-ai-search-visibility", "objective-own-vpi", 0.7],
+    ["mission-founder-authority", "objective-own-vpi", 1],
+    ["mission-product-page-to-video", "objective-demo-assets", 1],
+    ["mission-product-page-to-video", "objective-product-hunt", 0.8]
+  ] as const;
+
+  await Promise.all(
+    missionObjectives.map(([missionId, objectiveId, weight], index) =>
+      missionPrisma.missionObjective.upsert({
+        where: { missionId_objectiveId: { missionId, objectiveId } },
+        update: { weight, workspaceId },
+        create: {
+          id: `mission-objective-${String(index + 1).padStart(2, "0")}`,
+          missionId,
+          objectiveId,
+          workspaceId,
+          weight
+        } as any
+      })
+    )
+  );
+
+  const missionPlans = [
+    ["mission-own-vpi", "plan-vpi-authority", 1],
+    ["mission-own-vpi", "plan-blog-004-010-content", 0.8],
+    ["mission-product-hunt-momentum", "plan-product-hunt-follow-up", 1],
+    ["mission-purpose-specific-ai", "plan-aeo-geo-visibility", 1],
+    ["mission-ai-search-visibility", "plan-aeo-geo-visibility", 1],
+    ["mission-ai-search-visibility", "plan-vpi-authority", 0.7],
+    ["mission-founder-authority", "plan-vpi-authority", 1],
+    ["mission-product-page-to-video", "plan-product-hunt-follow-up", 1],
+    ["mission-product-page-to-video", "plan-aeo-geo-visibility", 0.6],
+    ["mission-product-hunt-momentum", "plan-directory-submission", 0.4]
+  ] as const;
+
+  await Promise.all(
+    missionPlans.map(([missionId, planId, weight], index) =>
+      missionPrisma.missionPlan.upsert({
+        where: { missionId_planId: { missionId, planId } },
+        update: { weight, workspaceId },
+        create: {
+          id: `mission-plan-${String(index + 1).padStart(2, "0")}`,
+          missionId,
+          planId,
+          workspaceId,
+          weight
+        } as any
+      })
+    )
+  );
+
+  const missionExecutions = [
+    ["mission-own-vpi", "execution-blog-004-internal-links", 0.9],
+    ["mission-own-vpi", "execution-vpi-landing-section", 1],
+    ["mission-product-hunt-momentum", "execution-product-hunt-reply", 1],
+    ["mission-product-hunt-momentum", "execution-ph-proof-screenshot", 0.8],
+    ["mission-purpose-specific-ai", "execution-purpose-specific-faq", 1],
+    ["mission-purpose-specific-ai", "execution-purpose-engines-company-post", 0.7],
+    ["mission-ai-search-visibility", "execution-answer-coverage-experiment", 1],
+    ["mission-founder-authority", "execution-founder-boundaries", 1],
+    ["mission-founder-authority", "execution-founder-vpi-post", 0.9],
+    ["mission-product-page-to-video", "execution-product-page-demo", 1],
+    ["mission-product-page-to-video", "execution-product-page-entity", 0.9],
+    ["mission-product-page-to-video", "execution-4k-proof-asset", 0.8]
+  ] as const;
+
+  await Promise.all(
+    missionExecutions.map(([missionId, executionItemId, importance], index) =>
+      missionPrisma.missionExecution.upsert({
+        where: { missionId_executionItemId: { missionId, executionItemId } },
+        update: { importance, workspaceId },
+        create: {
+          id: `mission-execution-${String(index + 1).padStart(2, "0")}`,
+          missionId,
+          executionItemId,
+          workspaceId,
+          importance
+        } as any
+      })
+    )
+  );
+
+  const missionLearnings = [
+    ["mission-own-vpi", "learning-15", 0.83],
+    ["mission-own-vpi", "learning-04", 0.86],
+    ["mission-product-hunt-momentum", "learning-07", 0.88],
+    ["mission-product-hunt-momentum", "learning-02", 0.93],
+    ["mission-purpose-specific-ai", "learning-14", 0.74],
+    ["mission-ai-search-visibility", "learning-08", 0.84],
+    ["mission-ai-search-visibility", "learning-12", 0.79],
+    ["mission-founder-authority", "learning-05", 0.81],
+    ["mission-product-page-to-video", "learning-06", 0.9],
+    ["mission-product-page-to-video", "learning-02", 0.93],
+    ["mission-product-page-to-video", "learning-13", 0.77]
+  ] as const;
+
+  await Promise.all(
+    missionLearnings.map(([missionId, learningId, confidence], index) =>
+      missionPrisma.missionLearning.upsert({
+        where: { missionId_learningId: { missionId, learningId } },
+        update: { confidence, workspaceId },
+        create: {
+          id: `mission-learning-${String(index + 1).padStart(2, "0")}`,
+          missionId,
+          learningId,
+          workspaceId,
+          confidence
+        } as any
+      })
+    )
+  );
+
+  const missionMetrics = [
+    ["mission-own-vpi", "metric-ai-mentions", 1],
+    ["mission-own-vpi", "metric-organic-traffic", 0.8],
+    ["mission-product-hunt-momentum", "metric-product-hunt-referrals", 1],
+    ["mission-product-hunt-momentum", "metric-community-replies", 0.8],
+    ["mission-purpose-specific-ai", "metric-ai-mentions", 1],
+    ["mission-ai-search-visibility", "metric-search-impressions", 1],
+    ["mission-ai-search-visibility", "metric-search-clicks", 0.8],
+    ["mission-founder-authority", "metric-linkedin-impressions", 1],
+    ["mission-product-page-to-video", "metric-qualified-signups", 1],
+    ["mission-product-page-to-video", "metric-search-clicks", 0.7],
+    ["mission-product-page-to-video", "metric-community-replies", 0.7],
+    ["mission-founder-authority", "metric-ai-mentions", 0.5]
+  ] as const;
+
+  await Promise.all(
+    missionMetrics.map(([missionId, metricId, weight], index) =>
+      missionPrisma.missionMetric.upsert({
+        where: { missionId_metricId: { missionId, metricId } },
+        update: { weight, workspaceId },
+        create: {
+          id: `mission-metric-${String(index + 1).padStart(2, "0")}`,
+          missionId,
+          metricId,
+          workspaceId,
+          weight
+        } as any
+      })
+    )
+  );
+
+  const missionSummaries = [
+    ["mission-own-vpi", "Video Production Intelligence is healthy and should keep compounding through founder authority, internal links, and answer-ready entity pages.", "Health is high because search, AI mentions, and cluster learning are moving together.", 0.88],
+    ["mission-product-hunt-momentum", "Product Hunt momentum remains strong, but demo proof needs to stay visible in every reply and follow-up asset.", "Community reply and referral measurements show positive movement tied to proof-led engagement.", 0.82],
+    ["mission-purpose-specific-ai", "Purpose-Specific AI awareness needs repetition through FAQ, company posts, and entity-backed content.", "Learning confidence is moderate because the language is promising but still early in AI surfaces.", 0.74],
+    ["mission-ai-search-visibility", "AI Search Visibility is progressing through FAQ coverage, entity pages, and answer coverage experiments.", "Search impressions and AI mentions support continued investment.", 0.84],
+    ["mission-founder-authority", "Founder Authority should increase because founder posts generate stronger qualitative comments.", "Founder-led content has positive channel learning and supports category ownership.", 0.81],
+    ["mission-product-page-to-video", "Product Page to Video is strategically critical but at risk until demo assets are complete.", "Commercial intent is high, but proof-quality blockers increase execution risk.", 0.79]
+  ] as const;
+
+  await Promise.all(
+    missionSummaries.map(([missionId, summary, reasoning, confidence], index) =>
+      missionPrisma.missionSummary.upsert({
+        where: { id: `mission-summary-${String(index + 1).padStart(2, "0")}` },
+        update: { missionId, workspaceId, summary, reasoning, confidence, generatedAt: dateFromNow(-(index % 3)) },
+        create: {
+          id: `mission-summary-${String(index + 1).padStart(2, "0")}`,
+          missionId,
+          workspaceId,
+          summary,
+          reasoning,
+          generatedAt: dateFromNow(-(index % 3)),
+          confidence
+        } as any
+      })
+    )
+  );
+
+  const missionEvents = [
+    [MissionEventType.MISSION_CREATED, "Mission", "mission-own-vpi", "Own Video Production Intelligence mission created.", EventSeverity.CRITICAL],
+    [MissionEventType.MISSION_STARTED, "Mission", "mission-product-hunt-momentum", "Product Hunt Momentum mission started.", EventSeverity.CRITICAL],
+    [MissionEventType.MISSION_SUMMARY_GENERATED, "MissionSummary", "mission-summary-01", "Mission summary generated for Video Production Intelligence.", EventSeverity.HIGH],
+    [MissionEventType.MISSION_HEALTH_CHANGED, "Mission", "mission-product-page-to-video", "Product Page to Video mission moved to at-risk.", EventSeverity.CRITICAL],
+    [MissionEventType.MISSION_RECOMMENDATION_CREATED, "Mission", "mission-founder-authority", "Founder Authority mission recommendation created.", EventSeverity.HIGH],
+    [MissionEventType.MISSION_PROGRESS_UPDATED, "Mission", "mission-ai-search-visibility", "AI Search Visibility mission progress updated.", EventSeverity.HIGH]
+  ] as const;
+
+  await Promise.all(
+    missionEvents.map(([eventType, sourceType, sourceId, title, severity], index) =>
+      prisma.event.upsert({
+        where: { id: `mission-event-${String(index + 1).padStart(2, "0")}` },
+        update: { eventType: eventType as any, sourceType, sourceId, title, severity },
+        create: {
+          ...tenant,
+          id: `mission-event-${String(index + 1).padStart(2, "0")}`,
+          eventType: eventType as any,
+          sourceType,
+          sourceId,
+          title,
+          description: title,
+          metadata: { capability: "mission-engine" },
+          severity,
+          status: EventStatus.PROCESSED,
+          processedAt: new Date()
+        }
+      })
+    )
+  );
+}
+
+async function seedConnectedIntelligence() {
+  const connectedPrisma = prisma as PrismaClient & Record<
+    "connector" | "rawSignal" | "normalizedSignal" | "connectorSyncRun",
+    { upsert: (args: any) => Promise<unknown> }
+  >;
+
+  const connectorSeeds = [
+    ["connector-gsc", "Google Search Console Mock Connector", ConnectorType.GOOGLE_SEARCH_CONSOLE, ConnectorStatus.MOCK, "Google", AuthType.NONE, "Search query and answer visibility signals.", 89, 1],
+    ["connector-ga", "Google Analytics Mock Connector", ConnectorType.GOOGLE_ANALYTICS, ConnectorStatus.MOCK, "Google", AuthType.NONE, "Traffic, referral, and conversion movement signals.", 84, 2],
+    ["connector-github", "GitHub Mock Connector", ConnectorType.GITHUB, ConnectorStatus.MOCK, "GitHub", AuthType.NONE, "Release, issue, and workflow change signals.", 82, 3],
+    ["connector-product-hunt", "Product Hunt Mock Connector", ConnectorType.PRODUCT_HUNT, ConnectorStatus.MOCK, "Product Hunt", AuthType.NONE, "Launch comments, referrals, and proof requests.", 87, 1],
+    ["connector-reddit", "Reddit Mock Connector", ConnectorType.REDDIT, ConnectorStatus.MOCK, "Reddit", AuthType.NONE, "Community threads and objections from AI video discussions.", 74, 4],
+    ["connector-linkedin", "LinkedIn Mock Connector", ConnectorType.LINKEDIN, ConnectorStatus.MOCK, "LinkedIn", AuthType.NONE, "Founder, company, and comment intelligence.", 81, 2],
+    ["connector-x", "X Mock Connector", ConnectorType.X, ConnectorStatus.MOCK, "X", AuthType.NONE, "Thread, reply, and category-language signals.", 76, 5],
+    ["connector-youtube", "YouTube Mock Connector", ConnectorType.YOUTUBE, ConnectorStatus.MOCK, "YouTube", AuthType.NONE, "Video script, comment, and watch-interest signals.", 71, 6],
+    ["connector-newsletter", "Newsletter Mock Connector", ConnectorType.NEWSLETTER, ConnectorStatus.MOCK, "Newsletter", AuthType.NONE, "Newsletter opens, clicks, and subscriber intent.", 86, 2],
+    ["connector-cms", "CMS Mock Connector", ConnectorType.CMS, ConnectorStatus.MOCK, "VidMaker CMS", AuthType.NONE, "Published content and article metadata.", 90, 1],
+    ["connector-manual-import", "Manual Import Connector", ConnectorType.MANUAL_IMPORT, ConnectorStatus.CONNECTED, "Manual", AuthType.MANUAL, "CSV and hand-entered market intelligence imports.", 79, 7]
+  ] as const;
+
+  await Promise.all(
+    connectorSeeds.map(([id, name, connectorType, status, provider, authType, description, healthScore, lastSyncOffset], index) =>
+      connectedPrisma.connector.upsert({
+        where: { id },
+        update: {
+          name,
+          connectorType,
+          status,
+          provider,
+          description,
+          authType,
+          config: { mode: "mock", kernelFirst: true, requiredConfigComplete: true },
+          lastSyncAt: dateFromNow(-lastSyncOffset),
+          nextSyncAt: dateFromNow(index < 4 ? 1 : 7),
+          healthScore
+        },
+        create: {
+          ...tenant,
+          id,
+          name,
+          connectorType,
+          status,
+          provider,
+          description,
+          authType,
+          config: { mode: "mock", kernelFirst: true, requiredConfigComplete: true },
+          lastSyncAt: dateFromNow(-lastSyncOffset),
+          nextSyncAt: dateFromNow(index < 4 ? 1 : 7),
+          healthScore
+        } as any
+      })
+    )
+  );
+
+  const signalSeeds = [
+    ["gsc-01", "connector-gsc", SignalType.SEARCH_QUERY, "what is video production intelligence", "Search query asking for the Video Production Intelligence category.", "https://search.google.com/search-console", "Google Search", "Search Console", Priority.CRITICAL, 0.91],
+    ["gsc-02", "connector-gsc", SignalType.SEARCH_QUERY, "product page to video", "Commercial search query for product page to video workflows.", "https://search.google.com/search-console", "Google Search", "Search Console", Priority.CRITICAL, 0.9],
+    ["gsc-03", "connector-gsc", SignalType.SEARCH_QUERY, "purpose specific ai video tool", "Search query connecting Purpose-Specific AI to video production.", "https://search.google.com/search-console", "Google Search", "Search Console", Priority.HIGH, 0.84],
+    ["ga-01", "connector-ga", SignalType.REFERRAL_TRAFFIC, "Product Hunt referral traffic increased", "Google Analytics referral signal from Product Hunt launch traffic.", "https://analytics.google.com", "Google Analytics", "GA4", Priority.HIGH, 0.86],
+    ["ga-02", "connector-ga", SignalType.TRAFFIC_CHANGE, "BLOG-004 organic traffic lift", "Traffic change after BLOG-004 internal links were added.", "https://analytics.google.com", "Google Analytics", "GA4", Priority.HIGH, 0.82],
+    ["ga-03", "connector-ga", SignalType.REFERRAL_TRAFFIC, "AI directory referral visit", "Referral traffic from an AI tools directory listing.", "https://analytics.google.com", "Google Analytics", "GA4", Priority.MEDIUM, 0.76],
+    ["github-01", "connector-github", SignalType.GITHUB_RELEASE, "VidMaker generation workflow release", "GitHub release shipped improvements to VidMaker generation workflow orchestration.", "https://github.com/apjproduction/vgos-enterprise/releases", "APJ Production", "GitHub", Priority.HIGH, 0.88],
+    ["github-02", "connector-github", SignalType.GITHUB_ISSUE, "Output coherence issue tagged", "GitHub issue tagged around source-to-scene coherence.", "https://github.com/apjproduction/vgos-enterprise/issues", "Product Team", "GitHub", Priority.HIGH, 0.8],
+    ["ph-01", "connector-product-hunt", SignalType.PRODUCT_HUNT_COMMENT, "URL-to-video example requested", "Product Hunt comment asks for a URL-to-video example from a product page.", "https://producthunt.com/posts/vidmaker", "Launch visitor", "Product Hunt", Priority.CRITICAL, 0.93],
+    ["ph-02", "connector-product-hunt", SignalType.PRODUCT_HUNT_COMMENT, "Asked about ready-to-post output", "Product Hunt commenter asks whether VidMaker creates ready-to-post videos.", "https://producthunt.com/posts/vidmaker", "Ecommerce operator", "Product Hunt", Priority.HIGH, 0.86],
+    ["ph-03", "connector-product-hunt", SignalType.REFERRAL_TRAFFIC, "Product Hunt referral conversion", "Referral signal shows launch visitors reaching the product page to video page.", "https://producthunt.com/posts/vidmaker", "Product Hunt", "Product Hunt", Priority.HIGH, 0.81],
+    ["reddit-01", "connector-reddit", SignalType.COMMUNITY_THREAD, "Generic AI video tools feel templated", "Reddit thread complains that generic AI video tools feel templated and hard to control.", "https://reddit.com/r/aivideo", "Reddit user", "Reddit", Priority.HIGH, 0.84],
+    ["reddit-02", "connector-reddit", SignalType.COMMUNITY_REPLY, "Need source-aware editing", "Community reply asks for source-aware editing instead of prompt-only generation.", "https://reddit.com/r/aivideo", "Creator", "Reddit", Priority.HIGH, 0.79],
+    ["reddit-03", "connector-reddit", SignalType.COMMUNITY_THREAD, "AI product video workflow discussion", "Community thread discusses automating product video creation from store pages.", "https://reddit.com/r/ecommerce", "Ecommerce founder", "Reddit", Priority.CRITICAL, 0.87],
+    ["linkedin-01", "connector-linkedin", SignalType.SOCIAL_COMMENT, "Purpose-Specific AI language resonated", "LinkedIn comment says Purpose-Specific AI is clearer than generic AI positioning.", "https://linkedin.com/company/vidmaker", "Marketing lead", "LinkedIn", Priority.HIGH, 0.85],
+    ["linkedin-02", "connector-linkedin", SignalType.SOCIAL_POST, "Founder post on Video Production Intelligence", "Founder post introduces Video Production Intelligence and Purpose Engines.", "https://linkedin.com/in/founder", "Founder", "LinkedIn", Priority.HIGH, 0.82],
+    ["linkedin-03", "connector-linkedin", SignalType.SOCIAL_COMMENT, "Asked for enterprise workflow controls", "LinkedIn comment asks whether VidMaker supports enterprise review workflows.", "https://linkedin.com/company/vidmaker", "Enterprise marketer", "LinkedIn", Priority.MEDIUM, 0.75],
+    ["x-01", "connector-x", SignalType.SOCIAL_COMMENT, "X reply asks for product URL demo", "X reply asks to see a product URL become a short social video.", "https://x.com/vidmaker", "Creator", "X", Priority.HIGH, 0.8],
+    ["x-02", "connector-x", SignalType.SOCIAL_POST, "X thread about product page to video", "X thread summarizes the product-page-to-video workflow.", "https://x.com/vidmaker/status/1", "VidMaker", "X", Priority.MEDIUM, 0.72],
+    ["youtube-01", "connector-youtube", SignalType.SOCIAL_COMMENT, "YouTube comment asks about 4K proof", "YouTube viewer asks whether VidMaker output can support 4K product proof.", "https://youtube.com/watch?v=vidmaker", "Video marketer", "YouTube", Priority.HIGH, 0.78],
+    ["youtube-02", "connector-youtube", SignalType.CUSTOM_SIGNAL, "YouTube script topic suggested", "YouTube audience signal suggests a script on AI video workflow automation.", "https://youtube.com/@vidmaker", "Creator audience", "YouTube", Priority.MEDIUM, 0.7],
+    ["newsletter-01", "connector-newsletter", SignalType.NEWSLETTER_METRIC, "Newsletter click on BLOG-004", "Newsletter audience clicked the BLOG-004 Video Production Intelligence article.", "https://vidmaker.com/blog/video-production-intelligence", "Newsletter", "Email", Priority.HIGH, 0.86],
+    ["newsletter-02", "connector-newsletter", SignalType.NEWSLETTER_METRIC, "Purpose-Specific AI click cluster", "Newsletter clicks clustered around Purpose-Specific AI explanation links.", "https://vidmaker.com/blog/purpose-specific-ai", "Newsletter", "Email", Priority.HIGH, 0.8],
+    ["cms-01", "connector-cms", SignalType.CMS_ARTICLE, "BLOG-004 published", "CMS article published for BLOG-004: What Is Video Production Intelligence?", "https://vidmaker.com/blog/video-production-intelligence", "VidMaker CMS", "CMS", Priority.CRITICAL, 0.94],
+    ["cms-02", "connector-cms", SignalType.CMS_ARTICLE, "Product page to video landing update", "CMS page update adds source-to-output proof for product page to video.", "https://vidmaker.com/product-page-to-video", "VidMaker CMS", "CMS", Priority.HIGH, 0.84],
+    ["manual-01", "connector-manual-import", SignalType.BACKLINK_FOUND, "Backlink found from AI directory", "Manual import found a backlink from an AI video tools directory.", "https://example.com/ai-video-tools/vidmaker", "Authority", "Manual Import", Priority.HIGH, 0.83],
+    ["manual-02", "connector-manual-import", SignalType.DIRECTORY_STATUS, "Futurepedia submission moved to review", "Manual status update shows Futurepedia submission in review.", "https://futurepedia.io", "Authority", "Manual Import", Priority.MEDIUM, 0.72],
+    ["manual-03", "connector-manual-import", SignalType.CUSTOM_SIGNAL, "Sales note requests ecommerce demo", "Manual import from sales notes requests a product-page-to-video ecommerce demo.", "https://vidmaker.com", "Sales", "Manual Import", Priority.CRITICAL, 0.88],
+    ["gsc-04", "connector-gsc", SignalType.SEARCH_QUERY, "ai video production workflow automation", "Search query around AI video production workflow automation.", "https://search.google.com/search-console", "Google Search", "Search Console", Priority.HIGH, 0.82],
+    ["ga-04", "connector-ga", SignalType.TRAFFIC_CHANGE, "Landing page scroll depth improved", "Analytics signal shows better scroll depth on product-page-to-video page.", "https://analytics.google.com", "Google Analytics", "GA4", Priority.MEDIUM, 0.73]
+  ] as const;
+
+  await Promise.all(
+    signalSeeds.map(([externalId, connectorId, signalType, title, summary, sourceUrl, author, platform, priority, confidenceScore], index) =>
+      connectedPrisma.rawSignal.upsert({
+        where: { id: `raw-signal-${String(index + 1).padStart(2, "0")}` },
+        update: {
+          connectorId,
+          source: platform,
+          sourceType: signalType,
+          externalId,
+          rawPayload: { externalId, title, body: summary, url: sourceUrl, author, platform, priority, confidenceScore },
+          receivedAt: dateFromNow(-(index % 12)),
+          processedAt: dateFromNow(-(index % 12)),
+          status: RawSignalStatus.ROUTED,
+          error: null
+        },
+        create: {
+          ...tenant,
+          id: `raw-signal-${String(index + 1).padStart(2, "0")}`,
+          connectorId,
+          source: platform,
+          sourceType: signalType,
+          externalId,
+          rawPayload: { externalId, title, body: summary, url: sourceUrl, author, platform, priority, confidenceScore },
+          receivedAt: dateFromNow(-(index % 12)),
+          processedAt: dateFromNow(-(index % 12)),
+          status: RawSignalStatus.ROUTED
+        } as any
+      })
+    )
+  );
+
+  await Promise.all(
+    signalSeeds.map(([externalId, connectorId, signalType, title, summary, sourceUrl, author, platform, priority, confidenceScore], index) =>
+      connectedPrisma.normalizedSignal.upsert({
+        where: { id: `normalized-signal-${String(index + 1).padStart(2, "0")}` },
+        update: {
+          rawSignalId: `raw-signal-${String(index + 1).padStart(2, "0")}`,
+          connectorId,
+          signalType,
+          title,
+          summary,
+          sourceUrl,
+          author,
+          platform,
+          occurredAt: dateFromNow(-(index % 12)),
+          confidenceScore,
+          priority,
+          metadata: { externalId, routed: true, kernelPath: "Connector -> RawSignal -> NormalizedSignal -> Event -> Intelligence Pipeline" }
+        },
+        create: {
+          ...tenant,
+          id: `normalized-signal-${String(index + 1).padStart(2, "0")}`,
+          rawSignalId: `raw-signal-${String(index + 1).padStart(2, "0")}`,
+          connectorId,
+          signalType,
+          title,
+          summary,
+          sourceUrl,
+          author,
+          platform,
+          occurredAt: dateFromNow(-(index % 12)),
+          confidenceScore,
+          priority,
+          metadata: { externalId, routed: true, kernelPath: "Connector -> RawSignal -> NormalizedSignal -> Event -> Intelligence Pipeline" }
+        } as any
+      })
+    )
+  );
+
+  await Promise.all(
+    Array.from({ length: 15 }, (_, index) => {
+      const connector = connectorSeeds[index % connectorSeeds.length];
+      const failed = index === 6 || index === 13;
+      const partial = index === 9;
+      const id = `connector-sync-run-${String(index + 1).padStart(2, "0")}`;
+      return connectedPrisma.connectorSyncRun.upsert({
+        where: { id },
+        update: {
+          connectorId: connector[0],
+          status: failed ? SyncStatus.FAILED : partial ? SyncStatus.PARTIAL : SyncStatus.COMPLETED,
+          startedAt: dateFromNow(-(index + 1)),
+          completedAt: failed ? null : dateFromNow(-(index + 1)),
+          recordsFetched: failed ? 0 : 3 + (index % 5),
+          recordsNormalized: failed ? 0 : 3 + (index % 4),
+          recordsRouted: failed ? 0 : 2 + (index % 4),
+          error: failed ? "Mock connector timeout while reading provider payload." : null,
+          logs: { connector: connector[1], mode: "mock", kernelFirst: true }
+        },
+        create: {
+          ...tenant,
+          id,
+          connectorId: connector[0],
+          status: failed ? SyncStatus.FAILED : partial ? SyncStatus.PARTIAL : SyncStatus.COMPLETED,
+          startedAt: dateFromNow(-(index + 1)),
+          completedAt: failed ? null : dateFromNow(-(index + 1)),
+          recordsFetched: failed ? 0 : 3 + (index % 5),
+          recordsNormalized: failed ? 0 : 3 + (index % 4),
+          recordsRouted: failed ? 0 : 2 + (index % 4),
+          error: failed ? "Mock connector timeout while reading provider payload." : null,
+          logs: { connector: connector[1], mode: "mock", kernelFirst: true }
+        } as any
+      });
+    })
+  );
+
+  const connectorEvents = [
+    [ConnectedIntelligenceEventType.CONNECTOR_CREATED, "Connector", "connector-gsc", "Google Search Console mock connector registered.", EventSeverity.HIGH],
+    [ConnectedIntelligenceEventType.CONNECTOR_CONNECTED, "Connector", "connector-manual-import", "Manual import connector connected.", EventSeverity.MEDIUM],
+    [ConnectedIntelligenceEventType.CONNECTOR_SYNC_COMPLETED, "ConnectorSyncRun", "connector-sync-run-01", "Google Search Console mock sync completed.", EventSeverity.HIGH],
+    [ConnectedIntelligenceEventType.RAW_SIGNAL_RECEIVED, "RawSignal", "raw-signal-01", "Raw search query signal received.", EventSeverity.HIGH],
+    [ConnectedIntelligenceEventType.SIGNAL_NORMALIZED, "NormalizedSignal", "normalized-signal-01", "Search query normalized into intelligence signal.", EventSeverity.HIGH],
+    [ConnectedIntelligenceEventType.SIGNAL_ROUTED, "NormalizedSignal", "normalized-signal-09", "Product Hunt comment routed to intelligence.", EventSeverity.CRITICAL],
+    [ConnectedIntelligenceEventType.CONNECTOR_SYNC_FAILED, "ConnectorSyncRun", "connector-sync-run-07", "X connector mock sync failed.", EventSeverity.HIGH],
+    [ConnectedIntelligenceEventType.CONNECTOR_HEALTH_CHANGED, "Connector", "connector-reddit", "Reddit connector health changed after partial community sync.", EventSeverity.MEDIUM]
+  ] as const;
+
+  await Promise.all(
+    connectorEvents.map(([eventType, sourceType, sourceId, title, severity], index) =>
+      prisma.event.upsert({
+        where: { id: `connected-intelligence-event-${String(index + 1).padStart(2, "0")}` },
+        update: { eventType: eventType as any, sourceType, sourceId, title, severity },
+        create: {
+          ...tenant,
+          id: `connected-intelligence-event-${String(index + 1).padStart(2, "0")}`,
+          eventType: eventType as any,
+          sourceType,
+          sourceId,
+          title,
+          description: title,
+          metadata: { capability: "connected-intelligence" },
+          severity,
+          status: EventStatus.PROCESSED,
+          processedAt: new Date()
+        }
+      })
+    )
+  );
+}
+
+
+async function seedIntelligenceQualityHardening() {
+  const highTitles = [
+    "Product-page-to-video demo recommendation",
+    "BLOG-004 authority recommendation",
+    "Directory submission recommendation",
+    "Product Hunt follow-up recommendation",
+    "Founder post recommendation",
+    "Purpose-Specific AI FAQ recommendation",
+    "Product-page-to-video X thread recommendation",
+    "VPI backlink outreach recommendation",
+    "BLOG-004 internal-link authority recommendation",
+    "Workflow intelligence company post recommendation"
+  ];
+  const lowTitles = [
+    "Low-evidence Pinterest proof pin recommendation",
+    "Low-confidence proof-mode feature request",
+    "Thin comparison article recommendation",
+    "Unverified community reply recommendation",
+    "Low-authority directory submission recommendation",
+    "Founder post without recent evidence recommendation",
+    "Landing-page claim update missing proof",
+    "Duplicate X thread recommendation",
+    "FAQ block missing source citation",
+    "Newsletter outreach without target list"
+  ];
+  const types = [
+    RecommendationType.LANDING_PAGE,
+    RecommendationType.BLOG_IDEA,
+    RecommendationType.DIRECTORY_SUBMISSION,
+    RecommendationType.COMMUNITY_REPLY,
+    RecommendationType.FOUNDER_POST,
+    RecommendationType.FAQ,
+    RecommendationType.X_THREAD,
+    RecommendationType.BACKLINK_OUTREACH,
+    RecommendationType.INTERNAL_LINK,
+    RecommendationType.COMPANY_POST
+  ];
+  const targets = [
+    ["IntelligenceObject", "intelligence-product-page-to-video-demo"],
+    ["ContentAsset", "content-blog-004"],
+    ["DirectorySubmission", "directory-ai-video-tools"],
+    ["Observation", "observation-product-hunt-comments"],
+    ["Insight", "insight-url-to-video-trust"]
+  ] as const;
+  const recSeeds = [
+    ...highTitles.map((title, index) => ({ title, high: true, index })),
+    ...lowTitles.map((title, index) => ({ title, high: false, index }))
+  ];
+
+  await Promise.all(
+    recSeeds.map(({ title, high, index }, seedIndex) => {
+      const [targetEntityType, targetEntityId] = targets[index % targets.length];
+      const id = `quality-rec-${high ? "high" : "low"}-${String(index + 1).padStart(2, "0")}`;
+      const confidenceScore = high ? Number((0.86 + index * 0.01).toFixed(2)) : Number((0.42 + index * 0.015).toFixed(2));
+      const evidenceStrength = high ? Number((0.82 + index * 0.01).toFixed(2)) : Number((0.24 + index * 0.02).toFixed(2));
+      const missingEvidence = high ? [] : index % 2 === 0 ? ["Source URL or citation", "Detailed reasoning"] : ["Source record link", "Expected impact"];
+      const duplicateRisk = index < 4 ? Number(((high ? 0.56 : 0.62) + index * 0.02).toFixed(2)) : high ? 0.12 : 0.22;
+      const qualityScore = high ? 90 + (index % 6) : 44 + (index % 8);
+      const confidenceExplanation = `${title} is ${high ? "high" : "low"} confidence with ${Math.round(evidenceStrength * 100)}% evidence strength.`;
+      return prisma.aIRecommendation.upsert({
+        where: { id },
+        update: { title, confidenceScore, qualityScore, evidenceStrength, missingEvidence, duplicateRisk, confidenceExplanation, reviewedAt: dateFromNow(-(seedIndex % 5)), reviewedBy: high ? "VGOS Quality Layer" : "Needs Evidence Review" },
+        create: {
+          ...tenant,
+          id,
+          title,
+          description: `${title} seeded for VGOS v5.3 intelligence quality review.`,
+          source: "VGOS Quality Layer",
+          url: "https://vidmaker.com",
+          owner: "Growth Intelligence",
+          recommendationType: types[index],
+          targetEntityType,
+          targetEntityId,
+          suggestedAction: title,
+          reasoning: "Seeded to exercise confidence scoring, evidence strength, duplicate risk, and missing evidence review surfaces.",
+          confidenceScore,
+          qualityScore,
+          evidenceStrength,
+          missingEvidence,
+          duplicateRisk,
+          confidenceExplanation,
+          reviewedAt: dateFromNow(-(seedIndex % 5)),
+          reviewedBy: high ? "VGOS Quality Layer" : "Needs Evidence Review",
+          priority: index < 3 ? Priority.CRITICAL : Priority.HIGH,
+          status: Status.RESEARCHING,
+          generatedBy: "VGOS Quality Layer"
+        }
+      });
+    })
+  );
+
+  await Promise.all(Array.from({ length: 21 }, (_, index) => {
+    const missingEvidence = index % 5 === 0 ? ["Recent performance evidence"] : [];
+    return prisma.recommendedAction.updateMany({
+      where: { id: `action-${String(index + 1).padStart(2, "0")}` },
+      data: {
+        confidenceScore: Number((0.7 + Math.min(index, 12) * 0.015).toFixed(2)),
+        qualityScore: index < 10 ? 88 - index : index % 8 === 0 ? 58 : 72,
+        evidenceStrength: Number((0.55 + (index % 6) * 0.05).toFixed(2)),
+        missingEvidence,
+        duplicateRisk: index < 8 ? Number((0.52 + index * 0.02).toFixed(2)) : 0.16,
+        confidenceExplanation: missingEvidence.length ? "Action needs more evidence before enterprise execution." : "Action has enough evidence for Mission Control review.",
+        reviewedAt: dateFromNow(-(index % 6)),
+        reviewedBy: index < 5 ? "Mission Control" : "VGOS Quality Layer"
+      }
+    });
+  }));
+
+  const auditSeeds = [
+    ["MISSION_CHANGED", "Mission", "mission-product-page-to-video-proof", "Growth Lead"],
+    ["PLAN_CHANGED", "Plan", "plan-product-page-demo-sprint", "Planning Engine"],
+    ["EXECUTION_CHANGED", "ExecutionItem", "execution-product-page-demo", "Execution Engine"],
+    ["MEASUREMENT_CREATED", "Measurement", "measurement-demo-signups-week-1", "Measurement Engine"],
+    ["RECOMMENDATION_REVIEWED", "AIRecommendation", "ai-rec-01", "Growth Intelligence Lead"],
+    ["RECOMMENDATION_CREATED", "AIRecommendation", "quality-rec-high-01", "VGOS Quality Layer"],
+    ["RECOMMENDATION_CREATED", "AIRecommendation", "quality-rec-low-01", "VGOS Quality Layer"],
+    ["DUPLICATE_RISK_FLAGGED", "RecommendedAction", "action-01", "VGOS Quality Layer"],
+    ["MISSING_EVIDENCE_FLAGGED", "RecommendedAction", "action-07", "VGOS Quality Layer"],
+    ["CONNECTOR_STATUS_CHANGED", "Connector", "connector-gsc", "Connector Engine"],
+    ["SIGNAL_NORMALIZED", "NormalizedSignal", "normalized-signal-01", "Normalization Engine"],
+    ["SIGNAL_ROUTED", "NormalizedSignal", "normalized-signal-09", "Signal Router"],
+    ["INTELLIGENCE_PROCESSED", "IntelligenceObject", "intelligence-product-page-to-video-demo", "Intelligence Pipeline"],
+    ["KNOWLEDGE_OBJECT_CREATED", "KnowledgeObject", "knowledge-product-page-to-video", "Knowledge Layer"],
+    ["STRATEGY_ADJUSTMENT_ACCEPTED", "StrategyAdjustment", "strategy-adjustment-05", "Growth Lead"],
+    ["STRATEGY_ADJUSTMENT_REJECTED", "StrategyAdjustment", "strategy-adjustment-04", "Growth Lead"],
+    ["MISSION_HEALTH_CALCULATED", "Mission", "mission-product-page-to-video-proof", "Mission Engine"],
+    ["MANUAL_EDIT", "ContentAsset", "content-blog-004", "Content Lead"],
+    ["MANUAL_EDIT", "DirectorySubmission", "directory-ai-video-tools", "Authority Lead"],
+    ["RECOMMENDATION_REVIEWED", "RecommendedAction", "action-03", "Mission Control"]
+  ] as const;
+
+  await Promise.all(auditSeeds.map(([action, entityType, entityId, actor], index) =>
+    prisma.auditLog.upsert({
+      where: { id: `audit-log-${String(index + 1).padStart(2, "0")}` },
+      update: { actor, action, entityType, entityId, metadata: { release: "v5.3", surface: index < 6 ? "Mission Control" : "Quality Layer" } },
+      create: {
+        id: `audit-log-${String(index + 1).padStart(2, "0")}`,
+        workspaceId,
+        actor,
+        action,
+        entityType,
+        entityId,
+        before: index % 4 === 0 ? { status: "RESEARCHING" } : undefined,
+        after: { status: index % 5 === 0 ? "IN_PROGRESS" : "REVIEWED" },
+        metadata: { release: "v5.3", surface: index < 6 ? "Mission Control" : "Quality Layer", summary: `${action} recorded for ${entityType}.` },
+        createdAt: dateFromNow(-index)
+      }
+    })
+  ));
+}
 async function main() {
   await seedFoundation();
   const personas = await seedPersonas();
@@ -3239,6 +4006,9 @@ async function main() {
   await seedRecommendedActions();
   await seedExecutionEngine();
   await seedMeasurementLearningEngine();
+  await seedMissionEngine();
+  await seedConnectedIntelligence();
+  await seedIntelligenceQualityHardening();
 }
 
 main()

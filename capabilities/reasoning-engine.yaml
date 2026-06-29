@@ -1,0 +1,26 @@
+id: reasoning-engine
+name: Reasoning Engine
+version: 5.1-enterprise
+owner: VidMaker Growth Intelligence
+status: active
+description: Stores explainable traces behind recommendations, mission summaries, and growth decisions.
+depends_on:
+  - pattern-engine
+  - knowledge-layer
+produces:
+  - ReasoningTrace
+  - MissionReasoning
+consumes:
+  - Pattern
+  - Memory
+  - Insight
+  - Mission
+eventsProduced:
+  - REASONING_TRACE_CREATED
+eventsConsumed:
+  - PATTERN_DETECTED
+  - MISSION_SUMMARY_GENERATED
+publicApi:
+  - rankOpportunities
+  - rankRecommendedActions
+documentation: architecture/data-flow.md

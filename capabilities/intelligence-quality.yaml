@@ -1,0 +1,40 @@
+id: intelligence-quality
+name: Intelligence Quality Layer
+version: 1.0.0
+status: ACTIVE
+description: >-
+  Scores VGOS signals, recommendations, actions, knowledge objects, and missions for
+  confidence, evidence strength, duplicate risk, and missing evidence before downstream
+  enterprise workflows consume them.
+inputs:
+  - Signals
+  - Recommendations
+  - Actions
+  - KnowledgeObjects
+  - Missions
+outputs:
+  - Quality scores
+  - Confidence explanations
+  - Duplicate warnings
+  - Missing evidence reports
+  - Audit events
+dependencies:
+  - Intelligence Pipeline
+  - Knowledge Layer
+  - Mission Engine
+  - Connected Intelligence
+  - Event System
+runtime:
+  logic_path: src/kernel/quality
+  observability_path: src/lib/observability
+  audit_model: AuditLog
+quality_gates:
+  - signal_quality
+  - recommendation_confidence
+  - evidence_strength
+  - duplicate_detection
+  - opportunity_score_calibration
+enterprise_surfaces:
+  - Mission Control Enterprise Health
+  - Audit Log
+  - Kernel tests

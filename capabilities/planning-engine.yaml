@@ -1,0 +1,33 @@
+id: planning-engine
+name: Planning Engine
+version: 5.1-enterprise
+owner: VidMaker Growth Intelligence
+status: beta
+description: Turns objectives, recommendations, patterns, constraints, and capacity into execution plans.
+depends_on:
+  - decision-engine
+  - knowledge-layer
+  - mission-engine
+produces:
+  - Plan
+  - Milestone
+  - PlanItem
+  - PredictedOutcome
+consumes:
+  - Objective
+  - Pattern
+  - RecommendedAction
+  - ResourceCapacity
+eventsProduced:
+  - PLAN_CREATED
+  - PLAN_ACTIVATED
+  - OUTCOME_PREDICTED
+eventsConsumed:
+  - OBJECTIVE_CREATED
+  - HIGH_IMPACT_ACTION_SELECTED
+  - MISSION_CREATED
+publicApi:
+  - generatePlanFromObjective
+  - generatePlanFromPatterns
+  - generatePlanFromRecommendedActions
+documentation: architecture/data-flow.md

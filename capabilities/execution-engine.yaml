@@ -1,0 +1,36 @@
+id: execution-engine
+name: Execution Engine
+version: 5.1-enterprise
+owner: VidMaker Growth Intelligence
+status: beta
+description: Turns plans, recommendations, workflows, and mission priorities into tracked work with approvals, evidence, blockers, and outcomes.
+depends_on:
+  - planning-engine
+  - mission-engine
+  - workflow-engine
+produces:
+  - ExecutionItem
+  - ExecutionEvidence
+  - ExecutionResult
+  - ExecutionEvent
+consumes:
+  - Plan
+  - PlanItem
+  - RecommendedAction
+  - WorkflowRun
+  - Mission
+eventsProduced:
+  - EXECUTION_STARTED
+  - EXECUTION_BLOCKED
+  - EXECUTION_COMPLETED
+  - EXECUTION_RESULT_CREATED
+eventsConsumed:
+  - PLAN_ACTIVATED
+  - PLAN_ITEM_COMPLETED
+  - MISSION_PROGRESS_UPDATED
+publicApi:
+  - startExecution
+  - completeExecution
+  - getExecutionQueue
+  - getExecutionHealth
+documentation: architecture/data-flow.md

@@ -6,6 +6,8 @@ import {
   type Priority,
   type RecommendedAction
 } from "@/lib/vgos-data";
+import { calculateRecommendationConfidence } from "@/kernel/quality/confidence-engine";
+import { assessDuplicateRisk } from "@/kernel/quality/duplicate-detection";
 
 export type PipelineSourceRecord = Record<string, unknown> & {
   id: string;
@@ -55,6 +57,10 @@ export type IntelligenceProvider = {
       organizationId?: string;
       sourceType?: string;
       now?: string;
+      existing?: {
+        aiRecommendations?: AIRecommendation[];
+        recommendedActions?: RecommendedAction[];
+      };
     }
   ): Promise<IntelligencePipelineResult>;
 };
@@ -292,7 +298,8 @@ export function calculateOpportunityScore(input: ScoringInput) {
 
 export function generateRecommendedActions(
   intelligenceObject: IntelligencePipelineResult["intelligenceObject"],
-  now = new Date().toISOString()
+  now = new Date().toISOString(),
+  existingActions: RecommendedAction[] = []
 ) {
   const sourceType = "IntelligenceObject";
   const sourceId = intelligenceObject.id;
@@ -391,24 +398,51 @@ export function generateRecommendedActions(
     .filter((action): action is NonNullable<typeof action> => Boolean(action))
     .filter((action) => sprintActionTypes.includes(action.actionType))
     .slice(0, 4)
-    .map((action, index) => ({
-      id: `action-${slug(sourceId)}-${slug(action.actionType)}-${index + 1}`,
-      organizationId: intelligenceObject.organizationId,
-      workspaceId: intelligenceObject.workspaceId,
-      title: action.title,
-      description: action.description,
-      sourceType,
-      sourceId,
-      actionType: action.actionType,
-      priority: action.priority,
-      status: "PENDING" as const,
-      dueDate: due.toISOString(),
-      owner: action.owner,
-      reasoning: action.reasoning,
-      expectedImpact: action.expectedImpact,
-      createdAt: now,
-      updatedAt: now
-    }));
+    .map((action, index) => {
+      const candidate = {
+        id: `action-${slug(sourceId)}-${slug(action.actionType)}-${index + 1}`,
+        organizationId: intelligenceObject.organizationId,
+        workspaceId: intelligenceObject.workspaceId,
+        title: action.title,
+        description: action.description,
+        sourceType,
+        sourceId,
+        actionType: action.actionType,
+        priority: action.priority,
+        status: "PENDING" as const,
+        dueDate: due.toISOString(),
+        owner: action.owner,
+        reasoning: action.reasoning,
+        expectedImpact: action.expectedImpact,
+        confidenceScore: intelligenceObject.confidenceScore,
+        qualityScore: 0,
+        evidenceStrength: 0,
+        missingEvidence: [] as string[],
+        duplicateRisk: 0,
+        confidenceExplanation: "",
+        createdAt: now,
+        updatedAt: now
+      };
+      const duplicate = assessDuplicateRisk(candidate, existingActions);
+      const quality = calculateRecommendationConfidence({
+        ...candidate,
+        summary: candidate.description,
+        detectedEntities: intelligenceObject.detectedEntities,
+        detectedKeywords: intelligenceObject.detectedKeywords,
+        duplicateRisk: duplicate.duplicateRisk
+      });
+      return {
+        ...candidate,
+        confidenceScore: quality.confidenceScore,
+        qualityScore: quality.qualityScore,
+        evidenceStrength: quality.evidenceStrength,
+        missingEvidence: quality.missingEvidence,
+        duplicateRisk: quality.duplicateRisk,
+        confidenceExplanation: quality.confidenceExplanation,
+        reviewedAt: now,
+        reviewedBy: "VGOS Intelligence Pipeline"
+      };
+    });
 }
 
 export function processIntelligenceRecord(
@@ -418,6 +452,10 @@ export function processIntelligenceRecord(
     organizationId?: string;
     sourceType?: string;
     now?: string;
+    existing?: {
+      aiRecommendations?: AIRecommendation[];
+      recommendedActions?: RecommendedAction[];
+    };
   }
 ): IntelligencePipelineResult {
   const now = options.now ?? new Date().toISOString();
@@ -470,9 +508,9 @@ export function processIntelligenceRecord(
     updatedAt: now
   };
 
-  const recommendedActions = generateRecommendedActions(intelligenceObject, now);
+  const recommendedActions = generateRecommendedActions(intelligenceObject, now, options.existing?.recommendedActions ?? []);
   const primaryAction = recommendedActions[0];
-  const aiRecommendation: AIRecommendation = {
+  const aiRecommendationCandidate: AIRecommendation = {
     id: `ai-rec-${slug(intelligenceId)}`,
     organizationId: intelligenceObject.organizationId,
     workspaceId: intelligenceObject.workspaceId,
@@ -496,9 +534,35 @@ export function processIntelligenceRecord(
     suggestedAction: primaryAction?.description ?? "Review the intelligence result and choose the next growth action.",
     reasoning: intelligenceObject.reasoning,
     confidenceScore: intelligenceObject.confidenceScore,
+    qualityScore: 0,
+    evidenceStrength: 0,
+    missingEvidence: [],
+    duplicateRisk: 0,
+    confidenceExplanation: "",
     generatedBy: "VGOS Intelligence Pipeline",
     createdAt: now,
     updatedAt: now
+  };
+  const aiDuplicate = assessDuplicateRisk(aiRecommendationCandidate, options.existing?.aiRecommendations ?? []);
+  const aiQuality = calculateRecommendationConfidence({
+    ...aiRecommendationCandidate,
+    summary: aiRecommendationCandidate.description,
+    sourceType: aiRecommendationCandidate.targetEntityType,
+    sourceId: aiRecommendationCandidate.targetEntityId,
+    detectedEntities: intelligenceObject.detectedEntities,
+    detectedKeywords: intelligenceObject.detectedKeywords,
+    duplicateRisk: aiDuplicate.duplicateRisk
+  });
+  const aiRecommendation: AIRecommendation = {
+    ...aiRecommendationCandidate,
+    confidenceScore: aiQuality.confidenceScore,
+    qualityScore: aiQuality.qualityScore,
+    evidenceStrength: aiQuality.evidenceStrength,
+    missingEvidence: aiQuality.missingEvidence,
+    duplicateRisk: aiQuality.duplicateRisk,
+    confidenceExplanation: aiQuality.confidenceExplanation,
+    reviewedAt: now,
+    reviewedBy: "VGOS Intelligence Pipeline"
   };
 
   return {

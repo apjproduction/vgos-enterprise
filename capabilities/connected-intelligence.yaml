@@ -1,0 +1,50 @@
+id: connected-intelligence
+name: Connected Intelligence
+version: 1.0.0
+owner: VidMaker Growth Intelligence
+status: beta
+description: Live-ready connector foundation that routes external source data through raw signals, normalized signals, events, and the VGOS intelligence kernel.
+depends_on:
+  - event-system
+  - intelligence-pipeline
+  - knowledge-layer
+  - measurement-engine
+  - mission-engine
+produces:
+  - RawSignal
+  - NormalizedSignal
+  - Event
+  - IntelligenceObject
+  - Measurement
+  - KnowledgeObject
+consumes:
+  - External APIs
+  - Manual Imports
+  - Webhooks
+  - Connector Config
+eventsProduced:
+  - CONNECTOR_CREATED
+  - CONNECTOR_CONNECTED
+  - CONNECTOR_SYNC_STARTED
+  - CONNECTOR_SYNC_COMPLETED
+  - CONNECTOR_SYNC_FAILED
+  - RAW_SIGNAL_RECEIVED
+  - SIGNAL_NORMALIZED
+  - SIGNAL_ROUTED
+  - SIGNAL_FAILED
+  - CONNECTOR_HEALTH_CHANGED
+eventsConsumed:
+  - CONNECTOR_SYNC_STARTED
+  - RAW_SIGNAL_RECEIVED
+  - SIGNAL_NORMALIZED
+publicApi:
+  - registerConnector
+  - createConnector
+  - updateConnectorStatus
+  - runConnectorSync
+  - processRawSignal
+  - normalizeSignal
+  - routeSignalToKernel
+  - getConnectorHealth
+  - getConnectorSyncHistory
+documentation: architecture/ADR-010-connected-intelligence.md
