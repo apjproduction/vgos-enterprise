@@ -1,0 +1,176 @@
+capabilities:
+  - id: cap-foundation
+    name: APJ Foundation
+    domain: Foundation
+    status: foundation-mvp
+    version: 1.0.0
+    purpose: Machine-readable source of truth for APJ Labs strategy, principles, standards, and platform governance.
+    owner: APJ Platform
+    inputs:
+      - Product Strategy
+      - Engineering Standards
+      - Architecture Decisions
+    outputs:
+      - Foundation Registry
+      - AI Rules
+      - Engineering Guidance
+      - Future Advisor Context
+    dependsOn: []
+
+  - id: cap-intelligence-kernel
+    name: Intelligence Kernel
+    domain: Intelligence
+    status: production-alpha
+    version: 1.0.0
+    purpose: Shared reasoning, knowledge, memory, planning, execution, measurement, learning, and recommendation services.
+    owner: APJ Intelligence
+    inputs:
+      - Signals
+      - Knowledge Objects
+      - Missions
+      - Measurements
+      - Learnings
+    outputs:
+      - Recommendations
+      - Plans
+      - Insights
+      - Mission Intelligence
+    dependsOn:
+      - cap-foundation
+
+  - id: cap-connected-intelligence
+    name: Connected Intelligence
+    domain: Platform
+    status: production-alpha
+    version: 1.0.0
+    purpose: Connector framework that turns external data into raw signals, normalized signals, events, and kernel inputs.
+    owner: APJ Platform
+    inputs:
+      - External APIs
+      - Manual Imports
+      - Webhooks
+    outputs:
+      - Raw Signals
+      - Normalized Signals
+      - Connector Sync Runs
+    dependsOn:
+      - cap-intelligence-kernel
+
+  - id: cap-executive-brief
+    name: Executive Brief
+    domain: Experience
+    status: production-alpha
+    version: 1.0.0
+    purpose: Daily executive-facing summary of priorities, mission health, changes, risks, recommendations, and expected impact.
+    owner: APJ Experience
+    inputs:
+      - Missions
+      - Work Queue
+      - Recommendations
+      - Measurements
+      - Learnings
+    outputs:
+      - Daily Brief
+      - Top Priorities
+      - Executive Recommendations
+    dependsOn:
+      - cap-intelligence-kernel
+
+  - id: cap-advisor
+    name: Advisor
+    domain: Experience
+    status: production-alpha
+    version: 1.0.0
+    purpose: Conversational interface for asking executive, operational, and architecture questions about APJ Labs and VGOS.
+    owner: APJ Experience
+    inputs:
+      - Advisor Context
+      - Foundation Registry
+      - Knowledge Objects
+      - Missions
+    outputs:
+      - Answers
+      - Reasoning
+      - Related Objects
+      - Suggested Actions
+    dependsOn:
+      - cap-foundation
+      - cap-intelligence-kernel
+
+  - id: cap-mission-engine
+    name: Mission Engine
+    domain: Intelligence
+    status: production-alpha
+    version: 1.0.0
+    purpose: Top-level strategic initiative model connecting objectives, plans, execution, measurements, learnings, and progress.
+    owner: APJ Intelligence
+    inputs:
+      - Objectives
+      - Plans
+      - Executions
+      - Measurements
+      - Learnings
+    outputs:
+      - Mission Health
+      - Mission Progress
+      - Mission Recommendations
+    dependsOn:
+      - cap-intelligence-kernel
+
+  - id: cap-planning-engine
+    name: Planning Engine
+    domain: Intelligence
+    status: production-alpha
+    version: 1.0.0
+    purpose: Converts objectives, patterns, and recommendations into structured plans, milestones, dependencies, constraints, and predicted outcomes.
+    owner: APJ Intelligence
+    inputs:
+      - Objectives
+      - Recommendations
+      - Patterns
+    outputs:
+      - Plans
+      - Milestones
+      - Plan Items
+      - Predicted Outcomes
+    dependsOn:
+      - cap-intelligence-kernel
+
+  - id: cap-execution-engine
+    name: Execution Engine
+    domain: Operations
+    status: production-alpha
+    version: 1.0.0
+    purpose: Converts plans and recommended actions into trackable execution records with owners, status, approvals, evidence, blockers, and results.
+    owner: APJ Operations
+    inputs:
+      - Plan Items
+      - Recommended Actions
+      - Workflow Runs
+    outputs:
+      - Execution Items
+      - Evidence
+      - Results
+      - Blockers
+      - Approvals
+    dependsOn:
+      - cap-planning-engine
+
+  - id: cap-measurement-learning
+    name: Measurement and Learning Engine
+    domain: Intelligence
+    status: production-alpha
+    version: 1.0.0
+    purpose: Connects execution to metrics, learnings, attribution, and strategy adjustments.
+    owner: APJ Intelligence
+    inputs:
+      - Execution Results
+      - Metrics
+      - Predicted Outcomes
+    outputs:
+      - Measurements
+      - Learnings
+      - Attributions
+      - Strategy Adjustments
+    dependsOn:
+      - cap-execution-engine
