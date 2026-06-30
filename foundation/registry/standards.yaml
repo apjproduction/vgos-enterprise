@@ -1,0 +1,120 @@
+standards:
+  - id: std-architecture
+    name: Architecture Standard
+    domain: Foundation
+    status: draft
+    owner: APJ Platform
+    purpose: Define how domains, services, capabilities, and product boundaries are designed and reviewed.
+    requiredFor:
+      - new capabilities
+      - new services
+      - schema changes
+      - cross-domain integrations
+
+  - id: std-ai-engineering
+    name: AI Engineering Standard
+    domain: Developer Experience
+    status: draft
+    owner: APJ Platform
+    purpose: Define how AI coding agents should read Foundation, follow RFCs, update documentation, and avoid architecture drift.
+    requiredFor:
+      - Codex work
+      - AI-generated pull requests
+      - refactoring
+      - capability implementation
+
+  - id: std-backend
+    name: Backend Standard
+    domain: Platform
+    status: draft
+    owner: APJ Platform
+    purpose: Define service design, error handling, validation, observability, and server-side architecture.
+    requiredFor:
+      - API routes
+      - kernel services
+      - connector services
+      - background workers
+
+  - id: std-frontend
+    name: Frontend Standard
+    domain: Experience
+    status: draft
+    owner: APJ Experience
+    purpose: Define React component structure, UI states, accessibility, responsive behavior, and business-logic boundaries.
+    requiredFor:
+      - pages
+      - components
+      - layouts
+      - design system updates
+
+  - id: std-database
+    name: Database Standard
+    domain: Platform
+    status: draft
+    owner: APJ Platform
+    purpose: Define schema evolution, migrations, workspace scoping, relation modeling, and seed-data discipline.
+    requiredFor:
+      - Prisma changes
+      - migrations
+      - seed scripts
+      - model changes
+
+  - id: std-connectors
+    name: Connector Standard
+    domain: Platform
+    status: draft
+    owner: APJ Platform
+    purpose: Define connector contracts, signal normalization, sync runs, health checks, and failure handling.
+    requiredFor:
+      - GitHub connector
+      - Search Console connector
+      - GA4 connector
+      - LinkedIn connector
+      - Product Hunt connector
+
+  - id: std-testing
+    name: Testing Standard
+    domain: Operations
+    status: draft
+    owner: APJ Operations
+    purpose: Define unit, integration, end-to-end, regression, accessibility, and performance testing expectations.
+    requiredFor:
+      - production releases
+      - kernel changes
+      - connector changes
+      - critical UI changes
+
+  - id: std-security
+    name: Security Standard
+    domain: Platform
+    status: draft
+    owner: APJ Platform
+    purpose: Define secrets, auth, authorization, audit logs, data boundaries, and secure connector handling.
+    requiredFor:
+      - production deployment
+      - live connectors
+      - user accounts
+      - external APIs
+
+  - id: std-documentation
+    name: Documentation Standard
+    domain: Foundation
+    status: draft
+    owner: APJ Foundation
+    purpose: Define metadata, templates, review cycles, glossary alignment, and Foundation registry updates.
+    requiredFor:
+      - RFCs
+      - ADRs
+      - playbooks
+      - capability docs
+
+  - id: std-release
+    name: Release Standard
+    domain: Operations
+    status: draft
+    owner: APJ Operations
+    purpose: Define release planning, validation, rollout, rollback, release notes, and post-release review.
+    requiredFor:
+      - monthly releases
+      - production deploys
+      - capability launches
