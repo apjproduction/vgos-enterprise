@@ -1,0 +1,96 @@
+products:
+  - id: product-vgos
+    name: VGOS
+    fullName: VidMaker Growth Operating System
+    category: Executive Intelligence
+    status: production-alpha
+    owner: APJ Product
+    purpose: >
+      Provide the executive operating experience for APJ Labs by turning signals,
+      knowledge, missions, plans, execution, measurements, and learning into daily decision support.
+    primaryUsers:
+      - Founder
+      - Operator
+      - Marketing Lead
+      - SEO Lead
+      - Product Manager
+      - Developer
+    consumes:
+      - Intelligence Kernel
+      - Foundation Registry
+      - Connected Intelligence
+      - Mission Engine
+      - Planning Engine
+      - Execution Engine
+      - Measurement and Learning Engine
+    produces:
+      - Executive Brief
+      - Advisor Answers
+      - Work Queue
+      - Results
+      - Mission Progress
+    northStarMetric: Founder decision time saved
+
+  - id: product-vidmaker
+    name: VidMaker
+    category: AI Video Intelligence
+    status: live-product
+    owner: APJ Product
+    purpose: >
+      Help creators, businesses, agencies, educators, and marketers transform ideas,
+      URLs, products, scripts, and media into platform-ready video assets.
+    primaryUsers:
+      - Creator
+      - Ecommerce Brand
+      - Agency
+      - Educator
+      - Marketing Team
+    consumes:
+      - APJ Platform
+      - Future VGOS recommendations
+    produces:
+      - Video Assets
+      - Graphics
+      - Thumbnails
+      - Publishing Packages
+    northStarMetric: Publish-ready videos created
+
+  - id: product-tradewizai
+    name: TradeWizAI
+    category: Financial Intelligence
+    status: active-development
+    owner: APJ Product
+    purpose: >
+      Provide intelligent trading, strategy, risk, and market automation capabilities.
+    primaryUsers:
+      - Trader
+      - Investor
+      - Financial Operator
+    consumes:
+      - APJ Platform
+      - Future Intelligence Kernel services
+    produces:
+      - Market Signals
+      - Strategy Insights
+      - Risk Controls
+    northStarMetric: Risk-adjusted intelligent trading decisions
+
+  - id: product-drivemart
+    name: DriveMart
+    category: Mobility Intelligence
+    status: planned
+    owner: APJ Product
+    purpose: >
+      Provide a marketplace and operating platform for cars, machinery, rentals, and related mobility workflows.
+    primaryUsers:
+      - Vehicle Owner
+      - Buyer
+      - Renter
+      - Operator
+    consumes:
+      - APJ Platform
+    produces:
+      - Listings
+      - Rental Operations
+      - Marketplace Signals
+    northStarMetric: Successful mobility transactions
