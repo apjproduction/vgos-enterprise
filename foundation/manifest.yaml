@@ -1,0 +1,58 @@
+foundation:
+  id: apj-foundation
+  name: APJ Foundation
+  version: 1.0.0
+  status: foundation-mvp
+  owner: APJ Platform
+  updated: 2026-06-30
+  purpose: >
+    Define the machine-readable operating foundation for APJ Labs, including
+    company philosophy, platform principles, product portfolio, capabilities,
+    standards, playbooks, and terminology.
+
+organization:
+  name: APJ Labs
+  category: Executive Intelligence Infrastructure
+  mission: >
+    Build reusable intelligence infrastructure that helps founders and
+    organizations make better decisions.
+  vision: >
+    Become the Executive Intelligence Platform that helps organizations observe,
+    reason, decide, execute, measure, learn, remember, and continuously improve.
+  operating_principle: >
+    Every significant product, engineering, or operational decision should improve
+    decision quality, preserve institutional memory, or strengthen reusable platform capabilities.
+
+platform:
+  name: APJ Platform
+  thesis: >
+    APJ Labs should evolve from a collection of software products into a shared
+    intelligence platform consumed by VGOS, VidMaker, TradeWizAI, DriveMart, and future products.
+  domains:
+    - Foundation
+    - Platform
+    - Intelligence
+    - Experience
+    - Products
+    - Operations
+
+source_of_truth:
+  rule: If Foundation and implementation disagree, implementation must be reviewed.
+  documents:
+    - foundation/manifest.yaml
+    - foundation/registry/products.yaml
+    - foundation/registry/capabilities.yaml
+    - foundation/registry/principles.yaml
+    - foundation/registry/standards.yaml
+    - foundation/registry/playbooks.yaml
+    - foundation/registry/glossary.yaml
+
+future_runtime:
+  package: packages/foundation
+  planned_capabilities:
+    - manifest loading
+    - registry validation
+    - markdown generation
+    - knowledge graph generation
+    - advisor context provider
+    - documentation health checks
