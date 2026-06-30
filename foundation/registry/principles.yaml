@@ -1,0 +1,84 @@
+principles:
+  - id: principle-decision-quality
+    name: Decision Quality First
+    category: Product Philosophy
+    priority: P0
+    statement: Every product, capability, connector, and agent should improve decision quality.
+    appliesTo:
+      - Product
+      - Engineering
+      - Intelligence
+      - Experience
+
+  - id: principle-kernel-first
+    name: Kernel First
+    category: Architecture
+    priority: P0
+    statement: Shared intelligence logic belongs in the Intelligence Kernel, not in UI components or isolated product code.
+    appliesTo:
+      - Kernel
+      - VGOS
+      - VidMaker
+      - TradeWizAI
+
+  - id: principle-foundation-source-of-truth
+    name: Foundation Is Source of Truth
+    category: Governance
+    priority: P0
+    statement: If Foundation and implementation disagree, implementation must be reviewed.
+    appliesTo:
+      - Foundation
+      - Engineering
+      - Architecture
+
+  - id: principle-explainable-recommendations
+    name: Explainable Recommendations
+    category: Intelligence Quality
+    priority: P0
+    statement: Every recommendation must expose reasoning, confidence, evidence, and expected impact.
+    appliesTo:
+      - Advisor
+      - Recommendation Engine
+      - Mission Engine
+      - Executive Brief
+
+  - id: principle-normalized-signals
+    name: Normalized Signals Only
+    category: Connected Intelligence
+    priority: P0
+    statement: Connectors must produce raw signals and normalized signals before data enters the kernel.
+    appliesTo:
+      - Connectors
+      - Signal Router
+      - Intelligence Pipeline
+
+  - id: principle-conversation-before-navigation
+    name: Conversation Before Navigation
+    category: Executive Experience
+    priority: P1
+    statement: If a user can naturally ask a question, VGOS should support asking instead of forcing menu navigation.
+    appliesTo:
+      - Advisor
+      - Executive Brief
+      - Work Queue
+
+  - id: principle-documentation-as-code
+    name: Documentation as Code
+    category: Foundation
+    priority: P1
+    statement: Important knowledge should be structured, versioned, validated, and eventually generated from machine-readable registries.
+    appliesTo:
+      - Foundation
+      - Atlas
+      - Documentation
+      - CI
+
+  - id: principle-shared-services
+    name: Shared Services Are Not Duplicated
+    category: Platform
+    priority: P0
+    statement: Identity, organizations, permissions, connectors, billing, and shared intelligence services should be shared platform capabilities.
+    appliesTo:
+      - Platform
+      - Products
+      - Architecture
