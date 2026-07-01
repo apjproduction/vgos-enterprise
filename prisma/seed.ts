@@ -5,6 +5,13 @@ import {
   ContentType,
   CognitionEvidenceType,
   CognitionRiskLevel,
+  DecisionCommitmentStatus,
+  DecisionCommitmentType,
+  DecisionOptionType,
+  DecisionQuality,
+  DecisionSituationStatus,
+  DecisionSituationType,
+  DeliberationStatus,
   EventSeverity,
   EventStatus,
   EventType,
@@ -4188,6 +4195,237 @@ async function seedReflectiveCognition() {
   );
 }
 
+async function seedDeliberationLayer() {
+  const situationSeeds = [
+    ["decision-situation-blog-005-demo", "Should BLOG-005 be published before the product-page demo?", "VGOS needs to decide whether content momentum is worth the trust risk of publishing before proof assets are ready.", DecisionSituationType.CONTENT_DECISION, DecisionSituationStatus.DECIDED, Priority.CRITICAL, "ExecutionItem", "execution-blog-005-outline", "mission-product-page-to-video", "objective-demo-assets"],
+    ["decision-situation-founder-content", "Should VidMaker increase founder-led content this week?", "Founder posts are outperforming company posts, but founder review capacity is limited.", DecisionSituationType.CHANNEL_DECISION, DecisionSituationStatus.DECIDED, Priority.HIGH, "Learning", "learning-05", "mission-founder-authority", "objective-own-vpi"],
+    ["decision-situation-directory-pause", "Should directory submissions be paused until proof assets are ready?", "Directory approvals are lagging and proof assets may improve listing quality and trust.", DecisionSituationType.RISK_DECISION, DecisionSituationStatus.DELIBERATING, Priority.HIGH, "Learning", "learning-03", "mission-product-hunt-momentum", "objective-authority"],
+    ["decision-situation-channel-priority", "Which channel deserves priority: LinkedIn, Product Hunt, or Reddit?", "VGOS should choose a focus channel for this week instead of splitting capacity across every launch surface.", DecisionSituationType.CHANNEL_DECISION, DecisionSituationStatus.DECIDED, Priority.HIGH, "Metric", "metric-linkedin-impressions", "mission-product-hunt-momentum", "objective-product-hunt"],
+    ["decision-situation-product-page-capacity", "Should the Product Page to Video mission receive more capacity?", "The Product Page to Video mission is strategically critical but at risk until demo assets and proof replies move.", DecisionSituationType.RESOURCE_DECISION, DecisionSituationStatus.OPEN, Priority.CRITICAL, "Mission", "mission-product-page-to-video", "mission-product-page-to-video", "objective-demo-assets"]
+  ] as const;
+
+  await Promise.all(
+    situationSeeds.map(([id, title, description, situationType, status, urgency, sourceType, sourceId, missionId, objectiveId]) =>
+      prisma.decisionSituation.upsert({
+        where: { id },
+        update: { title, description, situationType, status, urgency, sourceType, sourceId, missionId, objectiveId },
+        create: {
+          ...tenant,
+          id,
+          title,
+          description,
+          situationType,
+          status,
+          urgency,
+          sourceType,
+          sourceId,
+          missionId,
+          objectiveId
+        }
+      })
+    )
+  );
+
+  const optionSeeds = [
+    ["decision-option-blog-005-now", "decision-situation-blog-005-demo", "Publish BLOG-005 today.", "Ship the cleanup comparison article now and add proof once demo assets are ready.", DecisionOptionType.CREATE_CONTENT, 78, 42, Priority.HIGH, 0.72, ["Captures search momentum", "Keeps content cadence moving"], ["Proof is unfinished", "Conversion trust may be weaker"], ["Search demand remains active", "Proof can be added soon"], ["BLOG-005 outline supports the authority cluster"]],
+    ["decision-option-demo-first", "decision-situation-blog-005-demo", "Finish the product-page demo first.", "Complete the source-to-output proof asset before publishing BLOG-005.", DecisionOptionType.CREATE_DEMO, 88, 72, Priority.MEDIUM, 0.84, ["Improves BOFU trust", "Strengthens content evidence"], ["Delays content momentum", "Uses scarce growth capacity"], ["Proof assets increase conversion trust"], ["Demo proof needed before BOFU push", "Product Hunt comments ask for proof"]],
+    ["decision-option-founder-short-post", "decision-situation-blog-005-demo", "Publish a shorter founder post instead.", "Use founder voice to keep momentum while the demo and article mature.", DecisionOptionType.CREATE_CONTENT, 72, 34, Priority.MEDIUM, 0.78, ["Lower effort", "Founder voice builds trust"], ["Does not replace demo", "Needs founder review"], ["Founder-led posts outperform company posts"], ["Founder posts create better comments"]],
+    ["decision-option-defer-blog-005", "decision-situation-blog-005-demo", "Defer until Search Console data is available.", "Wait for fresher search evidence before committing to publication order.", DecisionOptionType.DEFER_DECISION, 42, 12, Priority.LOW, 0.62, ["Avoids premature content", "Protects capacity"], ["May miss momentum", "Decision remains unresolved"], ["Search data will clarify demand"], ["Evidence quality is incomplete"]],
+    ["decision-option-founder-increase", "decision-situation-founder-content", "Increase founder-led proof narratives.", "Allocate this week's content review to founder-led proof and category posts.", DecisionOptionType.CHANGE_STRATEGY, 84, 52, Priority.MEDIUM, 0.82, ["Uses strongest qualitative channel", "Supports category ownership"], ["Founder capacity is scarce"], ["Founder voice continues to outperform"], ["Founder post engagement learning"]],
+    ["decision-option-company-cadence", "decision-situation-founder-content", "Keep company content cadence unchanged.", "Keep company updates moving while founder capacity stays protected.", DecisionOptionType.CREATE_CONTENT, 58, 34, Priority.LOW, 0.64, ["Preserves cadence", "Low owner dependency"], ["Lower qualitative trust", "May underuse founder signal"], ["Company cadence matters this week"], ["Company LinkedIn signal exists"]],
+    ["decision-option-founder-experiment", "decision-situation-founder-content", "Run founder vs company post experiment.", "Publish one founder proof post and one company proof post, then compare response quality.", DecisionOptionType.RUN_EXPERIMENT, 74, 48, Priority.LOW, 0.76, ["Improves evidence", "Limits downside"], ["Slower than direct increase"], ["Experiment can produce quick signal"], ["Channel learning is promising but limited"]],
+    ["decision-option-pause-directories", "decision-situation-directory-pause", "Pause broad directory submissions.", "Stop low-confidence submissions until proof assets and approval follow-up are ready.", DecisionOptionType.PAUSE_WORK, 68, 18, Priority.LOW, 0.78, ["Protects capacity", "Avoids weak listings"], ["Slows backlink coverage"], ["Proof assets improve listing quality"], ["Directory approvals lag submissions"]],
+    ["decision-option-submit-fewer-directories", "decision-situation-directory-pause", "Submit only high-authority directories.", "Continue with a narrower directory list while proof assets are prepared.", DecisionOptionType.SUBMIT_DIRECTORY, 72, 44, Priority.MEDIUM, 0.7, ["Keeps authority motion alive", "Limits low-quality work"], ["Still depends on approval timing"], ["Selected directories are worth the delay"], ["Copy bank improved readiness"]],
+    ["decision-option-proof-assets-first", "decision-situation-directory-pause", "Improve proof assets before more submissions.", "Shift authority capacity into proof assets that can improve future directory conversion.", DecisionOptionType.CREATE_DEMO, 82, 68, Priority.MEDIUM, 0.8, ["Improves trust", "Supports multiple channels"], ["Delays directory volume"], ["Proof is the current bottleneck"], ["Proof-first BOFU reflection"]],
+    ["decision-option-linkedin-priority", "decision-situation-channel-priority", "Prioritize LinkedIn this week.", "Use LinkedIn founder and carousel formats while engagement evidence is strongest.", DecisionOptionType.CHANGE_STRATEGY, 82, 46, Priority.MEDIUM, 0.82, ["Strongest measured engagement", "Founder content fits"], ["May underuse Product Hunt momentum"], ["LinkedIn engagement remains durable"], ["LinkedIn carousel engagement improved"]],
+    ["decision-option-product-hunt-priority", "decision-situation-channel-priority", "Prioritize Product Hunt follow-up.", "Reply to active proof-demand comments before launch attention decays.", DecisionOptionType.REPLY_COMMUNITY, 86, 52, Priority.HIGH, 0.84, ["Captures live demand", "Directly addresses proof requests"], ["Needs demo link", "Timing window is narrow"], ["Proof reply converts attention"], ["Product Hunt proof-demand reflection"]],
+    ["decision-option-reddit-priority", "decision-situation-channel-priority", "Prioritize Reddit objections.", "Use Reddit cleanup objections to sharpen product proof and BLOG-005 angles.", DecisionOptionType.REPLY_COMMUNITY, 62, 44, Priority.HIGH, 0.6, ["Sharpens objections", "Supports BLOG-005"], ["Lower owned-channel control", "Risk of low conversion"], ["Reddit objections map to content"], ["Manual cleanup objections captured"]],
+    ["decision-option-add-demo-capacity", "decision-situation-product-page-capacity", "Move more capacity to product-page demo.", "Prioritize demo execution over lower-confidence distribution this week.", DecisionOptionType.START_EXECUTION, 88, 74, Priority.MEDIUM, 0.84, ["Unlocks replies and BOFU content", "Reduces mission risk"], ["Crowds out smaller work"], ["Demo is the mission bottleneck"], ["Product Page to Video is commercial intent"]],
+    ["decision-option-keep-balanced-capacity", "decision-situation-product-page-capacity", "Keep capacity balanced across channels.", "Keep demo, content, founder, and directory work moving in parallel.", DecisionOptionType.CUSTOM, 66, 58, Priority.HIGH, 0.62, ["Avoids single-lane dependency", "Keeps all surfaces warm"], ["May not unblock the mission fast enough"], ["Parallel progress is enough"], ["Current work queue has multiple high priorities"]],
+    ["decision-option-defer-capacity-change", "decision-situation-product-page-capacity", "Defer capacity change until next measurement.", "Wait for a clearer metric movement before changing mission allocation.", DecisionOptionType.DEFER_DECISION, 44, 10, Priority.LOW, 0.58, ["Avoids overreacting", "Protects current plan"], ["Mission risk can worsen"], ["Measurement will arrive soon"], ["Executive Brief needs live data"]]
+  ] as const;
+
+  await Promise.all(
+    optionSeeds.map(([id, situationId, title, description, optionType, expectedImpact, estimatedEffort, riskLevel, confidenceScore, pros, cons, assumptions, evidence]) =>
+      prisma.decisionOption.upsert({
+        where: { id },
+        update: { situationId, title, description, optionType, expectedImpact, estimatedEffort, riskLevel, confidenceScore, pros: [...pros], cons: [...cons], assumptions: [...assumptions], evidence: [...evidence] },
+        create: {
+          ...tenant,
+          id,
+          situationId,
+          title,
+          description,
+          optionType,
+          expectedImpact,
+          estimatedEffort,
+          riskLevel,
+          confidenceScore,
+          pros: [...pros],
+          cons: [...cons],
+          assumptions: [...assumptions],
+          evidence: [...evidence]
+        }
+      })
+    )
+  );
+
+  const riskPenalty = { LOW: 16, MEDIUM: 34, HIGH: 52, CRITICAL: 74 } as const;
+  await Promise.all(
+    optionSeeds.map(([optionId, situationId, title, , , expectedImpact, estimatedEffort, riskLevel, confidenceScore, , , , evidence], index) => {
+      const impactScore = Math.round(expectedImpact * 0.76 + confidenceScore * 24);
+      const effortScore = Math.max(0, 100 - estimatedEffort);
+      const riskScore = Math.max(0, 100 - riskPenalty[riskLevel]);
+      const evidenceScore = Math.min(96, 58 + evidence.length * 12 + Math.round(confidenceScore * 12));
+      const alignmentScore = Math.min(95, situationId.includes("product-page") || title.toLowerCase().includes("proof") ? 88 : 72 + (index % 4) * 4);
+      const urgencyScore = situationId.includes("blog-005") || situationId.includes("product-page") ? 88 : 72;
+      const overallScore = Math.round(impactScore * 0.27 + effortScore * 0.06 + riskScore * 0.12 + evidenceScore * 0.2 + alignmentScore * 0.2 + urgencyScore * 0.15);
+      const id = `option-evaluation-${String(index + 1).padStart(2, "0")}`;
+
+      return prisma.optionEvaluation.upsert({
+        where: { id },
+        update: { optionId, situationId, impactScore, effortScore, riskScore, evidenceScore, alignmentScore, urgencyScore, overallScore, rationale: `${title} scores ${overallScore}/100 after comparing impact, effort, risk, evidence, alignment, and urgency.` },
+        create: {
+          ...tenant,
+          id,
+          optionId,
+          situationId,
+          impactScore,
+          effortScore,
+          riskScore,
+          evidenceScore,
+          alignmentScore,
+          urgencyScore,
+          overallScore,
+          rationale: `${title} scores ${overallScore}/100 after comparing impact, effort, risk, evidence, alignment, and urgency.`
+        }
+      });
+    })
+  );
+
+  const deliberationSeeds = [
+    ["deliberation-blog-005-demo", "decision-situation-blog-005-demo", "VGOS compared publishing BLOG-005 now, finishing the demo first, using a founder post, and deferring.", "decision-option-demo-first", ["decision-option-blog-005-now", "decision-option-founder-short-post", "decision-option-defer-blog-005"], "VGOS recommends finishing the product-page demo first, then publishing BLOG-005 with proof attached.", 0.84, "The dissenting view is that BLOG-005 could capture search momentum today, but proof risk is more important.", "A validated measurement showing BLOG-005 can convert without demo proof would change this decision.", DeliberationStatus.COMPLETED],
+    ["deliberation-founder-content", "decision-situation-founder-content", "VGOS compared increasing founder-led content, keeping company cadence, and running an experiment.", "decision-option-founder-increase", ["decision-option-company-cadence"], "VGOS recommends increasing founder-led proof narratives while protecting founder review capacity.", 0.81, "The dissenting view is that founder capacity may become the bottleneck.", "If founder review is unavailable this week, run the founder vs company experiment instead.", DeliberationStatus.COMPLETED],
+    ["deliberation-directory-pause", "decision-situation-directory-pause", "VGOS compared pausing broad submissions, narrowing to high-authority directories, and proof-first work.", "decision-option-proof-assets-first", ["decision-option-pause-directories"], "VGOS recommends improving proof assets before scaling more directory submissions.", 0.78, "The dissenting view is that pausing submissions may slow backlink coverage.", "If approvals improve or proof assets are already accepted by directories, resume submissions.", DeliberationStatus.COMPLETED],
+    ["deliberation-channel-priority", "decision-situation-channel-priority", "VGOS compared LinkedIn, Product Hunt, and Reddit priority.", "decision-option-product-hunt-priority", ["decision-option-linkedin-priority", "decision-option-reddit-priority"], "VGOS recommends Product Hunt follow-up first, then LinkedIn reuse once proof is visible.", 0.82, "The dissenting view is that LinkedIn has stronger measured engagement.", "If the demo link is not ready, prioritize LinkedIn founder content instead.", DeliberationStatus.COMPLETED],
+    ["deliberation-product-page-capacity", "decision-situation-product-page-capacity", "VGOS compared extra demo capacity, balanced capacity, and deferral.", "decision-option-add-demo-capacity", ["decision-option-keep-balanced-capacity", "decision-option-defer-capacity-change"], "VGOS recommends moving more capacity to the product-page demo because it unlocks several downstream decisions.", 0.8, "The dissenting view is that balanced capacity protects channel momentum.", "If demo execution remains blocked after one focused work block, switch to a narrower experiment.", DeliberationStatus.DRAFT]
+  ] as const;
+
+  await Promise.all(
+    deliberationSeeds.map(([id, situationId, summary, recommendedOptionId, rejectedOptionIds, finalJudgment, confidenceScore, dissentingView, whatWouldChangeDecision, status]) =>
+      prisma.deliberation.upsert({
+        where: { id },
+        update: { situationId, summary, recommendedOptionId, rejectedOptionIds: [...rejectedOptionIds], finalJudgment, confidenceScore, dissentingView, whatWouldChangeDecision, status },
+        create: {
+          ...tenant,
+          id,
+          situationId,
+          summary,
+          recommendedOptionId,
+          rejectedOptionIds: [...rejectedOptionIds],
+          finalJudgment,
+          confidenceScore,
+          dissentingView,
+          whatWouldChangeDecision,
+          status
+        }
+      })
+    )
+  );
+
+  const commitmentSeeds = [
+    ["decision-commitment-demo-first", "decision-situation-blog-005-demo", "deliberation-blog-005-demo", "decision-option-demo-first", "Finish the product-page demo before BLOG-005", "Commit capacity to demo proof, then publish BLOG-005 with source-to-output evidence.", DecisionCommitmentType.EXECUTE_NOW, DecisionCommitmentStatus.IN_PROGRESS, "Growth", 2, "execution-product-page-demo", "plan-item-10"],
+    ["decision-commitment-founder-content", "decision-situation-founder-content", "deliberation-founder-content", "decision-option-founder-increase", "Reserve founder review for proof narrative", "Use founder review capacity for one proof-led narrative this week.", DecisionCommitmentType.SCHEDULE, DecisionCommitmentStatus.COMMITTED, "Tom Promise", 3, "execution-founder-vpi-post", "plan-item-02"],
+    ["decision-commitment-proof-assets", "decision-situation-directory-pause", "deliberation-directory-pause", "decision-option-proof-assets-first", "Improve proof assets before directory scale", "Shift authority sequencing toward proof asset readiness before broad submissions.", DecisionCommitmentType.EXECUTE_NOW, DecisionCommitmentStatus.COMMITTED, "Growth", 4, "execution-4k-proof-asset", "plan-item-10"],
+    ["decision-commitment-product-hunt", "decision-situation-channel-priority", "deliberation-channel-priority", "decision-option-product-hunt-priority", "Reply to Product Hunt with proof", "Use the best demo proof in Product Hunt follow-up before launch attention decays.", DecisionCommitmentType.EXECUTE_NOW, DecisionCommitmentStatus.COMMITTED, "Community Intelligence", 1, "execution-product-hunt-reply", "plan-item-15"],
+    ["decision-commitment-demo-capacity", "decision-situation-product-page-capacity", "deliberation-product-page-capacity", "decision-option-add-demo-capacity", "Move extra capacity to product-page demo", "Assign the next focused work block to product-page demo completion.", DecisionCommitmentType.SCHEDULE, DecisionCommitmentStatus.COMMITTED, "Growth", 2, "execution-product-page-demo", "plan-item-10"]
+  ] as const;
+
+  await Promise.all(
+    commitmentSeeds.map(([id, situationId, deliberationId, optionId, title, description, commitmentType, status, owner, dueInDays, linkedExecutionItemId, linkedPlanItemId]) =>
+      prisma.decisionCommitment.upsert({
+        where: { id },
+        update: { situationId, deliberationId, optionId, title, description, commitmentType, status, owner, dueDate: dateFromNow(dueInDays), linkedExecutionItemId, linkedPlanItemId },
+        create: {
+          ...tenant,
+          id,
+          situationId,
+          deliberationId,
+          optionId,
+          title,
+          description,
+          commitmentType,
+          status,
+          owner,
+          dueDate: dateFromNow(dueInDays),
+          linkedExecutionItemId,
+          linkedPlanItemId
+        }
+      })
+    )
+  );
+
+  const reviewSeeds = [
+    ["decision-review-founder-content", "decision-situation-founder-content", "deliberation-founder-content", "decision-commitment-founder-content", "Founder-led proof content produced stronger qualitative engagement and the decision was well calibrated.", 84, DecisionQuality.STRONG, "Risk-adjusted channel selection worked because VGOS considered capacity and evidence.", "Keep founder-led proof narratives high priority when qualitative trust is the goal."],
+    ["decision-review-directory-pause", "decision-situation-directory-pause", "deliberation-directory-pause", "decision-commitment-proof-assets", "Directory scaling decision is still mixed because authority outcomes lag, but proof-first sequencing reduced risk.", 63, DecisionQuality.MIXED, "VGOS correctly challenged approval timing but should monitor backlink outcomes longer.", "Use experiments or monitoring commitments when directory approval timing is uncertain."]
+  ] as const;
+
+  await Promise.all(
+    reviewSeeds.map(([id, situationId, deliberationId, commitmentId, summary, outcomeScore, decisionQuality, judgmentPattern, futureRule]) =>
+      prisma.decisionReview.upsert({
+        where: { id },
+        update: { situationId, deliberationId, commitmentId, summary, outcomeScore, decisionQuality, judgmentPattern, futureRule },
+        create: {
+          ...tenant,
+          id,
+          situationId,
+          deliberationId,
+          commitmentId,
+          summary,
+          outcomeScore,
+          decisionQuality,
+          judgmentPattern,
+          futureRule
+        }
+      })
+    )
+  );
+
+  const deliberationEvents = [
+    [EventType.DECISION_SITUATION_CREATED, "DecisionSituation", "decision-situation-product-page-capacity", "Product Page to Video capacity decision created.", EventSeverity.CRITICAL, EventStatus.PENDING],
+    [EventType.DECISION_OPTION_CREATED, "DecisionOption", "decision-option-add-demo-capacity", "Capacity decision option created.", EventSeverity.HIGH, EventStatus.PROCESSED],
+    [EventType.OPTION_EVALUATED, "OptionEvaluation", "option-evaluation-14", "Demo capacity option evaluated.", EventSeverity.HIGH, EventStatus.PROCESSED],
+    [EventType.OPTION_CHALLENGED, "DecisionOption", "decision-option-keep-balanced-capacity", "Balanced capacity option challenged.", EventSeverity.HIGH, EventStatus.PROCESSED],
+    [EventType.DELIBERATION_STARTED, "DecisionSituation", "decision-situation-product-page-capacity", "Product Page to Video capacity deliberation started.", EventSeverity.CRITICAL, EventStatus.PENDING],
+    [EventType.DELIBERATION_COMPLETED, "Deliberation", "deliberation-channel-priority", "Channel priority deliberation completed.", EventSeverity.HIGH, EventStatus.PROCESSED],
+    [EventType.DECISION_COMMITTED, "DecisionCommitment", "decision-commitment-product-hunt", "Product Hunt proof reply decision committed.", EventSeverity.HIGH, EventStatus.PENDING],
+    [EventType.DECISION_DEFERRED, "Deliberation", "deliberation-product-page-capacity", "Capacity change remains in draft until next proof work block.", EventSeverity.MEDIUM, EventStatus.PENDING],
+    [EventType.DECISION_REVIEWED, "DecisionReview", "decision-review-directory-pause", "Directory pause decision reviewed.", EventSeverity.HIGH, EventStatus.PROCESSED]
+  ] as const;
+
+  await Promise.all(
+    deliberationEvents.map(([eventType, sourceType, sourceId, title, severity, status], index) =>
+      prisma.event.upsert({
+        where: { id: `deliberation-layer-event-${String(index + 1).padStart(2, "0")}` },
+        update: { eventType, sourceType, sourceId, title, severity, status },
+        create: {
+          ...tenant,
+          id: `deliberation-layer-event-${String(index + 1).padStart(2, "0")}`,
+          eventType,
+          sourceType,
+          sourceId,
+          title,
+          description: title,
+          metadata: { capability: "deliberation-layer" },
+          severity,
+          status,
+          processedAt: status === EventStatus.PROCESSED ? new Date() : undefined
+        }
+      })
+    )
+  );
+}
+
 async function main() {
   await seedFoundation();
   const personas = await seedPersonas();
@@ -4208,6 +4446,7 @@ async function main() {
   await seedConnectedIntelligence();
   await seedIntelligenceQualityHardening();
   await seedReflectiveCognition();
+  await seedDeliberationLayer();
 }
 
 main()

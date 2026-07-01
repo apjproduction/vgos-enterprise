@@ -8,6 +8,8 @@ import type {
 } from "@/kernel/advisor/advisor-types";
 import { generateExecutiveJudgment } from "@/kernel/cognition/judgment-engine";
 import { generateTradeoffSummary } from "@/kernel/cognition/tradeoff-engine";
+import { getOpenSituations } from "@/kernel/deliberation/decision-situation-engine";
+import { deliberate } from "@/kernel/deliberation/deliberation-engine";
 import type { PlatformState } from "@/lib/vgos-data";
 
 export { buildAdvisorContext } from "@/kernel/advisor/advisor-context";
@@ -371,6 +373,92 @@ function summarizeFounderContent(context: AdvisorContext, question: string): Adv
   };
 }
 
+function explainDecisionDeliberation(context: AdvisorContext, question: string): AdvisorAnswer {
+  const lower = question.toLowerCase();
+  const workspaceSituations = context.state.decisionSituations.filter((item) => item.workspaceId === context.workspaceId);
+  const openSituations = getOpenSituations(context.state, context.workspaceId);
+  const target =
+    (lower.includes("review")
+      ? workspaceSituations.find((situation) => !context.state.decisionReviews.some((review) => review.situationId === situation.id))
+      : undefined) ??
+    workspaceSituations.find((situation) =>
+      lower.split(/\W+/).filter(Boolean).some((token) => token.length > 4 && situation.title.toLowerCase().includes(token))
+    ) ??
+    openSituations[0] ??
+    workspaceSituations[0];
+
+  if (!target) {
+    return {
+      question,
+      answer: "There is no active decision situation yet. Create a decision when VGOS needs to compare options before committing capacity.",
+      reasoning: ["The deliberation layer has no situation records for this workspace."],
+      relatedObjects: [],
+      suggestedActions: [{ label: "Open Decisions", description: "Review or create decision situations.", pageId: "decisions" }],
+      confidence: 0.58
+    };
+  }
+
+  const result = deliberate(target, context.state);
+  const scoreFor = (optionId: string) => result.evaluations.find((item) => item.optionId === optionId)?.overallScore ?? 0;
+  const sortedOptions = [...result.options].sort((a, b) => scoreFor(b.id) - scoreFor(a.id));
+  const doNothingOption = result.options.find((option) => option.optionType === "DO_NOTHING");
+  const doNothingScore = doNothingOption ? scoreFor(doNothingOption.id) : undefined;
+  const review = context.state.decisionReviews.find((item) => item.situationId === target.id);
+  const best = result.recommendedOption;
+
+  let answer = best
+    ? `VGOS recommends ${best.title.toLowerCase()} for "${target.title}" because it has the best risk-adjusted score and clearer evidence than the rejected options.`
+    : `VGOS has not found a strong option for "${target.title}" yet.`;
+
+  if (/reject|rejected/.test(lower)) {
+    answer = result.rejectedOptions.length
+      ? `VGOS rejected ${result.rejectedOptions.map((option) => option.title).join(", ")} because their scores, evidence, or risk-adjusted tradeoffs were weaker than ${best?.title ?? "the chosen option"}.`
+      : "VGOS has not rejected another option for this decision yet.";
+  } else if (/defer|wait/.test(lower)) {
+    answer = result.deliberation.status === "DEFERRED" || best?.optionType === "DEFER_DECISION"
+      ? `VGOS should defer this decision. ${result.deliberation.whatWouldChangeDecision}`
+      : `VGOS should not defer this decision right now. The current best option is ${best?.title ?? "the top scored option"}, and the decision can change if ${result.deliberation.whatWouldChangeDecision.toLowerCase()}`;
+  } else if (/do nothing|nothing/.test(lower)) {
+    answer = doNothingOption
+      ? `Doing nothing scores ${doNothingScore}/100. VGOS considered it, but it preserves ambiguity and is weaker than ${best?.title ?? "the leading option"}.`
+      : "A do-nothing option is not attached to this decision yet.";
+  } else if (/review/.test(lower)) {
+    answer = review
+      ? `This decision has been reviewed as ${review.decisionQuality.toLowerCase()}: ${review.summary}`
+      : `This decision still needs review after the commitment produces evidence. The current commitment is ${result.commitment.title}.`;
+  }
+
+  return {
+    question,
+    answer,
+    reasoning: [
+      result.deliberation.finalJudgment,
+      result.deliberation.dissentingView,
+      `Best option score: ${best ? scoreFor(best.id) : 0}/100.`
+    ],
+    decisionDeliberation: {
+      situationId: target.id,
+      situationTitle: target.title,
+      recommendedOption: best?.title,
+      rejectedOptions: result.rejectedOptions.map((option) => option.title),
+      optionScores: sortedOptions.map((option) => `${option.title}: ${scoreFor(option.id)}/100`),
+      dissentingView: result.deliberation.dissentingView,
+      whatWouldChangeDecision: result.deliberation.whatWouldChangeDecision,
+      commitmentTitle: result.commitment.title,
+      needsReview: !review
+    },
+    relatedObjects: [
+      { type: "DecisionSituation", id: target.id, title: target.title, detail: target.status },
+      ...(best ? [{ type: "DecisionOption", id: best.id, title: best.title, detail: `${scoreFor(best.id)}/100` }] : [])
+    ],
+    suggestedActions: [
+      { label: "Open Decisions", description: "Inspect options, challenges, commitment, and review state.", pageId: "decisions" },
+      { label: result.commitment.title, description: result.commitment.description, pageId: "workQueue" }
+    ],
+    confidence: result.deliberation.confidenceScore
+  };
+}
+
 export function answerExecutiveQuestion(
   question: string,
   state: PlatformState,
@@ -379,6 +467,7 @@ export function answerExecutiveQuestion(
   const context = buildAdvisorContext(state, workspaceId);
   const lower = question.toLowerCase();
 
+  if (/option|chosen|choose|reject|rejected|tradeoff|trade-off|defer|do nothing|risk-adjusted|decision.*review|needs review/.test(lower)) return addReflectiveCognition(explainDecisionDeliberation(context, question), state, workspaceId);
   if (/blocked|stuck|waiting/.test(lower)) return addReflectiveCognition(summarizeBlockedWork(state, workspaceId), state, workspaceId);
   if (/changed|yesterday|recent/.test(lower)) return addReflectiveCognition(summarizeRecentChanges(state, workspaceId), state, workspaceId);
   if (/risk|at risk|why.*mission/.test(lower)) return addReflectiveCognition(explainMissionRisk(state, workspaceId), state, workspaceId);

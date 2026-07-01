@@ -32,14 +32,14 @@ export const personaModes: PersonaMode[] = ["Founder", "Marketing", "SEO", "Prod
 export const operatorNavigationGroups: NavigationGroup[] = [
   {
     label: "Operator Mode",
-    pages: ["executiveBrief", "workQueue", "missions", "plans", "executions", "results", "advisor", "settings"]
+    pages: ["executiveBrief", "workQueue", "decisions", "missions", "plans", "executions", "results", "advisor", "settings"]
   }
 ];
 
 export const intelligenceStudioNavigationGroups: NavigationGroup[] = [
   {
     label: "Intelligence Studio",
-    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning", "assumptions", "evidence", "tradeoffs", "reflections"]
+    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning", "assumptions", "evidence", "tradeoffs", "reflections", "decisions", "deliberations", "options"]
   },
   {
     label: "Connections",
@@ -58,7 +58,7 @@ export const developerNavigationGroups: NavigationGroup[] = [
   },
   {
     label: "Command Center",
-    pages: ["missionControl", "briefing", "priorities"]
+    pages: ["missionControl", "briefing", "priorities", "decisions", "deliberations", "options"]
   },
   {
     label: "Strategy",
@@ -70,7 +70,7 @@ export const developerNavigationGroups: NavigationGroup[] = [
   },
   {
     label: "Intelligence",
-    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning", "assumptions", "evidence", "tradeoffs", "reflections", "learnings"]
+    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning", "assumptions", "evidence", "tradeoffs", "reflections", "decisions", "deliberations", "options", "learnings"]
   },
   {
     label: "Connections",
@@ -85,7 +85,7 @@ export const developerNavigationGroups: NavigationGroup[] = [
 export const navigationGroups = operatorNavigationGroups;
 
 const personaShortcutMap: Record<PersonaMode, PageId[]> = {
-  Founder: ["executiveBrief", "missions", "workQueue", "results", "advisor", "settings"],
+  Founder: ["executiveBrief", "missions", "workQueue", "decisions", "results", "advisor", "settings"],
   Marketing: ["contentEngine", "approvals", "results", "recommendedActions", "workQueue", "advisor"],
   SEO: ["searchEngine", "opportunityQueue", "contentEngine", "authorityEngine", "results", "advisor"],
   Product: ["productEngine", "blockers", "executions", "results", "signals", "advisor"],
@@ -96,19 +96,19 @@ const personaNavigationMap: Partial<Record<PersonaMode, NavigationGroup[]>> = {
   Marketing: [
     {
       label: "Marketing Focus",
-      pages: ["executiveBrief", "workQueue", "contentEngine", "approvals", "results", "recommendedActions", "advisor", "settings"]
+      pages: ["executiveBrief", "workQueue", "decisions", "contentEngine", "approvals", "results", "recommendedActions", "advisor", "settings"]
     }
   ],
   SEO: [
     {
       label: "SEO Focus",
-      pages: ["executiveBrief", "workQueue", "searchEngine", "opportunityQueue", "contentEngine", "authorityEngine", "results", "advisor"]
+      pages: ["executiveBrief", "workQueue", "decisions", "searchEngine", "opportunityQueue", "contentEngine", "authorityEngine", "results", "advisor"]
     }
   ],
   Product: [
     {
       label: "Product Focus",
-      pages: ["executiveBrief", "workQueue", "productEngine", "blockers", "executions", "signals", "results", "advisor"]
+      pages: ["executiveBrief", "workQueue", "decisions", "productEngine", "blockers", "executions", "signals", "results", "advisor"]
     }
   ]
 };
@@ -466,6 +466,15 @@ export function getPageIntro(page: PageDefinition) {
     },
     priorities: {
       whyItMatters: "VGOS ranks mission, execution, and recommendation signals so the operator can focus capacity on the highest-impact work."
+    },
+    decisions: {
+      whyItMatters: "VGOS compares options, challenges assumptions, and commits deliberately before spending scarce execution capacity."
+    },
+    deliberations: {
+      whyItMatters: "Deliberations preserve the final judgment, dissenting view, confidence, and what would change the decision."
+    },
+    options: {
+      whyItMatters: "Decision options make tradeoffs inspectable before VGOS chooses, rejects, defers, or commits."
     },
     systemHealth: {
       whyItMatters: "VGOS separates diagnostics from daily command work so connector health, errors, quality risk, and readiness gaps stay visible."

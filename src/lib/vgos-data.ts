@@ -27,6 +27,21 @@ import type {
   Reflection,
   TradeoffAnalysis
 } from "@/kernel/cognition/cognition-types";
+import type {
+  DecisionCommitment,
+  DecisionCommitmentStatus,
+  DecisionCommitmentType,
+  DecisionOption,
+  DecisionOptionType,
+  DecisionQuality,
+  DecisionReview,
+  DecisionSituation,
+  DecisionSituationStatus,
+  DecisionSituationType,
+  Deliberation,
+  DeliberationStatus,
+  OptionEvaluation
+} from "@/kernel/deliberation/deliberation-types";
 export type Status =
   | "NOT_STARTED"
   | "RESEARCHING"
@@ -161,7 +176,16 @@ export type EventType =
   | "TRADEOFF_ANALYZED"
   | "JUDGMENT_GENERATED"
   | "REFLECTION_CREATED"
-  | "CONFIDENCE_RECALIBRATED";
+  | "CONFIDENCE_RECALIBRATED"
+  | "DECISION_SITUATION_CREATED"
+  | "DECISION_OPTION_CREATED"
+  | "OPTION_EVALUATED"
+  | "OPTION_CHALLENGED"
+  | "DELIBERATION_STARTED"
+  | "DELIBERATION_COMPLETED"
+  | "DECISION_COMMITTED"
+  | "DECISION_DEFERRED"
+  | "DECISION_REVIEWED";
 
 export type EventSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type EventStatus = "PENDING" | "PROCESSED" | "DISMISSED";
@@ -1430,6 +1454,12 @@ export type PlatformState = {
   evidenceAssessments: EvidenceAssessment[];
   tradeoffAnalyses: TradeoffAnalysis[];
   reflections: Reflection[];
+  decisionSituations: DecisionSituation[];
+  decisionOptions: DecisionOption[];
+  optionEvaluations: OptionEvaluation[];
+  deliberations: Deliberation[];
+  decisionCommitments: DecisionCommitment[];
+  decisionReviews: DecisionReview[];
   connectors: Connector[];
   rawSignals: RawSignal[];
   normalizedSignals: NormalizedSignal[];
@@ -1459,6 +1489,8 @@ export type PageId =
   | "agents"
   | "reasoning"
   | "decisions"
+  | "deliberations"
+  | "options"
   | "knowledge"
   | "workflows"
   | "plans"
@@ -1542,6 +1574,12 @@ export type CollectionKey =
   | "evidenceAssessments"
   | "tradeoffAnalyses"
   | "reflections"
+  | "decisionSituations"
+  | "decisionOptions"
+  | "optionEvaluations"
+  | "deliberations"
+  | "decisionCommitments"
+  | "decisionReviews"
   | "connectors"
   | "rawSignals"
   | "normalizedSignals"
@@ -1714,8 +1752,23 @@ export const pageDefinitions: PageDefinition[] = [
   {
     id: "decisions",
     label: "Decisions",
-    description: "Ranked daily and weekly priorities selected by the decision engine.",
-    icon: Sparkles
+    description: "Open decision situations, compared options, final judgments, and commitments before VGOS spends capacity.",
+    icon: Sparkles,
+    collection: "decisionSituations"
+  },
+  {
+    id: "deliberations",
+    label: "Deliberations",
+    description: "Completed and deferred deliberations with final judgment, dissenting view, confidence, and commitment.",
+    icon: CircleHelp,
+    collection: "deliberations"
+  },
+  {
+    id: "options",
+    label: "Options",
+    description: "Decision options and their risk-adjusted evaluations before VGOS commits.",
+    icon: ClipboardList,
+    collection: "decisionOptions"
   },
   {
     id: "knowledge",
@@ -3716,6 +3769,145 @@ const reflections: Reflection[] = ([
   ...scoped(index)
 }));
 
+const decisionSituations: DecisionSituation[] = ([
+  ["decision-situation-blog-005-demo", "Should BLOG-005 be published before the product-page demo?", "VGOS needs to decide whether content momentum is worth the trust risk of publishing before proof assets are ready.", "CONTENT_DECISION", "DECIDED", "CRITICAL", "ExecutionItem", "execution-blog-005-outline", "mission-product-page-to-video", "objective-demo-assets"],
+  ["decision-situation-founder-content", "Should VidMaker increase founder-led content this week?", "Founder posts are outperforming company posts, but founder review capacity is limited.", "CHANNEL_DECISION", "DECIDED", "HIGH", "Learning", "learning-05", "mission-founder-authority", "objective-own-vpi"],
+  ["decision-situation-directory-pause", "Should directory submissions be paused until proof assets are ready?", "Directory approvals are lagging and proof assets may improve listing quality and trust.", "RISK_DECISION", "DELIBERATING", "HIGH", "Learning", "learning-03", "mission-product-hunt-momentum", "objective-authority"],
+  ["decision-situation-channel-priority", "Which channel deserves priority: LinkedIn, Product Hunt, or Reddit?", "VGOS should choose a focus channel for this week instead of splitting capacity across every launch surface.", "CHANNEL_DECISION", "DECIDED", "HIGH", "Metric", "metric-linkedin-impressions", "mission-product-hunt-momentum", "objective-product-hunt"],
+  ["decision-situation-product-page-capacity", "Should the Product Page to Video mission receive more capacity?", "The Product Page to Video mission is strategically critical but at risk until demo assets and proof replies move.", "RESOURCE_DECISION", "OPEN", "CRITICAL", "Mission", "mission-product-page-to-video", "mission-product-page-to-video", "objective-demo-assets"]
+] as const).map(([id, title, description, situationType, status, urgency, sourceType, sourceId, missionId, objectiveId], index) => ({
+  id,
+  title,
+  description,
+  situationType: situationType as DecisionSituationType,
+  status: status as DecisionSituationStatus,
+  urgency: urgency as Priority,
+  sourceType,
+  sourceId,
+  missionId,
+  objectiveId,
+  ...scoped(index)
+}));
+
+const decisionOptionSeedRows = [
+  ["decision-option-blog-005-now", "decision-situation-blog-005-demo", "Publish BLOG-005 today.", "Ship the cleanup comparison article now and add proof once demo assets are ready.", "CREATE_CONTENT", 78, 42, "HIGH", 0.72, ["Captures search momentum", "Keeps content cadence moving"], ["Proof is unfinished", "Conversion trust may be weaker"], ["Search demand remains active", "Proof can be added soon"], ["BLOG-005 outline supports the authority cluster"]],
+  ["decision-option-demo-first", "decision-situation-blog-005-demo", "Finish the product-page demo first.", "Complete the source-to-output proof asset before publishing BLOG-005.", "CREATE_DEMO", 88, 72, "MEDIUM", 0.84, ["Improves BOFU trust", "Strengthens content evidence"], ["Delays content momentum", "Uses scarce growth capacity"], ["Proof assets increase conversion trust"], ["Demo proof needed before BOFU push", "Product Hunt comments ask for proof"]],
+  ["decision-option-founder-short-post", "decision-situation-blog-005-demo", "Publish a shorter founder post instead.", "Use founder voice to keep momentum while the demo and article mature.", "CREATE_CONTENT", 72, 34, "MEDIUM", 0.78, ["Lower effort", "Founder voice builds trust"], ["Does not replace demo", "Needs founder review"], ["Founder-led posts outperform company posts"], ["Founder posts create better comments"]],
+  ["decision-option-defer-blog-005", "decision-situation-blog-005-demo", "Defer until Search Console data is available.", "Wait for fresher search evidence before committing to publication order.", "DEFER_DECISION", 42, 12, "LOW", 0.62, ["Avoids premature content", "Protects capacity"], ["May miss momentum", "Decision remains unresolved"], ["Search data will clarify demand"], ["Evidence quality is incomplete"]],
+  ["decision-option-founder-increase", "decision-situation-founder-content", "Increase founder-led proof narratives.", "Allocate this week's content review to founder-led proof and category posts.", "CHANGE_STRATEGY", 84, 52, "MEDIUM", 0.82, ["Uses strongest qualitative channel", "Supports category ownership"], ["Founder capacity is scarce"], ["Founder voice continues to outperform"], ["Founder post engagement learning"]],
+  ["decision-option-company-cadence", "decision-situation-founder-content", "Keep company content cadence unchanged.", "Keep company updates moving while founder capacity stays protected.", "CREATE_CONTENT", 58, 34, "LOW", 0.64, ["Preserves cadence", "Low owner dependency"], ["Lower qualitative trust", "May underuse founder signal"], ["Company cadence matters this week"], ["Company LinkedIn signal exists"]],
+  ["decision-option-founder-experiment", "decision-situation-founder-content", "Run founder vs company post experiment.", "Publish one founder proof post and one company proof post, then compare response quality.", "RUN_EXPERIMENT", 74, 48, "LOW", 0.76, ["Improves evidence", "Limits downside"], ["Slower than direct increase"], ["Experiment can produce quick signal"], ["Channel learning is promising but limited"]],
+  ["decision-option-pause-directories", "decision-situation-directory-pause", "Pause broad directory submissions.", "Stop low-confidence submissions until proof assets and approval follow-up are ready.", "PAUSE_WORK", 68, 18, "LOW", 0.78, ["Protects capacity", "Avoids weak listings"], ["Slows backlink coverage"], ["Proof assets improve listing quality"], ["Directory approvals lag submissions"]],
+  ["decision-option-submit-fewer-directories", "decision-situation-directory-pause", "Submit only high-authority directories.", "Continue with a narrower directory list while proof assets are prepared.", "SUBMIT_DIRECTORY", 72, 44, "MEDIUM", 0.7, ["Keeps authority motion alive", "Limits low-quality work"], ["Still depends on approval timing"], ["Selected directories are worth the delay"], ["Copy bank improved readiness"]],
+  ["decision-option-proof-assets-first", "decision-situation-directory-pause", "Improve proof assets before more submissions.", "Shift authority capacity into proof assets that can improve future directory conversion.", "CREATE_DEMO", 82, 68, "MEDIUM", 0.8, ["Improves trust", "Supports multiple channels"], ["Delays directory volume"], ["Proof is the current bottleneck"], ["Proof-first BOFU reflection"]],
+  ["decision-option-linkedin-priority", "decision-situation-channel-priority", "Prioritize LinkedIn this week.", "Use LinkedIn founder and carousel formats while engagement evidence is strongest.", "CHANGE_STRATEGY", 82, 46, "MEDIUM", 0.82, ["Strongest measured engagement", "Founder content fits"], ["May underuse Product Hunt momentum"], ["LinkedIn engagement remains durable"], ["LinkedIn carousel engagement improved"]],
+  ["decision-option-product-hunt-priority", "decision-situation-channel-priority", "Prioritize Product Hunt follow-up.", "Reply to active proof-demand comments before launch attention decays.", "REPLY_COMMUNITY", 86, 52, "HIGH", 0.84, ["Captures live demand", "Directly addresses proof requests"], ["Needs demo link", "Timing window is narrow"], ["Proof reply converts attention"], ["Product Hunt proof-demand reflection"]],
+  ["decision-option-reddit-priority", "decision-situation-channel-priority", "Prioritize Reddit objections.", "Use Reddit cleanup objections to sharpen product proof and BLOG-005 angles.", "REPLY_COMMUNITY", 62, 44, "HIGH", 0.6, ["Sharpens objections", "Supports BLOG-005"], ["Lower owned-channel control", "Risk of low conversion"], ["Reddit objections map to content"], ["Manual cleanup objections captured"]],
+  ["decision-option-add-demo-capacity", "decision-situation-product-page-capacity", "Move more capacity to product-page demo.", "Prioritize demo execution over lower-confidence distribution this week.", "START_EXECUTION", 88, 74, "MEDIUM", 0.84, ["Unlocks replies and BOFU content", "Reduces mission risk"], ["Crowds out smaller work"], ["Demo is the mission bottleneck"], ["Product Page to Video is commercial intent"]],
+  ["decision-option-keep-balanced-capacity", "decision-situation-product-page-capacity", "Keep capacity balanced across channels.", "Keep demo, content, founder, and directory work moving in parallel.", "CUSTOM", 66, 58, "HIGH", 0.62, ["Avoids single-lane dependency", "Keeps all surfaces warm"], ["May not unblock the mission fast enough"], ["Parallel progress is enough"], ["Current work queue has multiple high priorities"]],
+  ["decision-option-defer-capacity-change", "decision-situation-product-page-capacity", "Defer capacity change until next measurement.", "Wait for a clearer metric movement before changing mission allocation.", "DEFER_DECISION", 44, 10, "LOW", 0.58, ["Avoids overreacting", "Protects current plan"], ["Mission risk can worsen"], ["Measurement will arrive soon"], ["Executive Brief needs live data"]]
+] as const;
+
+const decisionOptions: DecisionOption[] = decisionOptionSeedRows.map(([id, situationId, title, description, optionType, expectedImpact, estimatedEffort, riskLevel, confidenceScore, pros, cons, assumptionsList, evidenceList], index) => ({
+  id,
+  situationId,
+  title,
+  description,
+  optionType: optionType as DecisionOptionType,
+  expectedImpact,
+  estimatedEffort,
+  riskLevel: riskLevel as Priority,
+  confidenceScore,
+  pros: [...pros],
+  cons: [...cons],
+  assumptions: [...assumptionsList],
+  evidence: [...evidenceList],
+  ...scoped(index)
+}));
+
+const optionEvaluations: OptionEvaluation[] = decisionOptions.map((option, index) => {
+  const riskPenalty = { LOW: 16, MEDIUM: 34, HIGH: 52, CRITICAL: 74 }[option.riskLevel] ?? 40;
+  const impactScore = Math.round(option.expectedImpact * 0.76 + option.confidenceScore * 24);
+  const effortScore = Math.max(0, 100 - option.estimatedEffort);
+  const riskScore = Math.max(0, 100 - riskPenalty);
+  const evidenceScore = Math.min(96, 58 + option.evidence.length * 12 + Math.round(option.confidenceScore * 12));
+  const alignmentScore = Math.min(95, option.situationId.includes("product-page") || option.title.toLowerCase().includes("proof") ? 88 : 72 + (index % 4) * 4);
+  const urgencyScore = option.situationId.includes("blog-005") || option.situationId.includes("product-page") ? 88 : 72;
+  const overallScore = Math.round(impactScore * 0.27 + effortScore * 0.06 + riskScore * 0.12 + evidenceScore * 0.2 + alignmentScore * 0.2 + urgencyScore * 0.15);
+  return {
+    id: `option-evaluation-${String(index + 1).padStart(2, "0")}`,
+    optionId: option.id,
+    situationId: option.situationId,
+    impactScore,
+    effortScore,
+    riskScore,
+    evidenceScore,
+    alignmentScore,
+    urgencyScore,
+    overallScore,
+    rationale: `${option.title} scores ${overallScore}/100 after comparing impact, effort, risk, evidence, alignment, and urgency.`,
+    ...scoped(index)
+  };
+});
+
+const deliberations: Deliberation[] = ([
+  ["deliberation-blog-005-demo", "decision-situation-blog-005-demo", "VGOS compared publishing BLOG-005 now, finishing the demo first, using a founder post, and deferring.", "decision-option-demo-first", ["decision-option-blog-005-now", "decision-option-founder-short-post", "decision-option-defer-blog-005"], "VGOS recommends finishing the product-page demo first, then publishing BLOG-005 with proof attached.", 0.84, "The dissenting view is that BLOG-005 could capture search momentum today, but proof risk is more important.", "A validated measurement showing BLOG-005 can convert without demo proof would change this decision.", "COMPLETED"],
+  ["deliberation-founder-content", "decision-situation-founder-content", "VGOS compared increasing founder-led content, keeping company cadence, and running an experiment.", "decision-option-founder-increase", ["decision-option-company-cadence"], "VGOS recommends increasing founder-led proof narratives while protecting founder review capacity.", 0.81, "The dissenting view is that founder capacity may become the bottleneck.", "If founder review is unavailable this week, run the founder vs company experiment instead.", "COMPLETED"],
+  ["deliberation-directory-pause", "decision-situation-directory-pause", "VGOS compared pausing broad submissions, narrowing to high-authority directories, and proof-first work.", "decision-option-proof-assets-first", ["decision-option-pause-directories"], "VGOS recommends improving proof assets before scaling more directory submissions.", 0.78, "The dissenting view is that pausing submissions may slow backlink coverage.", "If approvals improve or proof assets are already accepted by directories, resume submissions.", "COMPLETED"],
+  ["deliberation-channel-priority", "decision-situation-channel-priority", "VGOS compared LinkedIn, Product Hunt, and Reddit priority.", "decision-option-product-hunt-priority", ["decision-option-linkedin-priority", "decision-option-reddit-priority"], "VGOS recommends Product Hunt follow-up first, then LinkedIn reuse once proof is visible.", 0.82, "The dissenting view is that LinkedIn has stronger measured engagement.", "If the demo link is not ready, prioritize LinkedIn founder content instead.", "COMPLETED"],
+  ["deliberation-product-page-capacity", "decision-situation-product-page-capacity", "VGOS compared extra demo capacity, balanced capacity, and deferral.", "decision-option-add-demo-capacity", ["decision-option-keep-balanced-capacity", "decision-option-defer-capacity-change"], "VGOS recommends moving more capacity to the product-page demo because it unlocks several downstream decisions.", 0.8, "The dissenting view is that balanced capacity protects channel momentum.", "If demo execution remains blocked after one focused work block, switch to a narrower experiment.", "DRAFT"]
+] as const).map(([id, situationId, summary, recommendedOptionId, rejectedOptionIds, finalJudgment, confidenceScore, dissentingView, whatWouldChangeDecision, status], index) => ({
+  id,
+  situationId,
+  summary,
+  recommendedOptionId,
+  rejectedOptionIds: [...rejectedOptionIds],
+  finalJudgment,
+  confidenceScore,
+  dissentingView,
+  whatWouldChangeDecision,
+  status: status as DeliberationStatus,
+  ...scoped(index)
+}));
+
+const decisionCommitments: DecisionCommitment[] = ([
+  ["decision-commitment-demo-first", "decision-situation-blog-005-demo", "deliberation-blog-005-demo", "decision-option-demo-first", "Finish the product-page demo before BLOG-005", "Commit capacity to demo proof, then publish BLOG-005 with source-to-output evidence.", "EXECUTE_NOW", "IN_PROGRESS", "Growth", 2, "execution-product-page-demo", "plan-item-10"],
+  ["decision-commitment-founder-content", "decision-situation-founder-content", "deliberation-founder-content", "decision-option-founder-increase", "Reserve founder review for proof narrative", "Use founder review capacity for one proof-led narrative this week.", "SCHEDULE", "COMMITTED", "Tom Promise", 3, "execution-founder-vpi-post", "plan-item-02"],
+  ["decision-commitment-proof-assets", "decision-situation-directory-pause", "deliberation-directory-pause", "decision-option-proof-assets-first", "Improve proof assets before directory scale", "Shift authority sequencing toward proof asset readiness before broad submissions.", "EXECUTE_NOW", "COMMITTED", "Growth", 4, "execution-4k-proof-asset", "plan-item-10"],
+  ["decision-commitment-product-hunt", "decision-situation-channel-priority", "deliberation-channel-priority", "decision-option-product-hunt-priority", "Reply to Product Hunt with proof", "Use the best demo proof in Product Hunt follow-up before launch attention decays.", "EXECUTE_NOW", "COMMITTED", "Community Intelligence", 1, "execution-product-hunt-reply", "plan-item-15"],
+  ["decision-commitment-demo-capacity", "decision-situation-product-page-capacity", "deliberation-product-page-capacity", "decision-option-add-demo-capacity", "Move extra capacity to product-page demo", "Assign the next focused work block to product-page demo completion.", "SCHEDULE", "COMMITTED", "Growth", 2, "execution-product-page-demo", "plan-item-10"]
+] as const).map(([id, situationId, deliberationId, optionId, title, description, commitmentType, status, owner, dueInDays, linkedExecutionItemId, linkedPlanItemId], index) => ({
+  id,
+  situationId,
+  deliberationId,
+  optionId,
+  title,
+  description,
+  commitmentType: commitmentType as DecisionCommitmentType,
+  status: status as DecisionCommitmentStatus,
+  owner,
+  dueDate: daysFromNow(dueInDays),
+  linkedExecutionItemId,
+  linkedPlanItemId,
+  ...scoped(index)
+}));
+
+const decisionReviews: DecisionReview[] = ([
+  ["decision-review-founder-content", "decision-situation-founder-content", "deliberation-founder-content", "decision-commitment-founder-content", "Founder-led proof content produced stronger qualitative engagement and the decision was well calibrated.", 84, "STRONG", "Risk-adjusted channel selection worked because VGOS considered capacity and evidence.", "Keep founder-led proof narratives high priority when qualitative trust is the goal."],
+  ["decision-review-directory-pause", "decision-situation-directory-pause", "deliberation-directory-pause", "decision-commitment-proof-assets", "Directory scaling decision is still mixed because authority outcomes lag, but proof-first sequencing reduced risk.", 63, "MIXED", "VGOS correctly challenged approval timing but should monitor backlink outcomes longer.", "Use experiments or monitoring commitments when directory approval timing is uncertain."]
+] as const).map(([id, situationId, deliberationId, commitmentId, summary, outcomeScore, decisionQuality, judgmentPattern, futureRule], index) => ({
+  id,
+  situationId,
+  deliberationId,
+  commitmentId,
+  summary,
+  outcomeScore,
+  decisionQuality: decisionQuality as DecisionQuality,
+  judgmentPattern,
+  futureRule,
+  ...scoped(index)
+}));
+
 const auditLogs: AuditLog[] = [
   ["MISSION_CREATED", "Mission", "mission-product-page-to-video-proof", "Growth Lead"],
   ["PLAN_GENERATED", "Plan", "plan-product-page-demo-sprint", "Planning Engine"],
@@ -4495,7 +4687,129 @@ const cognitionEvents: Event[] = [
   }
 ];
 
-const events: Event[] = [...kernelEvents, ...growthEvents, ...missionEvents, ...connectorEvents, ...cognitionEvents];
+const deliberationEvents: Event[] = [
+  ...decisionSituations.map((situation, index) => ({
+    id: `${situation.id}-event`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: "DECISION_SITUATION_CREATED" as EventType,
+    sourceType: "DecisionSituation",
+    sourceId: situation.id,
+    title: situation.title,
+    description: situation.description,
+    metadata: { generatedBy: "deliberation-layer-seed", situationType: situation.situationType, urgency: situation.urgency },
+    severity: situation.urgency as EventSeverity,
+    status: situation.status === "OPEN" || situation.status === "DELIBERATING" ? "PENDING" as EventStatus : "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index),
+    processedAt: situation.status === "OPEN" || situation.status === "DELIBERATING" ? undefined : daysAgo(index)
+  })),
+  ...decisionOptions.slice(0, 8).map((option, index) => ({
+    id: `${option.id}-event`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: "DECISION_OPTION_CREATED" as EventType,
+    sourceType: "DecisionOption",
+    sourceId: option.id,
+    title: option.title,
+    description: option.description,
+    metadata: { generatedBy: "deliberation-layer-seed", situationId: option.situationId, optionType: option.optionType },
+    severity: option.riskLevel as EventSeverity,
+    status: "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index + 1),
+    processedAt: daysAgo(index + 1)
+  })),
+  ...optionEvaluations.slice(0, 8).map((evaluation, index) => ({
+    id: `${evaluation.id}-event`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: "OPTION_EVALUATED" as EventType,
+    sourceType: "OptionEvaluation",
+    sourceId: evaluation.id,
+    title: `Option evaluated: ${evaluation.overallScore}/100`,
+    description: evaluation.rationale,
+    metadata: { generatedBy: "deliberation-layer-seed", optionId: evaluation.optionId, situationId: evaluation.situationId },
+    severity: evaluation.overallScore >= 78 ? "HIGH" as EventSeverity : "MEDIUM" as EventSeverity,
+    status: "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index + 1),
+    processedAt: daysAgo(index + 1)
+  })),
+  ...deliberations.map((deliberation, index) => ({
+    id: `${deliberation.id}-event`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: deliberation.status === "DEFERRED" ? "DECISION_DEFERRED" as EventType : "DELIBERATION_COMPLETED" as EventType,
+    sourceType: "Deliberation",
+    sourceId: deliberation.id,
+    title: deliberation.summary,
+    description: deliberation.finalJudgment,
+    metadata: { generatedBy: "deliberation-layer-seed", recommendedOptionId: deliberation.recommendedOptionId, confidenceScore: deliberation.confidenceScore },
+    severity: deliberation.confidenceScore >= 0.8 ? "HIGH" as EventSeverity : "MEDIUM" as EventSeverity,
+    status: deliberation.status === "DRAFT" || deliberation.status === "NEEDS_EVIDENCE" ? "PENDING" as EventStatus : "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index + 1),
+    processedAt: deliberation.status === "DRAFT" || deliberation.status === "NEEDS_EVIDENCE" ? undefined : daysAgo(index + 1)
+  })),
+  ...decisionCommitments.map((commitment, index) => ({
+    id: `${commitment.id}-event`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: "DECISION_COMMITTED" as EventType,
+    sourceType: "DecisionCommitment",
+    sourceId: commitment.id,
+    title: commitment.title,
+    description: commitment.description,
+    metadata: { generatedBy: "deliberation-layer-seed", situationId: commitment.situationId, optionId: commitment.optionId },
+    severity: commitment.commitmentType === "EXECUTE_NOW" ? "HIGH" as EventSeverity : "MEDIUM" as EventSeverity,
+    status: commitment.status === "COMPLETED" ? "PROCESSED" as EventStatus : "PENDING" as EventStatus,
+    createdAt: daysAgo(index),
+    processedAt: commitment.status === "COMPLETED" ? daysAgo(index) : undefined
+  })),
+  ...decisionReviews.map((review, index) => ({
+    id: `${review.id}-event`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: "DECISION_REVIEWED" as EventType,
+    sourceType: "DecisionReview",
+    sourceId: review.id,
+    title: `Decision reviewed: ${formatEnum(review.decisionQuality)}`,
+    description: review.summary,
+    metadata: { generatedBy: "deliberation-layer-seed", outcomeScore: review.outcomeScore, decisionQuality: review.decisionQuality },
+    severity: review.decisionQuality === "MIXED" || review.decisionQuality === "WEAK" ? "HIGH" as EventSeverity : "MEDIUM" as EventSeverity,
+    status: "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index + 1),
+    processedAt: daysAgo(index + 1)
+  })),
+  {
+    id: "event-option-challenged-product-page-capacity",
+    organizationId: orgId,
+    workspaceId,
+    eventType: "OPTION_CHALLENGED",
+    sourceType: "DecisionOption",
+    sourceId: "decision-option-keep-balanced-capacity",
+    title: "Balanced capacity option challenged",
+    description: "VGOS challenged the balanced-capacity option because it may not unblock the Product Page to Video mission fast enough.",
+    metadata: { generatedBy: "deliberation-layer-seed", situationId: "decision-situation-product-page-capacity" },
+    severity: "HIGH",
+    status: "PROCESSED",
+    createdAt: daysAgo(0),
+    processedAt: daysAgo(0)
+  },
+  {
+    id: "event-deliberation-started-product-page-capacity",
+    organizationId: orgId,
+    workspaceId,
+    eventType: "DELIBERATION_STARTED",
+    sourceType: "DecisionSituation",
+    sourceId: "decision-situation-product-page-capacity",
+    title: "Product Page to Video capacity deliberation started",
+    description: "VGOS started a deliberation before changing mission capacity.",
+    metadata: { generatedBy: "deliberation-layer-seed" },
+    severity: "CRITICAL",
+    status: "PENDING",
+    createdAt: daysAgo(0)
+  }
+];
+
+const events: Event[] = [...kernelEvents, ...growthEvents, ...missionEvents, ...connectorEvents, ...cognitionEvents, ...deliberationEvents];
 
 const briefingSections: BriefingSection[] = [
   {
@@ -4746,6 +5060,12 @@ export const initialPlatformState: PlatformState = {
   evidenceAssessments,
   tradeoffAnalyses,
   reflections,
+  decisionSituations,
+  decisionOptions,
+  optionEvaluations,
+  deliberations,
+  decisionCommitments,
+  decisionReviews,
   connectors,
   rawSignals,
   normalizedSignals,
@@ -5088,6 +5408,101 @@ export function createDefaultRecord(collection: CollectionKey, activeWorkspaceId
       newLearning: "",
       futureAdjustment: "",
       confidenceScore: 0.65
+    };
+  }
+
+  if (collection === "decisionSituations") {
+    return {
+      ...base,
+      title: "New decision situation",
+      description: "",
+      situationType: "PRIORITY_DECISION",
+      status: "OPEN",
+      urgency: "HIGH",
+      sourceType: "Manual",
+      sourceId: "",
+      missionId: "",
+      objectiveId: ""
+    };
+  }
+
+  if (collection === "decisionOptions") {
+    return {
+      ...base,
+      situationId: "",
+      title: "New decision option",
+      description: "",
+      optionType: "CUSTOM",
+      expectedImpact: 70,
+      estimatedEffort: 40,
+      riskLevel: "MEDIUM",
+      confidenceScore: 0.65,
+      pros: [],
+      cons: [],
+      assumptions: [],
+      evidence: []
+    };
+  }
+
+  if (collection === "optionEvaluations") {
+    return {
+      ...base,
+      optionId: "",
+      situationId: "",
+      impactScore: 70,
+      effortScore: 60,
+      riskScore: 60,
+      evidenceScore: 60,
+      alignmentScore: 70,
+      urgencyScore: 70,
+      overallScore: 68,
+      rationale: ""
+    };
+  }
+
+  if (collection === "deliberations") {
+    return {
+      ...base,
+      situationId: "",
+      summary: "",
+      recommendedOptionId: "",
+      rejectedOptionIds: [],
+      finalJudgment: "",
+      confidenceScore: 0.65,
+      dissentingView: "",
+      whatWouldChangeDecision: "",
+      status: "DRAFT"
+    };
+  }
+
+  if (collection === "decisionCommitments") {
+    return {
+      ...base,
+      situationId: "",
+      deliberationId: "",
+      optionId: "",
+      title: "New decision commitment",
+      description: "",
+      commitmentType: "EXECUTE_NOW",
+      status: "COMMITTED",
+      owner: "Growth",
+      dueDate: "",
+      linkedExecutionItemId: "",
+      linkedPlanItemId: ""
+    };
+  }
+
+  if (collection === "decisionReviews") {
+    return {
+      ...base,
+      situationId: "",
+      deliberationId: "",
+      commitmentId: "",
+      summary: "",
+      outcomeScore: 70,
+      decisionQuality: "SOUND",
+      judgmentPattern: "",
+      futureRule: ""
     };
   }
 

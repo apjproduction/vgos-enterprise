@@ -1,0 +1,50 @@
+id: deliberation-layer
+name: Deliberation Layer
+version: 1.0.0
+status: ACTIVE
+description: >-
+  Adds explicit option-aware decision-making to VGOS so the system can identify
+  decision situations, generate alternatives, score tradeoffs, challenge each
+  option, make a final judgment, commit deliberately, and review the outcome.
+dependencies:
+  - Reflective Cognition & Executive Wisdom
+  - Executive Intelligence Experience
+  - Mission Engine
+  - Execution Engine
+  - Measurement & Learning Engine
+inputs:
+  - Decision Situations
+  - Recommendations
+  - Missions
+  - Execution Items
+  - Evidence Assessments
+  - Reflections
+outputs:
+  - Decision Options
+  - Option Evaluations
+  - Option Challenges
+  - Deliberations
+  - Decision Commitments
+  - Decision Reviews
+runtime:
+  logic_path: src/kernel/deliberation
+  pages:
+    - /decisions
+    - /deliberations
+    - /options
+events:
+  - DECISION_SITUATION_CREATED
+  - DECISION_OPTION_CREATED
+  - OPTION_EVALUATED
+  - OPTION_CHALLENGED
+  - DELIBERATION_STARTED
+  - DELIBERATION_COMPLETED
+  - DECISION_COMMITTED
+  - DECISION_DEFERRED
+  - DECISION_REVIEWED
+quality_gates:
+  - risk_adjusted_option_score
+  - dissenting_view_present
+  - what_would_change_decision_present
+  - commitment_linked_to_decision
+  - review_created_after_outcome
