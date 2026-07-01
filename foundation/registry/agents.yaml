@@ -1,0 +1,86 @@
+agents:
+  - id: agent-executive-advisor
+    name: Executive Advisor Agent
+    domain: Experience
+    status: planned
+    purpose: Answer executive questions, explain recommendations, summarize missions, and help the founder decide what to do next.
+    consumes:
+      - Foundation Registry
+      - Intelligence Kernel
+      - Missions
+      - Work Queue
+      - Measurements
+    produces:
+      - Advisor Answers
+      - Suggested Actions
+      - Reasoning Summaries
+
+  - id: agent-research
+    name: Research Agent
+    domain: Intelligence
+    status: planned
+    purpose: Detect market, customer, competitor, and search opportunities from connected intelligence sources.
+    consumes:
+      - Signals
+      - Knowledge Objects
+      - External Sources
+    produces:
+      - Opportunities
+      - Questions
+      - Research Briefs
+
+  - id: agent-seo
+    name: SEO Agent
+    domain: Intelligence
+    status: planned
+    purpose: Monitor search signals, content gaps, backlinks, internal links, AEO visibility, and GEO opportunities.
+    consumes:
+      - Search Console Signals
+      - Content Assets
+      - Backlink Signals
+    produces:
+      - SEO Recommendations
+      - Content Plans
+      - Authority Opportunities
+
+  - id: agent-content
+    name: Content Agent
+    domain: Experience
+    status: planned
+    purpose: Convert missions, recommendations, and opportunities into content plans, briefs, posts, scripts, and publishing packages.
+    consumes:
+      - Recommendations
+      - Missions
+      - Knowledge Objects
+    produces:
+      - Content Briefs
+      - Publishing Plans
+      - Work Queue Items
+
+  - id: agent-product
+    name: Product Agent
+    domain: Products
+    status: planned
+    purpose: Analyze product feedback, feature requests, blockers, launch data, and roadmap signals.
+    consumes:
+      - Product Signals
+      - GitHub Issues
+      - Customer Feedback
+    produces:
+      - Feature Priorities
+      - Product Learnings
+      - Roadmap Suggestions
+
+  - id: agent-measurement
+    name: Measurement Agent
+    domain: Intelligence
+    status: planned
+    purpose: Connect completed execution to metrics, outcomes, attribution, and learning.
+    consumes:
+      - Execution Results
+      - Metrics
+      - Measurements
+    produces:
+      - Learnings
+      - Attributions
+      - Strategy Adjustments
