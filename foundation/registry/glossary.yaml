@@ -1,0 +1,153 @@
+terms:
+  - id: term-advisor
+    name: Advisor
+    category: Executive Experience
+    definition: Conversational interface that answers executive, operational, product, and architecture questions using APJ Foundation, the Intelligence Kernel, and runtime context.
+    related:
+      - Executive Brief
+      - Recommendation
+      - Foundation
+      - Knowledge
+
+  - id: term-executive-brief
+    name: Executive Brief
+    category: Executive Experience
+    definition: The primary daily operating view that summarizes what changed, what matters, what is blocked, and what should be done next.
+    related:
+      - Advisor
+      - Mission
+      - Work Queue
+      - Recommendation
+
+  - id: term-foundation
+    name: Foundation
+    category: APJ Platform
+    definition: Machine-readable operating foundation for APJ Labs, including principles, products, capabilities, standards, playbooks, and terminology.
+    related:
+      - Atlas
+      - Registry
+      - Standards
+      - Governance
+
+  - id: term-atlas
+    name: Atlas
+    category: Knowledge System
+    definition: The broader knowledge and governance system that indexes architecture, standards, RFCs, ADRs, playbooks, roadmaps, and product knowledge.
+    related:
+      - Foundation
+      - Knowledge Graph
+      - Advisor
+
+  - id: term-capability
+    name: Capability
+    category: Platform
+    definition: A reusable business or technical ability provided by the platform, kernel, product, connector, or experience layer.
+    related:
+      - Capability Manifest
+      - Registry
+      - RFC
+      - ADR
+
+  - id: term-connector
+    name: Connector
+    category: Connected Intelligence
+    definition: An adapter that fetches or receives external data, creates raw signals, normalizes them, and routes them into the Intelligence Kernel.
+    related:
+      - Raw Signal
+      - Normalized Signal
+      - Signal Router
+
+  - id: term-signal
+    name: Signal
+    category: Connected Intelligence
+    definition: A meaningful external or internal data point that may become knowledge, measurement, recommendation, or learning.
+    related:
+      - Raw Signal
+      - Normalized Signal
+      - Intelligence Pipeline
+
+  - id: term-knowledge
+    name: Knowledge
+    category: Intelligence
+    definition: Structured understanding produced from signals, documentation, memory, reasoning, and relationships.
+    related:
+      - Knowledge Object
+      - Memory
+      - Reasoning
+      - Foundation
+
+  - id: term-memory
+    name: Memory
+    category: Intelligence
+    definition: Persistent institutional knowledge about recurring themes, decisions, patterns, outcomes, and lessons.
+    related:
+      - Institutional Memory
+      - Learning
+      - Decision
+
+  - id: term-mission
+    name: Mission
+    category: Strategy
+    definition: A strategic initiative that connects objectives, plans, execution, measurements, learnings, and outcomes.
+    related:
+      - Objective
+      - Plan
+      - Execution
+      - Measurement
+
+  - id: term-recommendation
+    name: Recommendation
+    category: Intelligence
+    definition: An explainable action proposal with reasoning, evidence, confidence, expected impact, and related context.
+    related:
+      - Advisor
+      - Executive Brief
+      - Confidence
+      - Evidence
+
+  - id: term-work-queue
+    name: Work Queue
+    category: Operations
+    definition: The operational list of ready, blocked, overdue, approval-needed, and completed execution items.
+    related:
+      - Execution
+      - Approval
+      - Evidence
+      - Results
+
+  - id: term-decision-quality
+    name: Decision Quality
+    category: Executive Intelligence
+    definition: A measure of how well APJ Labs turns knowledge and reasoning into successful decisions and outcomes.
+    related:
+      - Recommendation Accuracy
+      - Prediction Accuracy
+      - Mission Success
+      - Learning
+
+  - id: term-institutional-memory
+    name: Institutional Memory
+    category: Intelligence
+    definition: Accumulated company knowledge about decisions, rationale, outcomes, failures, successful playbooks, and lessons learned.
+    related:
+      - Memory
+      - Decision Intelligence
+      - Atlas
+
+  - id: term-workspace
+    name: Workspace
+    category: Platform
+    definition: Scoped operating context for products, users, missions, signals, knowledge, executions, and measurements.
+    related:
+      - Organization
+      - Product
+      - Permissions
+
+  - id: term-organization
+    name: Organization
+    category: Platform
+    definition: The account-level entity that owns users, workspaces, products, billing, permissions, and shared platform resources.
+    related:
+      - Workspace
+      - Identity
+      - Permissions
