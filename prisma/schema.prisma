@@ -147,6 +147,15 @@ enum EventType {
   SIGNAL_ROUTED
   SIGNAL_FAILED
   CONNECTOR_HEALTH_CHANGED
+  ASSUMPTION_CREATED
+  ASSUMPTION_VALIDATED
+  ASSUMPTION_INVALIDATED
+  EVIDENCE_ASSESSED
+  COUNTER_EVIDENCE_FOUND
+  TRADEOFF_ANALYZED
+  JUDGMENT_GENERATED
+  REFLECTION_CREATED
+  CONFIDENCE_RECALIBRATED
 }
 
 enum EventSeverity {
@@ -160,6 +169,32 @@ enum EventStatus {
   PENDING
   PROCESSED
   DISMISSED
+}
+
+enum AssumptionStatus {
+  UNTESTED
+  VALIDATED
+  INVALIDATED
+  NEEDS_EVIDENCE
+  ARCHIVED
+}
+
+enum CognitionRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum CognitionEvidenceType {
+  SIGNAL
+  MEASUREMENT
+  LEARNING
+  EXECUTION_RESULT
+  CONNECTOR_DATA
+  MANUAL_NOTE
+  HISTORICAL_PATTERN
+  COUNTER_EVIDENCE
 }
 
 enum ActionType {
@@ -700,6 +735,10 @@ model Organization {
   attributions         Attribution[]
   strategyAdjustments  StrategyAdjustment[]
   missions             Mission[]
+  assumptions          Assumption[]
+  evidenceAssessments  EvidenceAssessment[]
+  tradeoffAnalyses     TradeoffAnalysis[]
+  reflections          Reflection[]
   connectors           Connector[]
   rawSignals           RawSignal[]
   normalizedSignals    NormalizedSignal[]
@@ -789,6 +828,10 @@ model Workspace {
   missionLearnings     MissionLearning[]
   missionMetrics       MissionMetric[]
   missionSummaries     MissionSummary[]
+  assumptions          Assumption[]
+  evidenceAssessments  EvidenceAssessment[]
+  tradeoffAnalyses     TradeoffAnalysis[]
+  reflections          Reflection[]
   connectors           Connector[]
   rawSignals           RawSignal[]
   normalizedSignals    NormalizedSignal[]
@@ -2357,6 +2400,110 @@ model StrategyAdjustment {
   @@index([planId])
   @@index([status])
   @@index([priority])
+}
+
+model Assumption {
+  id               String               @id @default(cuid())
+  organizationId   String
+  workspaceId      String
+  title            String
+  description      String               @db.Text
+  sourceType       String?
+  sourceId         String?
+  status           AssumptionStatus     @default(UNTESTED)
+  confidenceScore  Float                @default(0)
+  riskLevel        CognitionRiskLevel   @default(MEDIUM)
+  validationMethod String?              @db.Text
+  validatedAt      DateTime?
+  invalidatedAt    DateTime?
+  organization     Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace        Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([sourceType, sourceId])
+  @@index([status])
+  @@index([riskLevel])
+  @@index([confidenceScore])
+}
+
+model EvidenceAssessment {
+  id               String                 @id @default(cuid())
+  organizationId   String
+  workspaceId      String
+  sourceType       String
+  sourceId         String
+  evidenceType     CognitionEvidenceType
+  summary          String                 @db.Text
+  strengthScore    Float                  @default(0)
+  reliabilityScore Float                  @default(0)
+  recencyScore     Float                  @default(0)
+  relevanceScore   Float                  @default(0)
+  overallScore     Float                  @default(0)
+  limitations      String                 @db.Text
+  organization     Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace        Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([sourceType, sourceId])
+  @@index([evidenceType])
+  @@index([overallScore])
+}
+
+model TradeoffAnalysis {
+  id                String       @id @default(cuid())
+  organizationId    String
+  workspaceId       String
+  title             String
+  sourceType        String?
+  sourceId          String?
+  optionA           String       @db.Text
+  optionB           String       @db.Text
+  optionC           String?      @db.Text
+  recommendedOption String       @db.Text
+  rationale         String       @db.Text
+  opportunityCost   String       @db.Text
+  riskSummary       String       @db.Text
+  confidenceScore   Float        @default(0)
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([sourceType, sourceId])
+  @@index([confidenceScore])
+}
+
+model Reflection {
+  id               String       @id @default(cuid())
+  organizationId   String
+  workspaceId      String
+  title            String
+  sourceType       String?
+  sourceId         String?
+  summary          String       @db.Text
+  whatWorked       String       @db.Text
+  whatFailed       String       @db.Text
+  wrongAssumptions String       @db.Text
+  newLearning      String       @db.Text
+  futureAdjustment String       @db.Text
+  confidenceScore  Float        @default(0)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace        Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([sourceType, sourceId])
+  @@index([confidenceScore])
 }
 
 model Mission {

@@ -1,0 +1,53 @@
+id: reflective-cognition
+name: Reflective Cognition & Executive Wisdom
+version: 1.0.0
+status: ACTIVE
+description: >-
+  Adds a deterministic judgment layer that makes VGOS recommendations more
+  trustworthy by exposing assumptions, evidence quality, counter-evidence,
+  tradeoffs, reflections, and recalibrated confidence.
+dependencies:
+  - Advisor
+  - Executive Brief
+  - Recommendation Engine
+  - Measurement & Learning Engine
+  - Mission Engine
+  - Intelligence Quality Layer
+inputs:
+  - Recommendations
+  - Learnings
+  - Measurements
+  - ExecutionResults
+  - StrategyAdjustments
+  - Missions
+  - Advisor Context
+outputs:
+  - Assumptions
+  - Evidence Assessments
+  - Tradeoff Analyses
+  - Reflections
+  - Better Judgment Explanations
+  - Recalibrated Confidence
+runtime:
+  logic_path: src/kernel/cognition
+  pages:
+    - /assumptions
+    - /evidence
+    - /tradeoffs
+    - /reflections
+events:
+  - ASSUMPTION_CREATED
+  - ASSUMPTION_VALIDATED
+  - ASSUMPTION_INVALIDATED
+  - EVIDENCE_ASSESSED
+  - COUNTER_EVIDENCE_FOUND
+  - TRADEOFF_ANALYZED
+  - JUDGMENT_GENERATED
+  - REFLECTION_CREATED
+  - CONFIDENCE_RECALIBRATED
+quality_gates:
+  - assumption_risk
+  - evidence_strength
+  - counter_evidence_risk
+  - tradeoff_confidence
+  - reflection_recalibration

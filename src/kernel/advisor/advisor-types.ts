@@ -15,6 +15,7 @@ import type {
 } from "@/lib/vgos-data";
 import type { RankedAction } from "@/kernel/decisions/decision-engine";
 import type { MissionOverview } from "@/kernel/missions/mission-types";
+import type { ExecutiveJudgment } from "@/kernel/cognition/cognition-types";
 
 export type AdvisorObjectReference = {
   type: string;
@@ -32,8 +33,18 @@ export type AdvisorSuggestedAction = {
 
 export type AdvisorAnswer = {
   question: string;
+  directAnswer?: string;
   answer: string;
   reasoning: string[];
+  assumptions?: string[];
+  evidence?: string[];
+  counterEvidence?: string[];
+  tradeoff?: string;
+  confidenceExplanation?: string;
+  whatWouldChangeRecommendation?: string[];
+  suggestedNextAction?: string;
+  shouldWaitForEvidence?: boolean;
+  executiveJudgment?: ExecutiveJudgment;
   relatedObjects: AdvisorObjectReference[];
   suggestedActions: AdvisorSuggestedAction[];
   confidence: number;
@@ -113,6 +124,7 @@ export type DailyBrief = {
   missionHealth: MissionHealthSummary[];
   recentWins: ExecutiveWin[];
   executiveRecommendation: string;
+  executiveJudgment: ExecutiveJudgment;
   recommendedFocus: string;
   estimatedWorkload: string;
 };

@@ -281,6 +281,48 @@ export const capabilityRegistry: CapabilityDefinition[] = [
     status: "ACTIVE"
   },
   {
+    id: "reflective-cognition",
+    name: "Reflective Cognition & Executive Wisdom",
+    description: "Strengthens VGOS judgment by explaining assumptions, assessing evidence, finding counter-evidence, comparing tradeoffs, reflecting on outcomes, and recalibrating confidence.",
+    version: "1.0.0",
+    inputs: ["Recommendations", "Measurements", "Learnings", "Execution Results", "Strategy Adjustments", "Missions", "Advisor Context"],
+    outputs: [
+      "Assumptions",
+      "Evidence Assessments",
+      "Tradeoff Analyses",
+      "Reflections",
+      "Better Judgment Explanations",
+      "Recalibrated Confidence"
+    ],
+    dependencies: [
+      "Advisor",
+      "Executive Brief",
+      "Recommendation Engine",
+      "Measurement & Learning Engine",
+      "Mission Engine",
+      "Intelligence Quality Layer"
+    ],
+    eventsConsumed: [
+      "AI_RECOMMENDATION_CREATED",
+      "MEASUREMENT_CREATED",
+      "LEARNING_CREATED",
+      "EXECUTION_RESULT_CREATED",
+      "STRATEGY_ADJUSTMENT_PROPOSED"
+    ],
+    eventsProduced: [
+      "ASSUMPTION_CREATED",
+      "ASSUMPTION_VALIDATED",
+      "ASSUMPTION_INVALIDATED",
+      "EVIDENCE_ASSESSED",
+      "COUNTER_EVIDENCE_FOUND",
+      "TRADEOFF_ANALYZED",
+      "JUDGMENT_GENERATED",
+      "REFLECTION_CREATED",
+      "CONFIDENCE_RECALIBRATED"
+    ],
+    status: "ACTIVE"
+  },
+  {
     id: "event-system",
     name: "Event System",
     description: "Records workspace-scoped events that trigger workflows and kernel updates.",

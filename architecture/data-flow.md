@@ -2,6 +2,21 @@
 
 ```mermaid
 flowchart LR
+  A["Observation"] --> B["Interpretation"]
+  B --> C["Assumption"]
+  C --> D["Evidence"]
+  D --> E["Counter-Evidence"]
+  E --> F["Trade-off"]
+  F --> G["Judgment"]
+  G --> H["Recommendation"]
+  H --> I["Execution"]
+  I --> J["Reflection"]
+  J --> K["Recalibration"]
+  K --> L["Future Judgment"]
+```
+
+```mermaid
+flowchart LR
   A["Raw market signal"] --> B["Intelligence Pipeline"]
   B --> C["IntelligenceObject"]
   C --> D["KnowledgeObject"]
