@@ -18,6 +18,15 @@ import {
   UsersRound
 } from "lucide-react";
 import { calculateSignalQuality } from "@/kernel/quality/signal-quality";
+import type {
+  Assumption,
+  AssumptionStatus,
+  CognitionEvidenceType,
+  CognitionRiskLevel,
+  EvidenceAssessment,
+  Reflection,
+  TradeoffAnalysis
+} from "@/kernel/cognition/cognition-types";
 export type Status =
   | "NOT_STARTED"
   | "RESEARCHING"
@@ -143,7 +152,16 @@ export type EventType =
   | "SIGNAL_NORMALIZED"
   | "SIGNAL_ROUTED"
   | "SIGNAL_FAILED"
-  | "CONNECTOR_HEALTH_CHANGED";
+  | "CONNECTOR_HEALTH_CHANGED"
+  | "ASSUMPTION_CREATED"
+  | "ASSUMPTION_VALIDATED"
+  | "ASSUMPTION_INVALIDATED"
+  | "EVIDENCE_ASSESSED"
+  | "COUNTER_EVIDENCE_FOUND"
+  | "TRADEOFF_ANALYZED"
+  | "JUDGMENT_GENERATED"
+  | "REFLECTION_CREATED"
+  | "CONFIDENCE_RECALIBRATED";
 
 export type EventSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type EventStatus = "PENDING" | "PROCESSED" | "DISMISSED";
@@ -1408,6 +1426,10 @@ export type PlatformState = {
   missionMetrics: MissionMetric[];
   missionSummaries: MissionSummary[];
   missionTemplates: MissionTemplate[];
+  assumptions: Assumption[];
+  evidenceAssessments: EvidenceAssessment[];
+  tradeoffAnalyses: TradeoffAnalysis[];
+  reflections: Reflection[];
   connectors: Connector[];
   rawSignals: RawSignal[];
   normalizedSignals: NormalizedSignal[];
@@ -1444,6 +1466,9 @@ export type PageId =
   | "approvals"
   | "blockers"
   | "evidence"
+  | "assumptions"
+  | "tradeoffs"
+  | "reflections"
   | "results"
   | "metrics"
   | "measurements"
@@ -1513,6 +1538,10 @@ export type CollectionKey =
   | "missionLearnings"
   | "missionMetrics"
   | "missionSummaries"
+  | "assumptions"
+  | "evidenceAssessments"
+  | "tradeoffAnalyses"
+  | "reflections"
   | "connectors"
   | "rawSignals"
   | "normalizedSignals"
@@ -1733,9 +1762,30 @@ export const pageDefinitions: PageDefinition[] = [
   {
     id: "evidence",
     label: "Evidence",
-    description: "Proof that execution happened: URLs, screenshots, files, notes, metrics, and live assets.",
+    description: "Assessed evidence quality across signals, measurement, learning, execution results, connectors, and counter-evidence.",
     icon: Database,
-    collection: "executionEvidence"
+    collection: "evidenceAssessments"
+  },
+  {
+    id: "assumptions",
+    label: "Assumptions",
+    description: "Explicit assumptions behind recommendations, missions, and operating decisions.",
+    icon: CircleHelp,
+    collection: "assumptions"
+  },
+  {
+    id: "tradeoffs",
+    label: "Tradeoffs",
+    description: "Option comparisons that show opportunity cost, risk, and confidence before VGOS recommends a path.",
+    icon: Sparkles,
+    collection: "tradeoffAnalyses"
+  },
+  {
+    id: "reflections",
+    label: "Reflections",
+    description: "Post-execution learning about what worked, what failed, wrong assumptions, and future adjustments.",
+    icon: Lightbulb,
+    collection: "reflections"
   },
   {
     id: "results",
@@ -3336,6 +3386,336 @@ const recommendedActions: RecommendedAction[] = [
   ...scoped(index)
 }));
 
+const assumptions: Assumption[] = ([
+  [
+    "assumption-product-page-demand",
+    "Product-page-to-video demand will continue after launch week.",
+    "VGOS assumes Product Hunt and search demand around product-page-to-video will stay useful beyond launch week.",
+    "RecommendedAction",
+    "action-17",
+    "VALIDATED",
+    0.86,
+    "HIGH",
+    "Supported by Product Hunt comments, search demand, and qualified signup measurement.",
+    daysAgo(1),
+    ""
+  ],
+  [
+    "assumption-founder-led-outperformance",
+    "Founder-led posts will outperform company posts.",
+    "VGOS assumes founder narrative creates stronger qualitative engagement than company-only distribution for proof and trust topics.",
+    "RecommendedAction",
+    "action-24",
+    "VALIDATED",
+    0.8,
+    "MEDIUM",
+    "Supported by LinkedIn and learning records.",
+    daysAgo(2),
+    ""
+  ],
+  [
+    "assumption-demo-proof-trust",
+    "Product demo proof will increase BOFU trust.",
+    "VGOS assumes source-to-output demo proof reduces skepticism before conversion-oriented content is scaled.",
+    "Mission",
+    "mission-product-page-to-video-proof",
+    "NEEDS_EVIDENCE",
+    0.74,
+    "CRITICAL",
+    "Needs proof asset and conversion follow-up.",
+    "",
+    ""
+  ],
+  [
+    "assumption-directory-authority",
+    "Directory submissions will generate authority signals.",
+    "VGOS assumes directory submissions convert into approvals, backlinks, and authority signals in a useful timeframe.",
+    "RecommendedAction",
+    "action-21",
+    "NEEDS_EVIDENCE",
+    0.58,
+    "HIGH",
+    "Needs approval and backlink evidence.",
+    "",
+    ""
+  ],
+  [
+    "assumption-blog-005-positioning",
+    "BLOG-005 can strengthen Video Production Intelligence positioning.",
+    "VGOS assumes a cleanup-focused BLOG-005 comparison article can reinforce Video Production Intelligence category ownership.",
+    "ExecutionItem",
+    "execution-blog-005-outline",
+    "UNTESTED",
+    0.69,
+    "MEDIUM",
+    "Validate with search impression and internal-link performance.",
+    "",
+    ""
+  ]
+] as const).map(([id, title, description, sourceType, sourceId, status, confidenceScore, riskLevel, validationMethod, validatedAt, invalidatedAt], index) => ({
+  id,
+  title,
+  description,
+  sourceType,
+  sourceId,
+  status: status as AssumptionStatus,
+  confidenceScore,
+  riskLevel: riskLevel as CognitionRiskLevel,
+  validationMethod: validationMethod || undefined,
+  validatedAt: validatedAt || undefined,
+  invalidatedAt: invalidatedAt || undefined,
+  ...scoped(index)
+}));
+
+const evidenceAssessments: EvidenceAssessment[] = ([
+  [
+    "evidence-product-hunt-proof-comments",
+    "Observation",
+    "observation-product-hunt-comments",
+    "SIGNAL",
+    "Product Hunt comments asked for URL-to-video and product-page proof before trusting the claim.",
+    0.82,
+    0.76,
+    0.92,
+    0.9,
+    0.84,
+    "Qualitative launch signal; conversion impact still needs measurement."
+  ],
+  [
+    "evidence-linkedin-carousel-engagement",
+    "Measurement",
+    "measurement-04",
+    "MEASUREMENT",
+    "LinkedIn carousel engagement improved after proof-led launch content.",
+    0.84,
+    0.88,
+    0.86,
+    0.82,
+    0.85,
+    "Attribution is strong but not isolated from launch timing."
+  ],
+  [
+    "evidence-founder-post-engagement",
+    "Learning",
+    "learning-05",
+    "LEARNING",
+    "Founder post engagement produced stronger qualitative comments than company posts.",
+    0.78,
+    0.82,
+    0.82,
+    0.8,
+    0.8,
+    "Needs more examples before becoming a universal channel rule."
+  ],
+  [
+    "evidence-product-page-search-demand",
+    "Measurement",
+    "measurement-21",
+    "MEASUREMENT",
+    "Search demand and qualified signup measurements support product-page-to-video as commercial intent.",
+    0.86,
+    0.88,
+    0.84,
+    0.9,
+    0.87,
+    "Demand can decay after launch without refreshed proof."
+  ],
+  [
+    "evidence-directory-approval-delays",
+    "Learning",
+    "learning-03",
+    "COUNTER_EVIDENCE",
+    "Directory approvals lag submissions, weakening confidence in immediate authority outcomes.",
+    0.74,
+    0.8,
+    0.86,
+    0.84,
+    0.8,
+    "Does not invalidate authority work, but it changes timing and priority."
+  ]
+] as const).map(([id, sourceType, sourceId, evidenceType, summary, strengthScore, reliabilityScore, recencyScore, relevanceScore, overallScore, limitations], index) => ({
+  id,
+  sourceType,
+  sourceId,
+  evidenceType: evidenceType as CognitionEvidenceType,
+  summary,
+  strengthScore,
+  reliabilityScore,
+  recencyScore,
+  relevanceScore,
+  overallScore,
+  limitations,
+  ...scoped(index)
+}));
+
+const tradeoffAnalyses: TradeoffAnalysis[] = ([
+  [
+    "tradeoff-blog-005-demo-first",
+    "Publish BLOG-005 now vs finish product demo first.",
+    "ExecutionItem",
+    "execution-blog-005-outline",
+    "Publish BLOG-005 today.",
+    "Finish product demo first.",
+    "Publish BLOG-005 only if demo work is scheduled immediately after.",
+    "Publish BLOG-005 only if demo work is scheduled immediately after.",
+    "Publishing BLOG-005 improves authority, but demo proof is more likely to improve BOFU trust.",
+    "Finishing the demo first may delay search momentum from BLOG-005.",
+    "Counter-risk is that content without proof can create traffic without conversion trust.",
+    0.78
+  ],
+  [
+    "tradeoff-directories-proof-assets",
+    "Submit more directories vs improve proof assets.",
+    "RecommendedAction",
+    "action-21",
+    "Submit more directories.",
+    "Improve proof assets.",
+    "Submit fewer high-authority directories after proof assets improve.",
+    "Submit fewer high-authority directories after proof assets improve.",
+    "Proof assets increase listing quality and conversion trust while directory approvals are lagging.",
+    "Delaying broad submissions may slow backlink coverage.",
+    "Approval lag makes immediate directory scaling lower confidence.",
+    0.74
+  ],
+  [
+    "tradeoff-founder-company-content",
+    "Founder content vs company content.",
+    "Learning",
+    "learning-05",
+    "Publish founder content.",
+    "Publish company content.",
+    "Use founder-led proof narrative with company repost.",
+    "Use founder-led proof narrative with company repost.",
+    "Founder voice appears to generate stronger qualitative engagement, while company content preserves brand cadence.",
+    "Founder-led content consumes scarce founder review capacity.",
+    "Capacity risk is the main counterweight.",
+    0.81
+  ],
+  [
+    "tradeoff-seo-product-hunt-follow-up",
+    "SEO content vs Product Hunt follow-up.",
+    "Mission",
+    "mission-product-hunt-momentum",
+    "Scale SEO content.",
+    "Prioritize Product Hunt follow-up.",
+    "Reply to Product Hunt with proof, then reuse it in SEO content.",
+    "Reply to Product Hunt with proof, then reuse it in SEO content.",
+    "Follow-up captures live launch attention while creating proof for durable SEO assets.",
+    "SEO content may wait another cycle.",
+    "The risk is missing short-lived launch momentum.",
+    0.83
+  ],
+  [
+    "tradeoff-broad-ai-video-vpi-focus",
+    "Broad AI video topics vs Video Production Intelligence category focus.",
+    "ContentAsset",
+    "content-blog-005",
+    "Chase broad AI video topics.",
+    "Focus Video Production Intelligence.",
+    "Use broad complaints to clarify Video Production Intelligence.",
+    "Use broad complaints to clarify Video Production Intelligence.",
+    "Broad topics have volume, but category focus builds distinctive authority.",
+    "Narrower positioning may miss some generic AI video searches.",
+    "The risk is under-explaining the category to new visitors.",
+    0.8
+  ]
+] as const).map(([id, title, sourceType, sourceId, optionA, optionB, optionC, recommendedOption, rationale, opportunityCost, riskSummary, confidenceScore], index) => ({
+  id,
+  title,
+  sourceType,
+  sourceId,
+  optionA,
+  optionB,
+  optionC,
+  recommendedOption,
+  rationale,
+  opportunityCost,
+  riskSummary,
+  confidenceScore,
+  ...scoped(index)
+}));
+
+const reflections: Reflection[] = ([
+  [
+    "reflection-founder-led-content",
+    "Founder-led content produced stronger qualitative engagement.",
+    "Learning",
+    "learning-05",
+    "Founder narrative around proof and boundaries produced better qualitative engagement than company-only updates.",
+    "Founder voice increased trust and specificity.",
+    "Founder review capacity became the limiting constraint.",
+    "Company-only distribution was assumed to be enough for trust-building.",
+    "Founder-led proof narratives should receive higher priority when trust is the goal.",
+    "Reserve founder review blocks for proof-led posts.",
+    0.82
+  ],
+  [
+    "reflection-product-hunt-proof-demand",
+    "Product Hunt launch created more proof-demand than expected.",
+    "ExecutionResult",
+    "execution-result-02",
+    "Launch comments asked for product-page and URL-to-video proof more often than expected.",
+    "Product Hunt created clear commercial-intent language.",
+    "Proof assets were not ready enough to answer every comment.",
+    "VGOS underestimated how quickly proof would become the conversion bottleneck.",
+    "Community replies should wait for concrete demo links when trust is uncertain.",
+    "Finish demo proof before scaling follow-up copy.",
+    0.86
+  ],
+  [
+    "reflection-directory-submissions-slower",
+    "Directory submissions are slower than assumed.",
+    "Learning",
+    "learning-03",
+    "Directory approvals lagged submission volume and delayed authority outcomes.",
+    "The copy bank improved readiness.",
+    "Approval timing did not match the original authority forecast.",
+    "VGOS assumed directory moderation would convert faster.",
+    "Authority recommendations should extend timelines and include follow-up capacity.",
+    "Reduce confidence for directory-heavy plans without approval evidence.",
+    0.8
+  ],
+  [
+    "reflection-proof-first-bofu",
+    "Proof-first content should precede BOFU conversion pushes.",
+    "Learning",
+    "learning-06",
+    "Demo proof is needed before aggressive conversion messaging.",
+    "Proof-led assets reduce skepticism.",
+    "Claim-first BOFU content risks trust gaps.",
+    "VGOS overestimated how much positioning could do without proof.",
+    "Conversion recommendations need visible proof assets.",
+    "Make demo proof a prerequisite for BOFU pushes.",
+    0.88
+  ],
+  [
+    "reflection-executive-brief-live-data",
+    "Executive Brief improves clarity but needs live data.",
+    "Event",
+    "kernel-event-01",
+    "Executive Brief improves operating clarity, but confidence should stay bounded while live connectors are incomplete.",
+    "Daily focus and mission health are easier to inspect.",
+    "Fresh external performance data is still incomplete.",
+    "VGOS assumed local seeded data was enough for high-confidence decisions.",
+    "Connector freshness should affect executive judgment confidence.",
+    "Connect Search Console and analytics before expanding lower-confidence content recommendations.",
+    0.76
+  ]
+] as const).map(([id, title, sourceType, sourceId, summary, whatWorked, whatFailed, wrongAssumptions, newLearning, futureAdjustment, confidenceScore], index) => ({
+  id,
+  title,
+  sourceType,
+  sourceId,
+  summary,
+  whatWorked,
+  whatFailed,
+  wrongAssumptions,
+  newLearning,
+  futureAdjustment,
+  confidenceScore,
+  ...scoped(index)
+}));
+
 const auditLogs: AuditLog[] = [
   ["MISSION_CREATED", "Mission", "mission-product-page-to-video-proof", "Growth Lead"],
   ["PLAN_GENERATED", "Plan", "plan-product-page-demo-sprint", "Planning Engine"],
@@ -3985,7 +4365,7 @@ const connectorEvents: Event[] = [
     createdAt: daysAgo(index + 4),
     processedAt: daysAgo(index + 4)
   })),
-  ...connectorSyncRuns.slice(0, 15).map((run, index) => ({
+  ...connectorSyncRuns.slice(0, 15).map((run) => ({
     id: `${run.id}-event`,
     organizationId: orgId,
     workspaceId,
@@ -4017,7 +4397,105 @@ const connectorEvents: Event[] = [
   }))
 ];
 
-const events: Event[] = [...kernelEvents, ...growthEvents, ...missionEvents, ...connectorEvents];
+const cognitionEvents: Event[] = [
+  ...assumptions.slice(0, 5).map((assumption, index) => ({
+    id: `${assumption.id}-event`,
+    organizationId: orgId,
+    workspaceId,
+    eventType:
+      assumption.status === "VALIDATED"
+        ? "ASSUMPTION_VALIDATED" as EventType
+        : assumption.status === "INVALIDATED"
+          ? "ASSUMPTION_INVALIDATED" as EventType
+          : "ASSUMPTION_CREATED" as EventType,
+    sourceType: "Assumption",
+    sourceId: assumption.id,
+    title: assumption.title,
+    description: assumption.description,
+    metadata: { generatedBy: "reflective-cognition-seed", riskLevel: assumption.riskLevel },
+    severity: assumption.riskLevel as EventSeverity,
+    status: assumption.status === "NEEDS_EVIDENCE" ? "PENDING" as EventStatus : "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index),
+    processedAt: assumption.status === "NEEDS_EVIDENCE" ? undefined : daysAgo(index)
+  })),
+  ...evidenceAssessments.slice(0, 5).map((assessment, index) => ({
+    id: `${assessment.id}-event`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: assessment.evidenceType === "COUNTER_EVIDENCE" ? "COUNTER_EVIDENCE_FOUND" as EventType : "EVIDENCE_ASSESSED" as EventType,
+    sourceType: "EvidenceAssessment",
+    sourceId: assessment.id,
+    title: `Evidence assessed: ${assessment.sourceType}`,
+    description: assessment.summary,
+    metadata: { generatedBy: "reflective-cognition-seed", overallScore: assessment.overallScore },
+    severity: assessment.overallScore < 0.65 ? "HIGH" as EventSeverity : "MEDIUM" as EventSeverity,
+    status: "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index + 1),
+    processedAt: daysAgo(index + 1)
+  })),
+  ...tradeoffAnalyses.slice(0, 3).map((tradeoff, index) => ({
+    id: `${tradeoff.id}-event`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: "TRADEOFF_ANALYZED" as EventType,
+    sourceType: "TradeoffAnalysis",
+    sourceId: tradeoff.id,
+    title: tradeoff.title,
+    description: tradeoff.rationale,
+    metadata: { generatedBy: "reflective-cognition-seed", recommendedOption: tradeoff.recommendedOption },
+    severity: "HIGH" as EventSeverity,
+    status: "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index + 2),
+    processedAt: daysAgo(index + 2)
+  })),
+  {
+    id: "event-executive-judgment-generated",
+    organizationId: orgId,
+    workspaceId,
+    eventType: "JUDGMENT_GENERATED",
+    sourceType: "ExecutiveJudgment",
+    sourceId: "judgment-today",
+    title: "Executive judgment generated",
+    description: "VGOS generated a reflective judgment with assumptions, evidence, counter-evidence, tradeoff, and confidence explanation.",
+    metadata: { generatedBy: "reflective-cognition-seed" },
+    severity: "HIGH",
+    status: "PROCESSED",
+    createdAt: daysAgo(0),
+    processedAt: daysAgo(0)
+  },
+  ...reflections.slice(0, 3).map((reflection, index) => ({
+    id: `${reflection.id}-event`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: "REFLECTION_CREATED" as EventType,
+    sourceType: "Reflection",
+    sourceId: reflection.id,
+    title: reflection.title,
+    description: reflection.summary,
+    metadata: { generatedBy: "reflective-cognition-seed", confidenceScore: reflection.confidenceScore },
+    severity: "MEDIUM" as EventSeverity,
+    status: "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index + 1),
+    processedAt: daysAgo(index + 1)
+  })),
+  {
+    id: "event-confidence-recalibrated-directory",
+    organizationId: orgId,
+    workspaceId,
+    eventType: "CONFIDENCE_RECALIBRATED",
+    sourceType: "Reflection",
+    sourceId: "reflection-directory-submissions-slower",
+    title: "Directory recommendation confidence recalibrated",
+    description: "VGOS reduced future confidence for directory-heavy authority recommendations because approvals repeatedly lagged submissions.",
+    metadata: { generatedBy: "reflective-cognition-seed", affectedRule: "directory-approval-lag" },
+    severity: "HIGH",
+    status: "PROCESSED",
+    createdAt: daysAgo(1),
+    processedAt: daysAgo(1)
+  }
+];
+
+const events: Event[] = [...kernelEvents, ...growthEvents, ...missionEvents, ...connectorEvents, ...cognitionEvents];
 
 const briefingSections: BriefingSection[] = [
   {
@@ -4264,6 +4742,10 @@ export const initialPlatformState: PlatformState = {
   missionMetrics,
   missionSummaries,
   missionTemplates,
+  assumptions,
+  evidenceAssessments,
+  tradeoffAnalyses,
+  reflections,
   connectors,
   rawSignals,
   normalizedSignals,
@@ -4543,6 +5025,71 @@ export function createDefaultRecord(collection: CollectionKey, activeWorkspaceId
     createdAt: date,
     updatedAt: date
   };
+
+  if (collection === "assumptions") {
+    return {
+      ...base,
+      title: "New assumption",
+      description: "",
+      sourceType: "Manual",
+      sourceId: "",
+      status: "UNTESTED",
+      confidenceScore: 0.6,
+      riskLevel: "MEDIUM",
+      validationMethod: "",
+      validatedAt: "",
+      invalidatedAt: ""
+    };
+  }
+
+  if (collection === "evidenceAssessments") {
+    return {
+      ...base,
+      sourceType: "Manual",
+      sourceId: "",
+      evidenceType: "MANUAL_NOTE",
+      summary: "",
+      strengthScore: 0.6,
+      reliabilityScore: 0.6,
+      recencyScore: 0.7,
+      relevanceScore: 0.6,
+      overallScore: 0.62,
+      limitations: ""
+    };
+  }
+
+  if (collection === "tradeoffAnalyses") {
+    return {
+      ...base,
+      title: "New tradeoff",
+      sourceType: "Manual",
+      sourceId: "",
+      optionA: "",
+      optionB: "",
+      optionC: "",
+      recommendedOption: "",
+      rationale: "",
+      opportunityCost: "",
+      riskSummary: "",
+      confidenceScore: 0.65
+    };
+  }
+
+  if (collection === "reflections") {
+    return {
+      ...base,
+      title: "New reflection",
+      sourceType: "Manual",
+      sourceId: "",
+      summary: "",
+      whatWorked: "",
+      whatFailed: "",
+      wrongAssumptions: "",
+      newLearning: "",
+      futureAdjustment: "",
+      confidenceScore: 0.65
+    };
+  }
 
   if (collection === "observations") {
     return {

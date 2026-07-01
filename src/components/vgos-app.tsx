@@ -148,6 +148,10 @@ import {
   rejectStrategyAdjustment
 } from "@/kernel/measurement/strategy-feedback-engine";
 import {
+  explainWorkItemCognition,
+  summarizeMissionCognition
+} from "@/kernel/cognition/judgment-engine";
+import {
   calculateOpportunityScore,
   createDefaultRecord,
   createScopedId,
@@ -239,7 +243,11 @@ const statusOptions = [
   "PROPOSED",
   "ACCEPTED",
   "REJECTED",
-  "IMPLEMENTED"
+  "IMPLEMENTED",
+  "UNTESTED",
+  "VALIDATED",
+  "INVALIDATED",
+  "NEEDS_EVIDENCE"
 ];
 
 const priorityOptions: Priority[] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
@@ -582,6 +590,18 @@ const strategyAdjustmentTypeOptions = [
 ];
 
 const strategyAdjustmentStatusOptions = ["PROPOSED", "ACCEPTED", "REJECTED", "IMPLEMENTED", "ARCHIVED"];
+const assumptionStatusOptions = ["UNTESTED", "VALIDATED", "INVALIDATED", "NEEDS_EVIDENCE", "ARCHIVED"];
+const cognitionRiskOptions = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+const cognitionEvidenceTypeOptions = [
+  "SIGNAL",
+  "MEASUREMENT",
+  "LEARNING",
+  "EXECUTION_RESULT",
+  "CONNECTOR_DATA",
+  "MANUAL_NOTE",
+  "HISTORICAL_PATTERN",
+  "COUNTER_EVIDENCE"
+];
 
 function priorityTone(priority?: Priority) {
   if (priority === "CRITICAL") return "red";
@@ -593,8 +613,8 @@ function priorityTone(priority?: Priority) {
 function statusTone(status?: string) {
   if (status === "LIVE" || status === "PUBLISHED" || status === "ACTIVE" || status === "COMPLETED" || status === "APPROVED" || status === "RESOLVED" || status === "HEALTHY" || status === "IMPROVING" || status === "ACCEPTED" || status === "IMPLEMENTED" || status === "CONNECTED" || status === "MOCK" || status === "ROUTED") return "green";
   if (status === "IN_PROGRESS" || status === "RESEARCHING" || status === "DRAFT" || status === "READY" || status === "IN_REVIEW" || status === "STARTED" || status === "RECEIVED" || status === "NORMALIZED") return "blue";
-  if (status === "BLOCKED" || status === "FAILED" || status === "REJECTED" || status === "DECLINING" || status === "AT_RISK" || status === "ERROR") return "red";
-  if (status === "SUBMITTED" || status === "QUEUED" || status === "PARTIAL") return "teal";
+  if (status === "BLOCKED" || status === "FAILED" || status === "REJECTED" || status === "DECLINING" || status === "AT_RISK" || status === "ERROR" || status === "INVALIDATED") return "red";
+  if (status === "SUBMITTED" || status === "QUEUED" || status === "PARTIAL" || status === "VALIDATED") return "teal";
   if (status === "ARCHIVED" || status === "PAUSED" || status === "CANCELLED" || status === "IGNORED" || status === "STALLED" || status === "DISCONNECTED") return "slate";
   return "amber";
 }
@@ -652,6 +672,10 @@ function sourceTypeToCollection(sourceType: string): EditableCollection {
     MissionLearning: "missionLearnings",
     MissionMetric: "missionMetrics",
     MissionSummary: "missionSummaries",
+    Assumption: "assumptions",
+    EvidenceAssessment: "evidenceAssessments",
+    TradeoffAnalysis: "tradeoffAnalyses",
+    Reflection: "reflections",
     Connector: "connectors",
     RawSignal: "rawSignals",
     NormalizedSignal: "normalizedSignals",
@@ -714,6 +738,10 @@ function collectionToSourceType(collection: EditableCollection) {
     missionLearnings: "MissionLearning",
     missionMetrics: "MissionMetric",
     missionSummaries: "MissionSummary",
+    assumptions: "Assumption",
+    evidenceAssessments: "EvidenceAssessment",
+    tradeoffAnalyses: "TradeoffAnalysis",
+    reflections: "Reflection",
     connectors: "Connector",
     rawSignals: "RawSignal",
     normalizedSignals: "NormalizedSignal",
@@ -759,6 +787,10 @@ function eventTypeForCollection(collection: EditableCollection) {
     learnings: "LEARNING_CREATED",
     attributions: "ATTRIBUTION_CREATED",
     strategyAdjustments: "STRATEGY_ADJUSTMENT_PROPOSED",
+    assumptions: "ASSUMPTION_CREATED",
+    evidenceAssessments: "EVIDENCE_ASSESSED",
+    tradeoffAnalyses: "TRADEOFF_ANALYZED",
+    reflections: "REFLECTION_CREATED",
     missions: "MISSION_CREATED",
     missionSummaries: "MISSION_SUMMARY_GENERATED",
     connectors: "CONNECTOR_CREATED",
@@ -3047,6 +3079,7 @@ function ExecutiveBriefPage({
     [state, activeWorkspaceId, userName]
   );
   const context = useMemo(() => buildAdvisorContext(state, activeWorkspaceId), [state, activeWorkspaceId]);
+  const judgment = brief.executiveJudgment;
   const personaFocus: Record<PersonaMode, string> = {
     Founder: "Founder mode is emphasizing decisions, proof, and leverage.",
     Marketing: "Marketing mode is emphasizing content, approvals, and results.",
@@ -3144,6 +3177,25 @@ function ExecutiveBriefPage({
                   <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.explanation}</p>
                 </button>
               ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Executive Judgment</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">Reflective read on the strongest recommendation today.</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm leading-6">
+                VGOS recommends {judgment.finalRecommendation}. {judgment.interpretation}
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <FocusRow label="Main assumption" value={judgment.assumptions[0]?.title ?? "No explicit assumption attached"} />
+                <FocusRow label="Counter-risk" value={judgment.counterEvidence[0] ?? "No material counter-risk visible"} />
+                <FocusRow label="Trade-off" value={judgment.tradeoff?.recommendedOption ?? "No explicit tradeoff attached"} />
+                <FocusRow label="Confidence" value={`${Math.round(judgment.confidenceScore * 100)}%`} />
+              </div>
+              <InlineList title="What would change this" items={judgment.whatWouldChangeRecommendation} />
             </CardContent>
           </Card>
 
@@ -3279,10 +3331,19 @@ function AdvisorWorkspace({
                 <p className="text-sm leading-6">{answer.answer}</p>
                 <div className="mt-3">
                   <Badge tone="blue">Confidence {Math.round(answer.confidence * 100)}%</Badge>
+                  {answer.shouldWaitForEvidence ? <Badge tone="amber" className="ml-2">Wait for evidence</Badge> : null}
                 </div>
+                {answer.confidenceExplanation ? (
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">{answer.confidenceExplanation}</p>
+                ) : null}
               </div>
               <div className="grid gap-3 xl:grid-cols-3">
                 <InlineList title="Reasoning" items={answer.reasoning} />
+                <InlineList title="Assumptions" items={answer.assumptions ?? ["No explicit assumptions attached."]} />
+                <InlineList title="Evidence" items={answer.evidence ?? ["No assessed evidence attached."]} />
+                <InlineList title="Counter-evidence" items={answer.counterEvidence ?? ["No material counter-evidence visible."]} />
+                <InlineList title="Trade-off" items={[answer.tradeoff ?? "No explicit tradeoff attached."]} />
+                <InlineList title="What would change this" items={answer.whatWouldChangeRecommendation ?? ["Fresh evidence that changes confidence."]} />
                 <InlineList
                   title="Related objects"
                   items={answer.relatedObjects.map((item) => `${item.type}: ${item.title}${item.detail ? ` (${item.detail})` : ""}`)}
@@ -3385,6 +3446,7 @@ function WorkQueuePage({
         <WorkQueueSection
           title="Today's Work"
           description="Items due today or earlier."
+          state={state}
           items={todayWork}
           onEdit={onEdit}
           onStartExecution={onStartExecution}
@@ -3398,6 +3460,7 @@ function WorkQueuePage({
         <WorkQueueSection
           title="Ready Items"
           description="Work that can start without another dependency."
+          state={state}
           items={readyItems}
           onEdit={onEdit}
           onStartExecution={onStartExecution}
@@ -3411,6 +3474,7 @@ function WorkQueuePage({
         <WorkQueueSection
           title="Blocked Items"
           description="This is blocked because a dependency, asset, approval, or decision is missing."
+          state={state}
           items={blockedItems}
           onEdit={onEdit}
           onStartExecution={onStartExecution}
@@ -3424,6 +3488,7 @@ function WorkQueuePage({
         <WorkQueueSection
           title="Approval Needed"
           description="Work waiting on founder, brand, SEO, product, or publishing review."
+          state={state}
           items={approvalNeeded}
           onEdit={onEdit}
           onStartExecution={onStartExecution}
@@ -3437,6 +3502,7 @@ function WorkQueuePage({
         <WorkQueueSection
           title="Overdue Items"
           description="Items past due that still need a decision."
+          state={state}
           items={overdueItems}
           onEdit={onEdit}
           onStartExecution={onStartExecution}
@@ -3450,6 +3516,7 @@ function WorkQueuePage({
         <WorkQueueSection
           title="Completed Today"
           description="Finished execution items with impact ready for results review."
+          state={state}
           items={completedToday}
           onEdit={onEdit}
           onStartExecution={onStartExecution}
@@ -3468,6 +3535,7 @@ function WorkQueuePage({
 function WorkQueueSection({
   title,
   description,
+  state,
   items,
   onEdit,
   onStartExecution,
@@ -3480,6 +3548,7 @@ function WorkQueueSection({
 }: {
   title: string;
   description: string;
+  state: PlatformState;
   items: ExecutionItem[];
   onEdit: (collection: EditableCollection, item: AnyRecord) => void;
   onStartExecution: (item: AnyRecord) => void;
@@ -3497,59 +3566,76 @@ function WorkQueueSection({
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </CardHeader>
       <CardContent className="space-y-2">
-        {items.slice(0, 8).map((item) => (
-          <div key={item.id} className="rounded-md border border-border bg-background p-3">
-            <div className="flex flex-wrap gap-2">
-              <Badge tone={statusTone(item.status)}>{formatEnum(item.status)}</Badge>
-              <Badge tone={priorityTone(item.priority)}>{formatEnum(item.priority)}</Badge>
+        {items.slice(0, 8).map((item) => {
+          const cognition = explainWorkItemCognition(state, item.id);
+          return (
+            <div key={item.id} className="rounded-md border border-border bg-background p-3">
+              <div className="flex flex-wrap gap-2">
+                <Badge tone={statusTone(item.status)}>{formatEnum(item.status)}</Badge>
+                <Badge tone={priorityTone(item.priority)}>{formatEnum(item.priority)}</Badge>
+              </div>
+              <p className="mt-2 text-sm font-semibold">{item.title}</p>
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{item.expectedImpact}</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <FocusRow label="Owner" value={item.owner} />
+                <FocusRow label="Due" value={formatDate(item.dueDate)} />
+                <FocusRow label="Impact" value={item.actualImpact ? "Captured" : "Expected"} />
+              </div>
+              <details className="mt-3 rounded-md border border-border bg-muted/30 p-3">
+                <summary className="cursor-pointer text-xs font-semibold text-foreground">Why this work matters</summary>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <FocusRow label="Related mission" value={cognition.relatedMission?.title ?? "No mission linked"} />
+                  <FocusRow label="Evidence strength" value={`${Math.round(cognition.evidenceStrength * 100)}%`} />
+                  <InlineList title="Expected impact" items={[cognition.expectedImpact]} />
+                  <InlineList
+                    title="Assumptions"
+                    items={cognition.assumptions.length ? cognition.assumptions.map((assumption) => assumption.title) : ["No explicit assumptions attached."]}
+                  />
+                  <InlineList title="Counter-risk" items={[cognition.counterRisk]} />
+                  <InlineList title="Trade-off" items={[cognition.tradeoff]} />
+                </div>
+              </details>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => onEdit("executionItems", item)}>
+                  <Edit3 className="h-4 w-4" />
+                  Open
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => onStartExecution(item)} disabled={item.status === "COMPLETED" || item.status === "IN_PROGRESS"}>
+                  <Play className="h-4 w-4" />
+                  Start
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => onCompleteExecution(item)} disabled={item.status === "COMPLETED"}>
+                  <CheckCircle2 className="h-4 w-4" />
+                  Complete
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => onAddEvidence(item)}>
+                  <Plus className="h-4 w-4" />
+                  Add Evidence
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => onRequestApproval(item)}>
+                  <CircleHelp className="h-4 w-4" />
+                  Request Approval
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    onBlockExecution(item);
+                    onAddBlocker(item);
+                  }}
+                  disabled={item.status === "BLOCKED" || item.status === "COMPLETED"}
+                >
+                  <Ban className="h-4 w-4" />
+                  Block
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => onSnoozeExecution(item)} disabled={item.status === "COMPLETED"}>
+                  <CalendarClock className="h-4 w-4" />
+                  Snooze
+                </Button>
+              </div>
             </div>
-            <p className="mt-2 text-sm font-semibold">{item.title}</p>
-            <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{item.expectedImpact}</p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-3">
-              <FocusRow label="Owner" value={item.owner} />
-              <FocusRow label="Due" value={formatDate(item.dueDate)} />
-              <FocusRow label="Impact" value={item.actualImpact ? "Captured" : "Expected"} />
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => onEdit("executionItems", item)}>
-                <Edit3 className="h-4 w-4" />
-                Open
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => onStartExecution(item)} disabled={item.status === "COMPLETED" || item.status === "IN_PROGRESS"}>
-                <Play className="h-4 w-4" />
-                Start
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => onCompleteExecution(item)} disabled={item.status === "COMPLETED"}>
-                <CheckCircle2 className="h-4 w-4" />
-                Complete
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => onAddEvidence(item)}>
-                <Plus className="h-4 w-4" />
-                Add Evidence
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => onRequestApproval(item)}>
-                <CircleHelp className="h-4 w-4" />
-                Request Approval
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  onBlockExecution(item);
-                  onAddBlocker(item);
-                }}
-                disabled={item.status === "BLOCKED" || item.status === "COMPLETED"}
-              >
-                <Ban className="h-4 w-4" />
-                Block
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => onSnoozeExecution(item)} disabled={item.status === "COMPLETED"}>
-                <CalendarClock className="h-4 w-4" />
-                Snooze
-              </Button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {items.length === 0 ? (
           <div className="flex min-h-32 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground">
             Nothing in this lane.
@@ -5253,6 +5339,7 @@ function MissionsPage({
   const overview = selectedMission ? getMissionOverview(state, selectedMission.id) : null;
   const insights = overview ? generateMissionInsights(overview) : [];
   const recommendations = overview ? generateMissionRecommendations(overview) : [];
+  const missionCognition = overview ? summarizeMissionCognition(state, overview.mission.id) : null;
   const missionEvents = selectedMission
     ? state.events
         .filter((item) => item.workspaceId === activeWorkspaceId && item.sourceType === "Mission" && item.sourceId === selectedMission.id)
@@ -5364,12 +5451,33 @@ function MissionsPage({
                   <MetricCard label="Velocity" value={`${overview.velocityScore}%`} />
                   <MetricCard label="Risk" value={`${overview.riskScore}%`} />
                   <MetricCard label="Confidence" value={`${overview.confidenceScore}%`} />
+                  <MetricCard label="Judgment" value={`${missionCognition?.judgmentConfidence ?? overview.confidenceScore}%`} />
                   <MetricCard label="Target" value={formatDate(overview.mission.targetDate)} />
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <InlineList title="Executive summary" items={[generateExecutiveSummary(overview)]} />
                   <InlineList title="Founder brief" items={[generateFounderBrief(overview)]} />
                 </div>
+                {missionCognition ? (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <InlineList
+                      title="High-risk assumptions"
+                      items={missionCognition.highRiskAssumptions.length ? missionCognition.highRiskAssumptions.map((item) => item.title) : ["No high-risk assumptions attached."]}
+                    />
+                    <InlineList
+                      title="Weak evidence areas"
+                      items={missionCognition.weakEvidenceAreas.length ? missionCognition.weakEvidenceAreas.map((item) => item.summary) : ["No weak evidence areas detected."]}
+                    />
+                    <InlineList
+                      title="Major trade-offs"
+                      items={missionCognition.majorTradeoffs.length ? missionCognition.majorTradeoffs.map((item) => `${item.recommendedOption}: ${item.rationale}`) : ["No major tradeoff attached."]}
+                    />
+                    <InlineList
+                      title="Reflections"
+                      items={missionCognition.reflections.length ? missionCognition.reflections.map((item) => item.futureAdjustment) : ["No reflections attached yet."]}
+                    />
+                  </div>
+                ) : null}
                 {overview.latestSummary ? (
                   <div className="rounded-md border border-border bg-background p-3">
                     <p className="text-xs font-semibold uppercase text-muted-foreground">Latest summary</p>
@@ -8038,6 +8146,67 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
     { key: "owner", label: "Owner" }
   ];
 
+  if (collection === "assumptions") {
+    return [
+      { key: "title", label: "Title" },
+      { key: "description", label: "Description", kind: "textarea" },
+      { key: "sourceType", label: "Source Type" },
+      { key: "sourceId", label: "Source ID" },
+      { key: "status", label: "Status", kind: "select", options: assumptionStatusOptions },
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" },
+      { key: "riskLevel", label: "Risk Level", kind: "select", options: cognitionRiskOptions },
+      { key: "validationMethod", label: "Validation Method", kind: "textarea" },
+      { key: "validatedAt", label: "Validated At" },
+      { key: "invalidatedAt", label: "Invalidated At" }
+    ];
+  }
+
+  if (collection === "evidenceAssessments") {
+    return [
+      { key: "sourceType", label: "Source Type" },
+      { key: "sourceId", label: "Source ID" },
+      { key: "evidenceType", label: "Evidence Type", kind: "select", options: cognitionEvidenceTypeOptions },
+      { key: "summary", label: "Summary", kind: "textarea" },
+      { key: "strengthScore", label: "Strength Score", kind: "number" },
+      { key: "reliabilityScore", label: "Reliability Score", kind: "number" },
+      { key: "recencyScore", label: "Recency Score", kind: "number" },
+      { key: "relevanceScore", label: "Relevance Score", kind: "number" },
+      { key: "overallScore", label: "Overall Score", kind: "number" },
+      { key: "limitations", label: "Limitations", kind: "textarea" }
+    ];
+  }
+
+  if (collection === "tradeoffAnalyses") {
+    return [
+      { key: "title", label: "Title" },
+      { key: "sourceType", label: "Source Type" },
+      { key: "sourceId", label: "Source ID" },
+      { key: "optionA", label: "Option A", kind: "textarea" },
+      { key: "optionB", label: "Option B", kind: "textarea" },
+      { key: "optionC", label: "Option C", kind: "textarea" },
+      { key: "recommendedOption", label: "Recommended Option", kind: "textarea" },
+      { key: "rationale", label: "Rationale", kind: "textarea" },
+      { key: "opportunityCost", label: "Opportunity Cost", kind: "textarea" },
+      { key: "riskSummary", label: "Risk Summary", kind: "textarea" },
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" }
+    ];
+  }
+
+  if (collection === "reflections") {
+    return [
+      { key: "title", label: "Title" },
+      { key: "sourceType", label: "Source Type" },
+      { key: "sourceId", label: "Source ID" },
+      { key: "summary", label: "Summary", kind: "textarea" },
+      { key: "whatWorked", label: "What Worked", kind: "textarea" },
+      { key: "whatFailed", label: "What Failed", kind: "textarea" },
+      { key: "wrongAssumptions", label: "Wrong Assumptions", kind: "textarea" },
+      { key: "newLearning", label: "New Learning", kind: "textarea" },
+      { key: "futureAdjustment", label: "Future Adjustment", kind: "textarea" },
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" }
+    ];
+  }
+
   if (collection === "missions") {
     return [
       { key: "title", label: "Title" },
@@ -8870,6 +9039,9 @@ function ContextBadges({ item }: { item: AnyRecord }) {
     item.metricType ? ["Metric", formatEnum(item.metricType), "blue"] : null,
     item.unit && item.currentValue !== undefined ? ["Current", `${item.currentValue} ${item.unit}`, "green"] : null,
     item.learningType ? ["Learning", formatEnum(item.learningType), "violet"] : null,
+    item.riskLevel ? ["Risk", formatEnum(item.riskLevel), priorityTone(item.riskLevel as Priority)] : null,
+    item.evidenceType ? ["Evidence", formatEnum(item.evidenceType), "teal"] : null,
+    item.overallScore !== undefined ? ["Evidence score", `${Math.round(Number(item.overallScore) * 100)}%`, "blue"] : null,
     item.attributionType ? ["Attribution", formatEnum(item.attributionType), "teal"] : null,
     item.adjustmentType ? ["Adjustment", formatEnum(item.adjustmentType), "amber"] : null,
     item.planType ? ["Plan", formatEnum(item.planType), "violet"] : null,

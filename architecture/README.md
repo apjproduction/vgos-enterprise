@@ -20,11 +20,13 @@ The Mission Engine turns objectives, plans, execution, measurement, learning, an
 
 Connected Intelligence prepares VGOS for live external data sources by requiring every provider adapter to pass through connectors, raw signals, normalized signals, events, and kernel routing before creating intelligence, knowledge, mission, measurement, or learning records.
 
+Reflective Cognition strengthens Advisor, Executive Brief, Work Queue, Missions, and recommendations by making assumptions, evidence quality, counter-evidence, tradeoffs, reflections, and confidence recalibration explicit.
+
 ## Current Layers
 
 - Data foundation: Prisma models for domain entities, intelligence objects, knowledge objects, relationships, memory snapshots, workflows, workflow runs, handoffs, plans, milestones, plan items, dependencies, constraints, predicted outcomes, resource capacity, execution items, execution evidence, blockers, approvals, results, metrics, measurements, learnings, attributions, strategy adjustments, missions, mission links, mission summaries, connectors, raw signals, normalized signals, and connector sync runs.
-- Kernel services: knowledge service, semantic search foundation, memory trend service, workflow engine, agent coordinator, decision engine, planning engine, execution engine, measurement engine, learning engine, attribution engine, strategy feedback engine, mission engine, mission builder, mission health, mission progress, mission summaries, connector registry, connector engine, normalization engine, signal router, connector health, scheduling, dependency analysis, prediction, resource planning, and scoring utilities.
-- Product UI: Mission Control, Missions, Connectors, Signals, Sync Runs, Knowledge, Workflows, Intelligence Pipeline, Memory, Patterns, Objectives, Agents, Reasoning, Decisions, Plans, Executions, Approvals, Blockers, Evidence, Results, Metrics, Measurements, Learnings, Attributions, Strategy Adjustments, Capabilities, and operational engine pages.
+- Kernel services: knowledge service, semantic search foundation, memory trend service, workflow engine, agent coordinator, decision engine, planning engine, execution engine, measurement engine, learning engine, attribution engine, strategy feedback engine, mission engine, mission builder, mission health, mission progress, mission summaries, connector registry, connector engine, normalization engine, signal router, connector health, reflective cognition, scheduling, dependency analysis, prediction, resource planning, and scoring utilities.
+- Product UI: Mission Control, Missions, Connectors, Signals, Sync Runs, Knowledge, Workflows, Intelligence Pipeline, Memory, Patterns, Objectives, Agents, Reasoning, Decisions, Plans, Executions, Approvals, Blockers, Evidence, Assumptions, Tradeoffs, Reflections, Results, Metrics, Measurements, Learnings, Attributions, Strategy Adjustments, Capabilities, and operational engine pages.
 - Tenant boundary: all major records remain scoped by organization and workspace.
 
 ## Operating Principle

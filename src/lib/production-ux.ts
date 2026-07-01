@@ -39,7 +39,7 @@ export const operatorNavigationGroups: NavigationGroup[] = [
 export const intelligenceStudioNavigationGroups: NavigationGroup[] = [
   {
     label: "Intelligence Studio",
-    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning"]
+    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning", "assumptions", "evidence", "tradeoffs", "reflections"]
   },
   {
     label: "Connections",
@@ -70,7 +70,7 @@ export const developerNavigationGroups: NavigationGroup[] = [
   },
   {
     label: "Intelligence",
-    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning", "learnings"]
+    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning", "assumptions", "evidence", "tradeoffs", "reflections", "learnings"]
   },
   {
     label: "Connections",
@@ -522,6 +522,30 @@ export function getEmptyStateCopy(collection: CollectionKey, label?: string) {
       description: "Create or generate recommendations so VGOS has suggested next actions to rank.",
       actionLabel: "Create Recommendation",
       secondaryText: "Recommendations can become plan items, execution items, or tasks."
+    },
+    assumptions: {
+      title: "No assumptions yet.",
+      description: "Add assumptions when a recommendation depends on something VGOS should test.",
+      actionLabel: "Create Assumption",
+      secondaryText: "Assumptions make uncertainty explicit before confidence rises."
+    },
+    evidenceAssessments: {
+      title: "No evidence assessments yet.",
+      description: "Assess evidence when a recommendation needs source quality, recency, or relevance reviewed.",
+      actionLabel: "Assess Evidence",
+      secondaryText: "Evidence quality should explain why VGOS trusts a recommendation."
+    },
+    tradeoffAnalyses: {
+      title: "No tradeoffs yet.",
+      description: "Compare options when a decision has meaningful opportunity cost or sequencing risk.",
+      actionLabel: "Create Tradeoff",
+      secondaryText: "Tradeoffs help VGOS explain what it is choosing against."
+    },
+    reflections: {
+      title: "No reflections yet.",
+      description: "Create reflections after work ships, measurement arrives, or a learning changes future judgment.",
+      actionLabel: "Create Reflection",
+      secondaryText: "Reflections recalibrate future recommendations."
     },
     plans: {
       title: "No plans yet.",

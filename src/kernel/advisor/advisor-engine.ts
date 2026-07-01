@@ -6,6 +6,8 @@ import type {
   DailyBrief,
   ExecutiveReview
 } from "@/kernel/advisor/advisor-types";
+import { generateExecutiveJudgment } from "@/kernel/cognition/judgment-engine";
+import { generateTradeoffSummary } from "@/kernel/cognition/tradeoff-engine";
 import type { PlatformState } from "@/lib/vgos-data";
 
 export { buildAdvisorContext } from "@/kernel/advisor/advisor-context";
@@ -51,8 +53,38 @@ function summarizeList(items: string[], fallback: string) {
   return items.length ? items.join(" ") : fallback;
 }
 
+function firstRecommendationReference(answer: AdvisorAnswer) {
+  return answer.relatedObjects.find((item) => /recommendation/i.test(item.type))?.id;
+}
+
+function addReflectiveCognition(
+  answer: AdvisorAnswer,
+  state: PlatformState,
+  workspaceId: string,
+  sourceId = firstRecommendationReference(answer)
+): AdvisorAnswer {
+  const judgment = generateExecutiveJudgment(state, workspaceId, sourceId);
+  const tradeoff = judgment.tradeoff ? generateTradeoffSummary(judgment.tradeoff) : "No explicit tradeoff is attached yet; VGOS is using evidence and assumption risk.";
+
+  return {
+    ...answer,
+    directAnswer: answer.answer,
+    assumptions: judgment.assumptions.map((item) => `${item.title} (${item.riskLevel.toLowerCase()} risk)`),
+    evidence: judgment.evidence.map((item) => `${item.summary} (${Math.round(item.overallScore * 100)}%)`),
+    counterEvidence: judgment.counterEvidence.length ? judgment.counterEvidence : ["No material counter-evidence is visible yet."],
+    tradeoff,
+    confidence: Math.min(answer.confidence, Math.max(0.55, judgment.confidenceScore + 0.05)),
+    confidenceExplanation: judgment.confidenceExplanation,
+    whatWouldChangeRecommendation: judgment.whatWouldChangeRecommendation,
+    suggestedNextAction: judgment.suggestedNextAction,
+    shouldWaitForEvidence: judgment.shouldDefer,
+    executiveJudgment: judgment
+  };
+}
+
 export function generateDailyBrief(state: PlatformState, workspaceId: string, userName = "Tom Promise"): DailyBrief {
   const context = buildAdvisorContext(state, workspaceId);
+  const executiveJudgment = generateExecutiveJudgment(state, workspaceId, context.topPriorities[0]?.id);
   const topPriorityTitles = context.topPriorities.map((item) => item.title);
   const blockedTitles = [
     ...context.blockedExecutions.slice(0, 3).map((item) => item.title),
@@ -73,6 +105,7 @@ export function generateDailyBrief(state: PlatformState, workspaceId: string, us
     missionHealth: context.missionHealth.slice(0, 6),
     recentWins: context.recentWins.slice(0, 5),
     executiveRecommendation: context.executiveRecommendation,
+    executiveJudgment,
     recommendedFocus: summarizeList(topPriorityTitles.slice(0, 3), "Keep capacity on ready execution items and founder review."),
     estimatedWorkload: context.estimatedWorkload
   };
@@ -346,17 +379,17 @@ export function answerExecutiveQuestion(
   const context = buildAdvisorContext(state, workspaceId);
   const lower = question.toLowerCase();
 
-  if (/blocked|stuck|waiting/.test(lower)) return summarizeBlockedWork(state, workspaceId);
-  if (/changed|yesterday|recent/.test(lower)) return summarizeRecentChanges(state, workspaceId);
-  if (/risk|at risk|why.*mission/.test(lower)) return explainMissionRisk(state, workspaceId);
-  if (/publish|content|blog|faq/.test(lower)) return answerPublishingQuestion(context, question);
-  if (/highest confidence|confidence|recommendations/.test(lower)) return explainRecommendation(state, workspaceId);
-  if (/product hunt|launch momentum/.test(lower)) return summarizeProductHunt(context, question);
-  if (/founder|linkedin|authority/.test(lower)) return summarizeFounderContent(context, question);
-  if (/work queue|today|next action|should i do/.test(lower)) return recommendNextActions(state, workspaceId);
+  if (/blocked|stuck|waiting/.test(lower)) return addReflectiveCognition(summarizeBlockedWork(state, workspaceId), state, workspaceId);
+  if (/changed|yesterday|recent/.test(lower)) return addReflectiveCognition(summarizeRecentChanges(state, workspaceId), state, workspaceId);
+  if (/risk|at risk|why.*mission/.test(lower)) return addReflectiveCognition(explainMissionRisk(state, workspaceId), state, workspaceId);
+  if (/publish|content|blog|faq/.test(lower)) return addReflectiveCognition(answerPublishingQuestion(context, question), state, workspaceId);
+  if (/highest confidence|confidence|recommendations/.test(lower)) return addReflectiveCognition(explainRecommendation(state, workspaceId), state, workspaceId);
+  if (/product hunt|launch momentum/.test(lower)) return addReflectiveCognition(summarizeProductHunt(context, question), state, workspaceId);
+  if (/founder|linkedin|authority/.test(lower)) return addReflectiveCognition(summarizeFounderContent(context, question), state, workspaceId);
+  if (/work queue|today|next action|should i do/.test(lower)) return addReflectiveCognition(recommendNextActions(state, workspaceId), state, workspaceId);
 
   const brief = generateDailyBrief(state, workspaceId);
-  return {
+  return addReflectiveCognition({
     question,
     answer: `${brief.summary} Recommended focus: ${brief.recommendedFocus}`,
     reasoning: [
@@ -369,5 +402,5 @@ export function answerExecutiveQuestion(
       { label: "Open Work Queue", description: "Start the highest-priority ready item.", pageId: "workQueue" }
     ],
     confidence: 0.8
-  };
+  }, state, workspaceId);
 }
