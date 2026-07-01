@@ -156,6 +156,15 @@ enum EventType {
   JUDGMENT_GENERATED
   REFLECTION_CREATED
   CONFIDENCE_RECALIBRATED
+  DECISION_SITUATION_CREATED
+  DECISION_OPTION_CREATED
+  OPTION_EVALUATED
+  OPTION_CHALLENGED
+  DELIBERATION_STARTED
+  DELIBERATION_COMPLETED
+  DECISION_COMMITTED
+  DECISION_DEFERRED
+  DECISION_REVIEWED
 }
 
 enum EventSeverity {
@@ -195,6 +204,72 @@ enum CognitionEvidenceType {
   MANUAL_NOTE
   HISTORICAL_PATTERN
   COUNTER_EVIDENCE
+}
+
+enum DecisionSituationType {
+  PRIORITY_DECISION
+  STRATEGY_DECISION
+  CONTENT_DECISION
+  PRODUCT_DECISION
+  CHANNEL_DECISION
+  RESOURCE_DECISION
+  EXECUTION_DECISION
+  RISK_DECISION
+  CUSTOM
+}
+
+enum DecisionSituationStatus {
+  OPEN
+  DELIBERATING
+  DECIDED
+  DEFERRED
+  CANCELLED
+  REVIEWED
+}
+
+enum DecisionOptionType {
+  CREATE_CONTENT
+  CREATE_DEMO
+  PAUSE_WORK
+  START_EXECUTION
+  CHANGE_STRATEGY
+  RUN_EXPERIMENT
+  UPDATE_PAGE
+  REPLY_COMMUNITY
+  SUBMIT_DIRECTORY
+  DEFER_DECISION
+  DO_NOTHING
+  CUSTOM
+}
+
+enum DeliberationStatus {
+  DRAFT
+  COMPLETED
+  DEFERRED
+  NEEDS_EVIDENCE
+}
+
+enum DecisionCommitmentType {
+  EXECUTE_NOW
+  SCHEDULE
+  EXPERIMENT
+  MONITOR
+  DEFER
+  REJECT
+}
+
+enum DecisionCommitmentStatus {
+  COMMITTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum DecisionQuality {
+  STRONG
+  SOUND
+  MIXED
+  WEAK
 }
 
 enum ActionType {
@@ -739,6 +814,12 @@ model Organization {
   evidenceAssessments  EvidenceAssessment[]
   tradeoffAnalyses     TradeoffAnalysis[]
   reflections          Reflection[]
+  decisionSituations   DecisionSituation[]
+  decisionOptions      DecisionOption[]
+  optionEvaluations    OptionEvaluation[]
+  deliberations        Deliberation[]
+  decisionCommitments  DecisionCommitment[]
+  decisionReviews      DecisionReview[]
   connectors           Connector[]
   rawSignals           RawSignal[]
   normalizedSignals    NormalizedSignal[]
@@ -832,6 +913,12 @@ model Workspace {
   evidenceAssessments  EvidenceAssessment[]
   tradeoffAnalyses     TradeoffAnalysis[]
   reflections          Reflection[]
+  decisionSituations   DecisionSituation[]
+  decisionOptions      DecisionOption[]
+  optionEvaluations    OptionEvaluation[]
+  deliberations        Deliberation[]
+  decisionCommitments  DecisionCommitment[]
+  decisionReviews      DecisionReview[]
   connectors           Connector[]
   rawSignals           RawSignal[]
   normalizedSignals    NormalizedSignal[]
@@ -1612,6 +1699,7 @@ model Objective {
   learnings          Learning[]
   strategyAdjustments StrategyAdjustment[]
   missionObjectives  MissionObjective[]
+  decisionSituations DecisionSituation[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 
@@ -1969,6 +2057,7 @@ model PlanItem {
   outgoingDependencies PlanDependency[]    @relation("PlanDependencyFrom")
   incomingDependencies PlanDependency[]    @relation("PlanDependencyTo")
   executionItems       ExecutionItem[]
+  decisionCommitments  DecisionCommitment[]
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
 
@@ -2112,6 +2201,7 @@ model ExecutionItem {
   measurements         Measurement[]
   learnings            Learning[]
   missionExecutions    MissionExecution[]
+  decisionCommitments  DecisionCommitment[]
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 
@@ -2506,6 +2596,196 @@ model Reflection {
   @@index([confidenceScore])
 }
 
+model DecisionSituation {
+  id               String                  @id @default(cuid())
+  organizationId   String
+  workspaceId      String
+  title            String
+  description      String                  @db.Text
+  situationType    DecisionSituationType
+  status           DecisionSituationStatus @default(OPEN)
+  urgency          Priority                @default(MEDIUM)
+  sourceType       String?
+  sourceId         String?
+  missionId        String?
+  objectiveId      String?
+  organization     Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace        Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mission          Mission?                @relation(fields: [missionId], references: [id], onDelete: SetNull)
+  objective        Objective?              @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
+  options          DecisionOption[]
+  evaluations      OptionEvaluation[]
+  deliberations    Deliberation[]
+  commitments      DecisionCommitment[]
+  reviews          DecisionReview[]
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([situationType])
+  @@index([status])
+  @@index([urgency])
+  @@index([sourceType, sourceId])
+  @@index([missionId])
+  @@index([objectiveId])
+}
+
+model DecisionOption {
+  id               String             @id @default(cuid())
+  organizationId   String
+  workspaceId      String
+  situationId      String
+  title            String
+  description      String             @db.Text
+  optionType       DecisionOptionType
+  expectedImpact   Float              @default(0)
+  estimatedEffort  Float              @default(0)
+  riskLevel        Priority           @default(MEDIUM)
+  confidenceScore  Float              @default(0)
+  pros             Json
+  cons             Json
+  assumptions      Json
+  evidence         Json
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace        Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  situation        DecisionSituation  @relation(fields: [situationId], references: [id], onDelete: Cascade)
+  evaluations      OptionEvaluation[]
+  commitments      DecisionCommitment[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([situationId])
+  @@index([optionType])
+  @@index([riskLevel])
+  @@index([confidenceScore])
+}
+
+model OptionEvaluation {
+  id               String            @id @default(cuid())
+  organizationId   String
+  workspaceId      String
+  optionId         String
+  situationId      String
+  impactScore      Float             @default(0)
+  effortScore      Float             @default(0)
+  riskScore        Float             @default(0)
+  evidenceScore    Float             @default(0)
+  alignmentScore   Float             @default(0)
+  urgencyScore     Float             @default(0)
+  overallScore     Float             @default(0)
+  rationale        String            @db.Text
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  option           DecisionOption    @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  situation        DecisionSituation @relation(fields: [situationId], references: [id], onDelete: Cascade)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([optionId])
+  @@index([situationId])
+  @@index([overallScore])
+}
+
+model Deliberation {
+  id                      String               @id @default(cuid())
+  organizationId          String
+  workspaceId             String
+  situationId             String
+  summary                 String               @db.Text
+  recommendedOptionId     String?
+  rejectedOptionIds       Json
+  finalJudgment           String               @db.Text
+  confidenceScore         Float                @default(0)
+  dissentingView          String               @db.Text
+  whatWouldChangeDecision String               @db.Text
+  status                  DeliberationStatus   @default(DRAFT)
+  organization            Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace               Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  situation               DecisionSituation    @relation(fields: [situationId], references: [id], onDelete: Cascade)
+  commitments             DecisionCommitment[]
+  reviews                 DecisionReview[]
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([situationId])
+  @@index([recommendedOptionId])
+  @@index([status])
+  @@index([confidenceScore])
+}
+
+model DecisionCommitment {
+  id                    String                   @id @default(cuid())
+  organizationId        String
+  workspaceId           String
+  situationId           String
+  deliberationId        String
+  optionId              String
+  title                 String
+  description           String                   @db.Text
+  commitmentType        DecisionCommitmentType
+  status                DecisionCommitmentStatus @default(COMMITTED)
+  owner                 String
+  dueDate               DateTime?
+  linkedExecutionItemId String?
+  linkedPlanItemId      String?
+  organization          Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace             Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  situation             DecisionSituation        @relation(fields: [situationId], references: [id], onDelete: Cascade)
+  deliberation          Deliberation             @relation(fields: [deliberationId], references: [id], onDelete: Cascade)
+  option                DecisionOption           @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  executionItem         ExecutionItem?           @relation(fields: [linkedExecutionItemId], references: [id], onDelete: SetNull)
+  planItem              PlanItem?                @relation(fields: [linkedPlanItemId], references: [id], onDelete: SetNull)
+  reviews               DecisionReview[]
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([situationId])
+  @@index([deliberationId])
+  @@index([optionId])
+  @@index([commitmentType])
+  @@index([status])
+  @@index([linkedExecutionItemId])
+  @@index([linkedPlanItemId])
+}
+
+model DecisionReview {
+  id               String              @id @default(cuid())
+  organizationId   String
+  workspaceId      String
+  situationId      String
+  deliberationId   String?
+  commitmentId     String?
+  summary          String              @db.Text
+  outcomeScore     Float               @default(0)
+  decisionQuality  DecisionQuality
+  judgmentPattern  String              @db.Text
+  futureRule       String              @db.Text
+  organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace        Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  situation        DecisionSituation   @relation(fields: [situationId], references: [id], onDelete: Cascade)
+  deliberation     Deliberation?       @relation(fields: [deliberationId], references: [id], onDelete: SetNull)
+  commitment       DecisionCommitment? @relation(fields: [commitmentId], references: [id], onDelete: SetNull)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([situationId])
+  @@index([deliberationId])
+  @@index([commitmentId])
+  @@index([decisionQuality])
+  @@index([outcomeScore])
+}
+
 model Mission {
   id              String             @id @default(cuid())
   organizationId  String
@@ -2533,6 +2813,7 @@ model Mission {
   learnings       MissionLearning[]
   metrics         MissionMetric[]
   summaries       MissionSummary[]
+  decisionSituations DecisionSituation[]
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 

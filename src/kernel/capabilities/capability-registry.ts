@@ -323,6 +323,47 @@ export const capabilityRegistry: CapabilityDefinition[] = [
     status: "ACTIVE"
   },
   {
+    id: "deliberation-layer",
+    name: "Deliberation Layer",
+    description: "Forces VGOS to identify decision situations, generate options, score tradeoffs, challenge choices, commit deliberately, and review outcomes before changing capacity or strategy.",
+    version: "1.0.0",
+    inputs: ["Decision Situations", "Recommendations", "Missions", "Execution Items", "Evidence", "Reflections"],
+    outputs: [
+      "Decision Options",
+      "Option Evaluations",
+      "Option Challenges",
+      "Deliberations",
+      "Decision Commitments",
+      "Decision Reviews"
+    ],
+    dependencies: [
+      "Reflective Cognition & Executive Wisdom",
+      "Executive Intelligence Experience",
+      "Mission Engine",
+      "Execution Engine",
+      "Measurement & Learning Engine"
+    ],
+    eventsConsumed: [
+      "HIGH_IMPACT_ACTION_SELECTED",
+      "MISSION_HEALTH_CHANGED",
+      "EXECUTION_BLOCKED",
+      "LEARNING_CREATED",
+      "REFLECTION_CREATED"
+    ],
+    eventsProduced: [
+      "DECISION_SITUATION_CREATED",
+      "DECISION_OPTION_CREATED",
+      "OPTION_EVALUATED",
+      "OPTION_CHALLENGED",
+      "DELIBERATION_STARTED",
+      "DELIBERATION_COMPLETED",
+      "DECISION_COMMITTED",
+      "DECISION_DEFERRED",
+      "DECISION_REVIEWED"
+    ],
+    status: "ACTIVE"
+  },
+  {
     id: "event-system",
     name: "Event System",
     description: "Records workspace-scoped events that trigger workflows and kernel updates.",

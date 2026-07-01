@@ -152,6 +152,16 @@ import {
   summarizeMissionCognition
 } from "@/kernel/cognition/judgment-engine";
 import {
+  createSituationFromWorkQueueConflict,
+  getOpenSituations
+} from "@/kernel/deliberation/decision-situation-engine";
+import { deliberate } from "@/kernel/deliberation/deliberation-engine";
+import { challengeOption } from "@/kernel/deliberation/option-challenger";
+import type {
+  DecisionOption,
+  DeliberationResult
+} from "@/kernel/deliberation/deliberation-types";
+import {
   calculateOpportunityScore,
   createDefaultRecord,
   createScopedId,
@@ -189,7 +199,6 @@ import {
   type PlanItem,
   type PlatformState,
   type Priority,
-  type RawSignal,
   type RawSignalStatus,
   type RecommendationType,
   type RelationshipType,
@@ -247,7 +256,15 @@ const statusOptions = [
   "UNTESTED",
   "VALIDATED",
   "INVALIDATED",
-  "NEEDS_EVIDENCE"
+  "NEEDS_EVIDENCE",
+  "OPEN",
+  "DELIBERATING",
+  "DECIDED",
+  "DEFERRED",
+  "CANCELLED",
+  "REVIEWED",
+  "DRAFT",
+  "COMMITTED"
 ];
 
 const priorityOptions: Priority[] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
@@ -602,6 +619,36 @@ const cognitionEvidenceTypeOptions = [
   "HISTORICAL_PATTERN",
   "COUNTER_EVIDENCE"
 ];
+const decisionSituationTypeOptions = [
+  "PRIORITY_DECISION",
+  "STRATEGY_DECISION",
+  "CONTENT_DECISION",
+  "PRODUCT_DECISION",
+  "CHANNEL_DECISION",
+  "RESOURCE_DECISION",
+  "EXECUTION_DECISION",
+  "RISK_DECISION",
+  "CUSTOM"
+];
+const decisionSituationStatusOptions = ["OPEN", "DELIBERATING", "DECIDED", "DEFERRED", "CANCELLED", "REVIEWED"];
+const decisionOptionTypeOptions = [
+  "CREATE_CONTENT",
+  "CREATE_DEMO",
+  "PAUSE_WORK",
+  "START_EXECUTION",
+  "CHANGE_STRATEGY",
+  "RUN_EXPERIMENT",
+  "UPDATE_PAGE",
+  "REPLY_COMMUNITY",
+  "SUBMIT_DIRECTORY",
+  "DEFER_DECISION",
+  "DO_NOTHING",
+  "CUSTOM"
+];
+const deliberationStatusOptions = ["DRAFT", "COMPLETED", "DEFERRED", "NEEDS_EVIDENCE"];
+const decisionCommitmentTypeOptions = ["EXECUTE_NOW", "SCHEDULE", "EXPERIMENT", "MONITOR", "DEFER", "REJECT"];
+const decisionCommitmentStatusOptions = ["COMMITTED", "IN_PROGRESS", "COMPLETED", "CANCELLED"];
+const decisionQualityOptions = ["STRONG", "SOUND", "MIXED", "WEAK"];
 
 function priorityTone(priority?: Priority) {
   if (priority === "CRITICAL") return "red";
@@ -611,8 +658,8 @@ function priorityTone(priority?: Priority) {
 }
 
 function statusTone(status?: string) {
-  if (status === "LIVE" || status === "PUBLISHED" || status === "ACTIVE" || status === "COMPLETED" || status === "APPROVED" || status === "RESOLVED" || status === "HEALTHY" || status === "IMPROVING" || status === "ACCEPTED" || status === "IMPLEMENTED" || status === "CONNECTED" || status === "MOCK" || status === "ROUTED") return "green";
-  if (status === "IN_PROGRESS" || status === "RESEARCHING" || status === "DRAFT" || status === "READY" || status === "IN_REVIEW" || status === "STARTED" || status === "RECEIVED" || status === "NORMALIZED") return "blue";
+  if (status === "LIVE" || status === "PUBLISHED" || status === "ACTIVE" || status === "COMPLETED" || status === "APPROVED" || status === "RESOLVED" || status === "HEALTHY" || status === "IMPROVING" || status === "ACCEPTED" || status === "IMPLEMENTED" || status === "CONNECTED" || status === "MOCK" || status === "ROUTED" || status === "DECIDED" || status === "REVIEWED") return "green";
+  if (status === "IN_PROGRESS" || status === "RESEARCHING" || status === "DRAFT" || status === "READY" || status === "IN_REVIEW" || status === "STARTED" || status === "RECEIVED" || status === "NORMALIZED" || status === "OPEN" || status === "DELIBERATING" || status === "COMMITTED") return "blue";
   if (status === "BLOCKED" || status === "FAILED" || status === "REJECTED" || status === "DECLINING" || status === "AT_RISK" || status === "ERROR" || status === "INVALIDATED") return "red";
   if (status === "SUBMITTED" || status === "QUEUED" || status === "PARTIAL" || status === "VALIDATED") return "teal";
   if (status === "ARCHIVED" || status === "PAUSED" || status === "CANCELLED" || status === "IGNORED" || status === "STALLED" || status === "DISCONNECTED") return "slate";
@@ -676,6 +723,12 @@ function sourceTypeToCollection(sourceType: string): EditableCollection {
     EvidenceAssessment: "evidenceAssessments",
     TradeoffAnalysis: "tradeoffAnalyses",
     Reflection: "reflections",
+    DecisionSituation: "decisionSituations",
+    DecisionOption: "decisionOptions",
+    OptionEvaluation: "optionEvaluations",
+    Deliberation: "deliberations",
+    DecisionCommitment: "decisionCommitments",
+    DecisionReview: "decisionReviews",
     Connector: "connectors",
     RawSignal: "rawSignals",
     NormalizedSignal: "normalizedSignals",
@@ -742,6 +795,12 @@ function collectionToSourceType(collection: EditableCollection) {
     evidenceAssessments: "EvidenceAssessment",
     tradeoffAnalyses: "TradeoffAnalysis",
     reflections: "Reflection",
+    decisionSituations: "DecisionSituation",
+    decisionOptions: "DecisionOption",
+    optionEvaluations: "OptionEvaluation",
+    deliberations: "Deliberation",
+    decisionCommitments: "DecisionCommitment",
+    decisionReviews: "DecisionReview",
     connectors: "Connector",
     rawSignals: "RawSignal",
     normalizedSignals: "NormalizedSignal",
@@ -791,6 +850,12 @@ function eventTypeForCollection(collection: EditableCollection) {
     evidenceAssessments: "EVIDENCE_ASSESSED",
     tradeoffAnalyses: "TRADEOFF_ANALYZED",
     reflections: "REFLECTION_CREATED",
+    decisionSituations: "DECISION_SITUATION_CREATED",
+    decisionOptions: "DECISION_OPTION_CREATED",
+    optionEvaluations: "OPTION_EVALUATED",
+    deliberations: "DELIBERATION_COMPLETED",
+    decisionCommitments: "DECISION_COMMITTED",
+    decisionReviews: "DECISION_REVIEWED",
     missions: "MISSION_CREATED",
     missionSummaries: "MISSION_SUMMARY_GENERATED",
     connectors: "CONNECTOR_CREATED",
@@ -2712,6 +2777,7 @@ export function VgosApp({ initialPage = "executiveBrief" }: { initialPage?: Page
             <WorkQueuePage
               state={state}
               activeWorkspaceId={activeWorkspaceId}
+              onNavigate={navigateTo}
               onCreate={openCreate}
               onEdit={openEdit}
               onStartExecution={startExecutionItem}
@@ -3080,6 +3146,10 @@ function ExecutiveBriefPage({
   );
   const context = useMemo(() => buildAdvisorContext(state, activeWorkspaceId), [state, activeWorkspaceId]);
   const judgment = brief.executiveJudgment;
+  const decisionNeeded = useMemo(() => {
+    const situation = getOpenSituations(state, activeWorkspaceId)[0];
+    return situation ? deliberate(situation, state) : null;
+  }, [state, activeWorkspaceId]);
   const personaFocus: Record<PersonaMode, string> = {
     Founder: "Founder mode is emphasizing decisions, proof, and leverage.",
     Marketing: "Marketing mode is emphasizing content, approvals, and results.",
@@ -3198,6 +3268,33 @@ function ExecutiveBriefPage({
               <InlineList title="What would change this" items={judgment.whatWouldChangeRecommendation} />
             </CardContent>
           </Card>
+
+          {decisionNeeded ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Decision Needed</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">The highest-urgency open decision before VGOS spends more capacity.</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone={priorityTone(decisionNeeded.situation.urgency)}>{formatEnum(decisionNeeded.situation.urgency)}</Badge>
+                  <Badge tone={statusTone(decisionNeeded.situation.status)}>{formatEnum(decisionNeeded.situation.status)}</Badge>
+                </div>
+                <p className="text-sm font-semibold">{decisionNeeded.situation.title}</p>
+                <p className="text-xs leading-5 text-muted-foreground">{decisionNeeded.deliberation.finalJudgment}</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <FocusRow label="Chosen" value={decisionNeeded.recommendedOption?.title ?? "No option selected"} />
+                  <FocusRow label="Confidence" value={`${Math.round(decisionNeeded.deliberation.confidenceScore * 100)}%`} />
+                </div>
+                <InlineList title="Rejected" items={decisionNeeded.rejectedOptions.map((option) => option.title).slice(0, 3)} />
+                <InlineList title="Dissenting view" items={[decisionNeeded.deliberation.dissentingView]} />
+                <Button variant="outline" size="sm" onClick={() => onNavigate("decisions")}>
+                  <ArrowRight className="h-4 w-4" />
+                  Review Decision
+                </Button>
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader>
@@ -3337,6 +3434,23 @@ function AdvisorWorkspace({
                   <p className="mt-2 text-xs leading-5 text-muted-foreground">{answer.confidenceExplanation}</p>
                 ) : null}
               </div>
+              {answer.decisionDeliberation ? (
+                <div className="rounded-md border border-border bg-muted/30 p-4">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge tone="blue">Decision</Badge>
+                    {answer.decisionDeliberation.needsReview ? <Badge tone="amber">Needs Review</Badge> : <Badge tone="green">Reviewed</Badge>}
+                  </div>
+                  <h3 className="mt-3 text-sm font-semibold">{answer.decisionDeliberation.situationTitle}</h3>
+                  <div className="mt-3 grid gap-3 xl:grid-cols-3">
+                    <InlineList title="Option scores" items={answer.decisionDeliberation.optionScores} />
+                    <InlineList title="Rejected" items={answer.decisionDeliberation.rejectedOptions} />
+                    <InlineList title="Dissenting view" items={[answer.decisionDeliberation.dissentingView]} />
+                    <InlineList title="Chosen" items={[answer.decisionDeliberation.recommendedOption ?? "No chosen option yet."]} />
+                    <InlineList title="Commitment" items={[answer.decisionDeliberation.commitmentTitle]} />
+                    <InlineList title="What would change it" items={[answer.decisionDeliberation.whatWouldChangeDecision]} />
+                  </div>
+                </div>
+              ) : null}
               <div className="grid gap-3 xl:grid-cols-3">
                 <InlineList title="Reasoning" items={answer.reasoning} />
                 <InlineList title="Assumptions" items={answer.assumptions ?? ["No explicit assumptions attached."]} />
@@ -3380,6 +3494,7 @@ function AdvisorWorkspace({
 function WorkQueuePage({
   state,
   activeWorkspaceId,
+  onNavigate,
   onCreate,
   onEdit,
   onStartExecution,
@@ -3392,6 +3507,7 @@ function WorkQueuePage({
 }: {
   state: PlatformState;
   activeWorkspaceId: string;
+  onNavigate: (page: PageId) => void;
   onCreate: (collection: EditableCollection) => void;
   onEdit: (collection: EditableCollection, item: AnyRecord) => void;
   onStartExecution: (item: AnyRecord) => void;
@@ -3417,6 +3533,15 @@ function WorkQueuePage({
     const completedAt = new Date(item.completedAt);
     return completedAt >= todayStart && completedAt <= todayEnd;
   });
+  const conflictingWork = queue
+    .filter((item) => !["COMPLETED", "CANCELLED"].includes(item.status) && (item.priority === "CRITICAL" || item.priority === "HIGH"))
+    .slice(0, 4);
+  const storedCapacitySituation = state.decisionSituations.find(
+    (item) => item.workspaceId === activeWorkspaceId && item.sourceType === "WorkQueue"
+  );
+  const generatedCapacitySituation = createSituationFromWorkQueueConflict(conflictingWork);
+  const capacitySituation = storedCapacitySituation ?? generatedCapacitySituation;
+  const capacityDecision = capacitySituation ? deliberate(capacitySituation, state) : null;
 
   return (
     <div className="space-y-4">
@@ -3441,6 +3566,36 @@ function WorkQueuePage({
           <FocusRow label="Done today" value={String(completedToday.length)} />
         </CardContent>
       </Card>
+
+      {capacityDecision ? (
+        <Card>
+          <CardHeader className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div>
+              <Badge tone="amber">Decision Needed</Badge>
+              <CardTitle className="mt-2">{capacityDecision.situation.title}</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">{capacityDecision.situation.description}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={() => onEdit("decisionSituations", capacityDecision.situation)}>
+                <Edit3 className="h-4 w-4" />
+                Capture
+              </Button>
+              <Button size="sm" onClick={() => onNavigate("decisions")}>
+                <ArrowRight className="h-4 w-4" />
+                Review
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-3 lg:grid-cols-3">
+            <FocusRow label="Recommended" value={capacityDecision.recommendedOption?.title ?? "No option selected"} />
+            <FocusRow label="Commitment" value={capacityDecision.commitment.title} />
+            <FocusRow label="Confidence" value={`${Math.round(capacityDecision.deliberation.confidenceScore * 100)}%`} />
+            <InlineList title="Competing work" items={conflictingWork.map((item) => item.title).slice(0, 4)} />
+            <InlineList title="Rejected" items={capacityDecision.rejectedOptions.map((option) => option.title).slice(0, 3)} />
+            <InlineList title="Dissenting view" items={[capacityDecision.deliberation.dissentingView]} />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <section className="grid gap-4 xl:grid-cols-2">
         <WorkQueueSection
@@ -4520,6 +4675,46 @@ function DecisionPage({
   activeWorkspaceId: string;
   onEdit: (collection: EditableCollection, item: AnyRecord) => void;
 }) {
+  if (page.id === "decisions") {
+    const situations = state.decisionSituations
+      .filter((item) => item.workspaceId === activeWorkspaceId)
+      .sort((a, b) => {
+        const statusA = ["OPEN", "DELIBERATING"].includes(a.status) ? 0 : a.status === "DECIDED" ? 1 : 2;
+        const statusB = ["OPEN", "DELIBERATING"].includes(b.status) ? 0 : b.status === "DECIDED" ? 1 : 2;
+        return statusA - statusB || priorityRank(a.urgency) - priorityRank(b.urgency);
+      });
+    const results = situations.map((situation) => deliberate(situation, state));
+    const openCount = situations.filter((item) => item.status === "OPEN" || item.status === "DELIBERATING").length;
+    const decidedCount = situations.filter((item) => item.status === "DECIDED" || item.status === "REVIEWED").length;
+    const reviewCount = state.decisionReviews.filter((item) => item.workspaceId === activeWorkspaceId).length;
+
+    return (
+      <div className="space-y-4">
+        <Card>
+          <CardHeader className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <Badge tone="blue">Deliberation Layer</Badge>
+              <CardTitle className="mt-2">{page.label}</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">{page.description}</p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-4 xl:w-[680px]">
+              <FocusRow label="Open" value={String(openCount)} />
+              <FocusRow label="Decided" value={String(decidedCount)} />
+              <FocusRow label="Commitments" value={String(state.decisionCommitments.length)} />
+              <FocusRow label="Reviews" value={String(reviewCount)} />
+            </div>
+          </CardHeader>
+        </Card>
+
+        <div className="grid gap-4">
+          {results.map((result) => (
+            <DecisionSituationPanel key={result.situation.id} result={result} state={state} onEdit={onEdit} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   const daily = selectTopDailyPriorities(state, activeWorkspaceId, 5);
   const weekly = selectTopWeeklyPriorities(state, activeWorkspaceId, 8);
   const highestImpact = rankRecommendedActions(state, activeWorkspaceId).slice(0, 10);
@@ -4604,6 +4799,136 @@ function DecisionPage({
           ))}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function DecisionSituationPanel({
+  result,
+  state,
+  onEdit
+}: {
+  result: DeliberationResult;
+  state: PlatformState;
+  onEdit: (collection: EditableCollection, item: AnyRecord) => void;
+}) {
+  const { situation, deliberation, commitment, recommendedOption } = result;
+  const mission = situation.missionId ? state.missions.find((item) => item.id === situation.missionId) : undefined;
+  const review = state.decisionReviews.find((item) => item.situationId === situation.id);
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap gap-2">
+            <Badge tone={priorityTone(situation.urgency)}>{formatEnum(situation.urgency)}</Badge>
+            <Badge tone={statusTone(situation.status)}>{formatEnum(situation.status)}</Badge>
+            <Badge tone="slate">{formatEnum(situation.situationType)}</Badge>
+            {mission ? <Badge tone="blue">{mission.title}</Badge> : null}
+          </div>
+          <CardTitle className="mt-3">{situation.title}</CardTitle>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-muted-foreground">{situation.description}</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => onEdit("decisionSituations", situation)}>
+          <Edit3 className="h-4 w-4" />
+          Edit
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-md border border-border bg-muted/30 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="green">Recommended</Badge>
+            {recommendedOption ? <Badge tone="blue">{recommendedOption.title}</Badge> : null}
+            <Badge tone="slate">Confidence {Math.round(deliberation.confidenceScore * 100)}%</Badge>
+          </div>
+          <p className="mt-3 text-sm leading-6">{deliberation.finalJudgment}</p>
+          <div className="mt-3 grid gap-3 lg:grid-cols-3">
+            <InlineList title="Dissenting view" items={[deliberation.dissentingView]} />
+            <InlineList title="Rejected options" items={result.rejectedOptions.map((option) => option.title)} />
+            <InlineList title="What would change this" items={[deliberation.whatWouldChangeDecision]} />
+          </div>
+        </div>
+
+        <div className="grid gap-3 xl:grid-cols-2">
+          {result.options.map((option) => (
+            <DecisionOptionPanel key={option.id} option={option} result={result} onEdit={onEdit} />
+          ))}
+        </div>
+
+        <div className="grid gap-3 xl:grid-cols-2">
+          <div className="rounded-md border border-border bg-background p-4">
+            <div className="flex flex-wrap gap-2">
+              <Badge tone={statusTone(commitment.status)}>{formatEnum(commitment.status)}</Badge>
+              <Badge tone="blue">{formatEnum(commitment.commitmentType)}</Badge>
+            </div>
+            <h3 className="mt-3 text-sm font-semibold">{commitment.title}</h3>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">{commitment.description}</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <FocusRow label="Owner" value={commitment.owner} />
+              <FocusRow label="Due" value={commitment.dueDate ? formatDate(commitment.dueDate) : "No date"} />
+            </div>
+          </div>
+          <div className="rounded-md border border-border bg-background p-4">
+            <div className="flex flex-wrap gap-2">
+              <Badge tone={review ? "green" : "amber"}>{review ? "Reviewed" : "Awaiting Review"}</Badge>
+              {review ? <Badge tone={review.decisionQuality === "STRONG" ? "green" : review.decisionQuality === "MIXED" ? "amber" : "blue"}>{formatEnum(review.decisionQuality)}</Badge> : null}
+            </div>
+            <h3 className="mt-3 text-sm font-semibold">Decision review</h3>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              {review ? review.summary : "Review this decision after the linked commitment produces evidence."}
+            </p>
+            {review ? (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <FocusRow label="Outcome" value={`${review.outcomeScore}/100`} />
+                <FocusRow label="Future rule" value={review.futureRule} />
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DecisionOptionPanel({
+  option,
+  result,
+  onEdit
+}: {
+  option: DecisionOption;
+  result: DeliberationResult;
+  onEdit: (collection: EditableCollection, item: AnyRecord) => void;
+}) {
+  const evaluation = result.evaluations.find((item) => item.optionId === option.id);
+  const challenge = result.challenges[option.id] ?? challengeOption(option);
+  const recommended = result.recommendedOption?.id === option.id;
+
+  return (
+    <div className={cn("rounded-md border p-4", recommended ? "border-primary bg-primary/5" : "border-border bg-background")}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Badge tone={recommended ? "green" : "slate"}>{recommended ? "Chosen" : "Considered"}</Badge>
+          <Badge tone={priorityTone(option.riskLevel)}>Risk {formatEnum(option.riskLevel)}</Badge>
+          <Badge tone="blue">{formatEnum(option.optionType)}</Badge>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => onEdit("decisionOptions", option)}>
+          <Edit3 className="h-4 w-4" />
+          Edit
+        </Button>
+      </div>
+      <h3 className="mt-3 text-sm font-semibold">{option.title}</h3>
+      <p className="mt-2 text-xs leading-5 text-muted-foreground">{option.description}</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <FocusRow label="Overall" value={evaluation ? `${evaluation.overallScore}/100` : "Unscored"} />
+        <FocusRow label="Impact" value={String(option.expectedImpact)} />
+        <FocusRow label="Effort" value={String(option.estimatedEffort)} />
+      </div>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <InlineList title="Pros" items={option.pros} />
+        <InlineList title="Cons" items={option.cons} />
+        <InlineList title="Challenge" items={challenge.weaknesses.slice(0, 3)} />
+        <InlineList title="Missing evidence" items={challenge.missingEvidence.slice(0, 3)} />
+      </div>
     </div>
   );
 }
@@ -5340,6 +5665,19 @@ function MissionsPage({
   const insights = overview ? generateMissionInsights(overview) : [];
   const recommendations = overview ? generateMissionRecommendations(overview) : [];
   const missionCognition = overview ? summarizeMissionCognition(state, overview.mission.id) : null;
+  const missionDecisions = selectedMission
+    ? state.decisionSituations.filter((item) => item.workspaceId === activeWorkspaceId && item.missionId === selectedMission.id)
+    : [];
+  const missionDecisionResults = missionDecisions.map((situation) => deliberate(situation, state));
+  const missionCommitments = state.decisionCommitments.filter((commitment) =>
+    missionDecisions.some((situation) => situation.id === commitment.situationId)
+  );
+  const missionReviews = state.decisionReviews.filter((review) =>
+    missionDecisions.some((situation) => situation.id === review.situationId)
+  );
+  const missionStrategyChanges = missionDecisionResults.filter(
+    (result) => result.situation.situationType === "STRATEGY_DECISION" || result.recommendedOption?.optionType === "CHANGE_STRATEGY"
+  );
   const missionEvents = selectedMission
     ? state.events
         .filter((item) => item.workspaceId === activeWorkspaceId && item.sourceType === "Mission" && item.sourceId === selectedMission.id)
@@ -5475,6 +5813,32 @@ function MissionsPage({
                     <InlineList
                       title="Reflections"
                       items={missionCognition.reflections.length ? missionCognition.reflections.map((item) => item.futureAdjustment) : ["No reflections attached yet."]}
+                    />
+                  </div>
+                ) : null}
+                {missionDecisions.length ? (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <InlineList
+                      title="Open decisions"
+                      items={missionDecisionResults
+                        .filter((result) => result.situation.status === "OPEN" || result.situation.status === "DELIBERATING")
+                        .map((result) => `${result.situation.title}: ${result.recommendedOption?.title ?? "No option selected"}`)}
+                    />
+                    <InlineList
+                      title="Deliberations"
+                      items={missionDecisionResults.map((result) => `${result.situation.title}: ${result.deliberation.finalJudgment}`)}
+                    />
+                    <InlineList
+                      title="Commitments"
+                      items={missionCommitments.map((commitment) => `${commitment.title} (${formatEnum(commitment.status)})`)}
+                    />
+                    <InlineList
+                      title="Reviews"
+                      items={missionReviews.map((review) => `${formatEnum(review.decisionQuality)}: ${review.summary}`)}
+                    />
+                    <InlineList
+                      title="Strategy changed by decisions"
+                      items={missionStrategyChanges.map((result) => `${result.situation.title}: ${result.recommendedOption?.title ?? result.deliberation.finalJudgment}`)}
                     />
                   </div>
                 ) : null}
@@ -8136,6 +8500,10 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
   const missionOptions = state.missions.map((mission) => mission.id);
   const connectorOptions = state.connectors.map((connector) => connector.id);
   const rawSignalOptions = state.rawSignals.map((signal) => signal.id);
+  const decisionSituationOptions = state.decisionSituations.map((situation) => situation.id);
+  const decisionOptionOptions = state.decisionOptions.map((option) => option.id);
+  const deliberationOptions = state.deliberations.map((deliberation) => deliberation.id);
+  const decisionCommitmentOptions = state.decisionCommitments.map((commitment) => commitment.id);
   const commonCore: FieldConfig[] = [
     { key: "title", label: "Title" },
     { key: "description", label: "Description", kind: "textarea" },
@@ -8204,6 +8572,95 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
       { key: "newLearning", label: "New Learning", kind: "textarea" },
       { key: "futureAdjustment", label: "Future Adjustment", kind: "textarea" },
       { key: "confidenceScore", label: "Confidence Score", kind: "number" }
+    ];
+  }
+
+  if (collection === "decisionSituations") {
+    return [
+      { key: "title", label: "Title" },
+      { key: "description", label: "Description", kind: "textarea" },
+      { key: "situationType", label: "Situation Type", kind: "select", options: decisionSituationTypeOptions },
+      { key: "status", label: "Status", kind: "select", options: decisionSituationStatusOptions },
+      { key: "urgency", label: "Urgency", kind: "select", options: priorityOptions },
+      { key: "sourceType", label: "Source Type" },
+      { key: "sourceId", label: "Source ID" },
+      { key: "missionId", label: "Mission", kind: "select", options: ["", ...missionOptions] },
+      { key: "objectiveId", label: "Objective", kind: "select", options: ["", ...objectiveOptions] }
+    ];
+  }
+
+  if (collection === "decisionOptions") {
+    return [
+      { key: "situationId", label: "Decision Situation", kind: "select", options: decisionSituationOptions },
+      { key: "title", label: "Title" },
+      { key: "description", label: "Description", kind: "textarea" },
+      { key: "optionType", label: "Option Type", kind: "select", options: decisionOptionTypeOptions },
+      { key: "expectedImpact", label: "Expected Impact", kind: "number" },
+      { key: "estimatedEffort", label: "Estimated Effort", kind: "number" },
+      { key: "riskLevel", label: "Risk Level", kind: "select", options: priorityOptions },
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" },
+      { key: "pros", label: "Pros", kind: "tags" },
+      { key: "cons", label: "Cons", kind: "tags" },
+      { key: "assumptions", label: "Assumptions", kind: "tags" },
+      { key: "evidence", label: "Evidence", kind: "tags" }
+    ];
+  }
+
+  if (collection === "optionEvaluations") {
+    return [
+      { key: "optionId", label: "Decision Option", kind: "select", options: decisionOptionOptions },
+      { key: "situationId", label: "Decision Situation", kind: "select", options: decisionSituationOptions },
+      { key: "impactScore", label: "Impact Score", kind: "number" },
+      { key: "effortScore", label: "Effort Score", kind: "number" },
+      { key: "riskScore", label: "Risk Score", kind: "number" },
+      { key: "evidenceScore", label: "Evidence Score", kind: "number" },
+      { key: "alignmentScore", label: "Alignment Score", kind: "number" },
+      { key: "urgencyScore", label: "Urgency Score", kind: "number" },
+      { key: "overallScore", label: "Overall Score", kind: "number" },
+      { key: "rationale", label: "Rationale", kind: "textarea" }
+    ];
+  }
+
+  if (collection === "deliberations") {
+    return [
+      { key: "situationId", label: "Decision Situation", kind: "select", options: decisionSituationOptions },
+      { key: "summary", label: "Summary", kind: "textarea" },
+      { key: "recommendedOptionId", label: "Recommended Option", kind: "select", options: ["", ...decisionOptionOptions] },
+      { key: "rejectedOptionIds", label: "Rejected Options", kind: "tags" },
+      { key: "finalJudgment", label: "Final Judgment", kind: "textarea" },
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" },
+      { key: "dissentingView", label: "Dissenting View", kind: "textarea" },
+      { key: "whatWouldChangeDecision", label: "What Would Change Decision", kind: "textarea" },
+      { key: "status", label: "Status", kind: "select", options: deliberationStatusOptions }
+    ];
+  }
+
+  if (collection === "decisionCommitments") {
+    return [
+      { key: "situationId", label: "Decision Situation", kind: "select", options: decisionSituationOptions },
+      { key: "deliberationId", label: "Deliberation", kind: "select", options: deliberationOptions },
+      { key: "optionId", label: "Decision Option", kind: "select", options: decisionOptionOptions },
+      { key: "title", label: "Title" },
+      { key: "description", label: "Description", kind: "textarea" },
+      { key: "commitmentType", label: "Commitment Type", kind: "select", options: decisionCommitmentTypeOptions },
+      { key: "status", label: "Status", kind: "select", options: decisionCommitmentStatusOptions },
+      { key: "owner", label: "Owner" },
+      { key: "dueDate", label: "Due Date" },
+      { key: "linkedExecutionItemId", label: "Linked Execution Item", kind: "select", options: ["", ...executionItemOptions] },
+      { key: "linkedPlanItemId", label: "Linked Plan Item", kind: "select", options: ["", ...planItemOptions] }
+    ];
+  }
+
+  if (collection === "decisionReviews") {
+    return [
+      { key: "situationId", label: "Decision Situation", kind: "select", options: decisionSituationOptions },
+      { key: "deliberationId", label: "Deliberation", kind: "select", options: ["", ...deliberationOptions] },
+      { key: "commitmentId", label: "Commitment", kind: "select", options: ["", ...decisionCommitmentOptions] },
+      { key: "summary", label: "Summary", kind: "textarea" },
+      { key: "outcomeScore", label: "Outcome Score", kind: "number" },
+      { key: "decisionQuality", label: "Decision Quality", kind: "select", options: decisionQualityOptions },
+      { key: "judgmentPattern", label: "Judgment Pattern", kind: "textarea" },
+      { key: "futureRule", label: "Future Rule", kind: "textarea" }
     ];
   }
 
@@ -9039,9 +9496,14 @@ function ContextBadges({ item }: { item: AnyRecord }) {
     item.metricType ? ["Metric", formatEnum(item.metricType), "blue"] : null,
     item.unit && item.currentValue !== undefined ? ["Current", `${item.currentValue} ${item.unit}`, "green"] : null,
     item.learningType ? ["Learning", formatEnum(item.learningType), "violet"] : null,
+    item.situationType ? ["Decision", formatEnum(item.situationType), "violet"] : null,
+    item.urgency ? ["Urgency", formatEnum(item.urgency), priorityTone(item.urgency as Priority)] : null,
+    item.optionType ? ["Option", formatEnum(item.optionType), "blue"] : null,
+    item.commitmentType ? ["Commitment", formatEnum(item.commitmentType), "teal"] : null,
+    item.decisionQuality ? ["Quality", formatEnum(item.decisionQuality), item.decisionQuality === "STRONG" ? "green" : item.decisionQuality === "MIXED" || item.decisionQuality === "WEAK" ? "amber" : "blue"] : null,
     item.riskLevel ? ["Risk", formatEnum(item.riskLevel), priorityTone(item.riskLevel as Priority)] : null,
     item.evidenceType ? ["Evidence", formatEnum(item.evidenceType), "teal"] : null,
-    item.overallScore !== undefined ? ["Evidence score", `${Math.round(Number(item.overallScore) * 100)}%`, "blue"] : null,
+    item.overallScore !== undefined ? ["Score", `${Number(item.overallScore) > 1 ? Math.round(Number(item.overallScore)) : Math.round(Number(item.overallScore) * 100)}%`, "blue"] : null,
     item.attributionType ? ["Attribution", formatEnum(item.attributionType), "teal"] : null,
     item.adjustmentType ? ["Adjustment", formatEnum(item.adjustmentType), "amber"] : null,
     item.planType ? ["Plan", formatEnum(item.planType), "violet"] : null,

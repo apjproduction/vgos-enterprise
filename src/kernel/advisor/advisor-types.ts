@@ -31,6 +31,18 @@ export type AdvisorSuggestedAction = {
   sourceId?: string;
 };
 
+export type AdvisorDecisionDeliberation = {
+  situationId: string;
+  situationTitle: string;
+  recommendedOption?: string;
+  rejectedOptions: string[];
+  optionScores: string[];
+  dissentingView: string;
+  whatWouldChangeDecision: string;
+  commitmentTitle: string;
+  needsReview: boolean;
+};
+
 export type AdvisorAnswer = {
   question: string;
   directAnswer?: string;
@@ -45,6 +57,7 @@ export type AdvisorAnswer = {
   suggestedNextAction?: string;
   shouldWaitForEvidence?: boolean;
   executiveJudgment?: ExecutiveJudgment;
+  decisionDeliberation?: AdvisorDecisionDeliberation;
   relatedObjects: AdvisorObjectReference[];
   suggestedActions: AdvisorSuggestedAction[];
   confidence: number;
