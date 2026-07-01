@@ -1,0 +1,110 @@
+playbooks:
+  - id: playbook-architecture-review
+    name: Architecture Review
+    domain: Foundation
+    status: draft
+    owner: APJ Platform
+    purpose: Review new capabilities, services, schema changes, connector contracts, and domain boundaries before implementation.
+    triggers:
+      - new capability
+      - schema change
+      - new service
+      - major refactor
+    outputs:
+      - architecture decision
+      - ADR when needed
+      - review notes
+
+  - id: playbook-rfc-review
+    name: RFC Review
+    domain: Foundation
+    status: draft
+    owner: APJ Foundation
+    purpose: Ensure proposals define problem, goals, non-goals, architecture, risks, tests, rollout, and success metrics.
+    triggers:
+      - new epic
+      - new connector
+      - new agent
+      - major product workflow
+    outputs:
+      - accepted RFC
+      - revised RFC
+      - rejected RFC with rationale
+
+  - id: playbook-release
+    name: Release Playbook
+    domain: Operations
+    status: draft
+    owner: APJ Operations
+    purpose: Provide a repeatable process for validating, deploying, monitoring, and reviewing production releases.
+    triggers:
+      - production deploy
+      - capability release
+      - connector release
+    outputs:
+      - release notes
+      - validation checklist
+      - rollout record
+      - post-release review
+
+  - id: playbook-capability-launch
+    name: Capability Launch
+    domain: Product
+    status: draft
+    owner: APJ Product
+    purpose: Launch new platform or product capabilities with clear acceptance criteria, documentation, validation, and metrics.
+    triggers:
+      - new kernel capability
+      - new UI capability
+      - new product workflow
+    outputs:
+      - capability manifest
+      - release notes
+      - success metrics
+
+  - id: playbook-connector-launch
+    name: Connector Launch
+    domain: Platform
+    status: draft
+    owner: APJ Platform
+    purpose: Launch a connector through config validation, sync testing, signal normalization, routing validation, and health monitoring.
+    triggers:
+      - new connector
+      - live connector upgrade
+    outputs:
+      - connector manifest
+      - test sync runs
+      - health metrics
+
+  - id: playbook-product-hunt-launch
+    name: Product Hunt Launch
+    domain: Product
+    status: active
+    owner: APJ Product
+    purpose: Plan, execute, measure, and learn from Product Hunt launches and post-launch momentum.
+    triggers:
+      - Product Hunt launch
+      - post-launch campaign
+    outputs:
+      - launch assets
+      - founder posts
+      - community replies
+      - measurements
+      - learnings
+
+  - id: playbook-founder-content
+    name: Founder Content
+    domain: Experience
+    status: active
+    owner: APJ Product
+    purpose: Produce founder-led content that builds authority, trust, distribution, and category ownership.
+    triggers:
+      - high-confidence content recommendation
+      - mission priority
+      - launch milestone
+    outputs:
+      - founder post
+      - carousel
+      - X thread
+      - LinkedIn response
+      - learning
