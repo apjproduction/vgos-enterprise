@@ -47,6 +47,7 @@ import { cn } from "@/lib/utils";
 import { processIntelligenceRecord } from "@/lib/intelligence-pipeline";
 import { buildOpportunityQueue, type OpportunityItem } from "@/lib/opportunity-engine";
 import { getCurrentUser } from "@/lib/auth/auth-placeholder";
+import { getEnterpriseState } from "@/lib/enterprise-state";
 import {
   connectorSetupOptions,
   createOnboardingArtifacts,
@@ -112,7 +113,7 @@ import { getHealthColor } from "@/kernel/missions/mission-health";
 import { calculateRecommendationConfidence } from "@/kernel/quality/confidence-engine";
 import { assessDuplicateRisk } from "@/kernel/quality/duplicate-detection";
 import { createAuditLogEntry } from "@/lib/observability/audit-log";
-import { getFounderWorkspaceData } from "@/lib/founder-os";
+import { mapEnterpriseStateToFounderWorkspace } from "@/lib/founder-os";
 import { connectorRegistry } from "@/kernel/connectors/connector-registry";
 import {
   createConnector,
@@ -2757,7 +2758,7 @@ export function VgosApp({ initialPage = "executiveBrief" }: { initialPage?: Page
             />
           ) : null}
           {activePage === "founder" ? (
-            <FounderShell data={getFounderWorkspaceData(state, activeWorkspaceId)} embedded />
+            <FounderShell data={mapEnterpriseStateToFounderWorkspace(getEnterpriseState(state, activeWorkspaceId))} embedded />
           ) : activePage === "executiveBrief" ? (
             <ExecutiveBriefPage
               state={state}

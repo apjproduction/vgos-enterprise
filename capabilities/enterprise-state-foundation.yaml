@@ -1,0 +1,44 @@
+id: enterprise-state-foundation
+name: Enterprise State Foundation
+version: 1.0.0
+status: ACTIVE
+description: >-
+  Establishes EnterpriseState as the canonical runtime operating state for
+  Founder OS, reshaping existing VGOS missions, decisions, priorities,
+  reflections, recommendations, advisor output, and deliberation data into the
+  founder workspace without adding another intelligence engine.
+dependencies:
+  - Executive Intelligence Experience
+  - Deliberation Layer
+  - Mission Engine
+  - Execution Engine
+inputs:
+  - Missions
+  - Decisions
+  - Priorities
+  - Reflections
+  - Recommendations
+  - Advisor Outputs
+  - Deliberations
+outputs:
+  - EnterpriseState
+  - Founder Workspace Data
+  - Founder Operating Snapshot
+runtime:
+  logic_path: src/lib/enterprise-state.ts
+  adapter_path: src/lib/founder-os.ts
+  pages:
+    - /founder
+events:
+  consumed:
+    - MISSION_UPDATED
+    - HIGH_IMPACT_ACTION_SELECTED
+    - EXECUTION_BLOCKED
+    - LEARNING_CREATED
+    - REFLECTION_CREATED
+  produced: []
+quality_gates:
+  - founder_workspace_data_path_uses_enterprise_state
+  - founder_workspace_contract_preserved
+  - no_new_cognitive_engine
+  - founder_next_action_present

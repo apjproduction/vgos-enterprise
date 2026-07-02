@@ -1,6 +1,10 @@
 import { FounderShell } from "@/components/founder/founder-shell";
-import { getFounderWorkspaceData } from "@/lib/founder-os";
+import { getEnterpriseState } from "@/lib/enterprise-state";
+import { mapEnterpriseStateToFounderWorkspace } from "@/lib/founder-os";
 
 export default function FounderRoute() {
-  return <FounderShell data={getFounderWorkspaceData()} />;
+  const enterpriseState = getEnterpriseState();
+  const workspaceData = mapEnterpriseStateToFounderWorkspace(enterpriseState);
+
+  return <FounderShell data={workspaceData} />;
 }

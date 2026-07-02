@@ -281,6 +281,41 @@ export const capabilityRegistry: CapabilityDefinition[] = [
     status: "ACTIVE"
   },
   {
+    id: "enterprise-state-foundation",
+    name: "Enterprise State Foundation",
+    description: "Defines EnterpriseState as the canonical operating state that Founder OS renders without adding a new intelligence engine.",
+    version: "1.0.0",
+    inputs: [
+      "Missions",
+      "Decisions",
+      "Priorities",
+      "Reflections",
+      "Recommendations",
+      "Advisor Outputs",
+      "Deliberations"
+    ],
+    outputs: [
+      "EnterpriseState",
+      "Founder Workspace Data",
+      "Founder Operating Snapshot"
+    ],
+    dependencies: [
+      "Executive Intelligence Experience",
+      "Deliberation Layer",
+      "Mission Engine",
+      "Execution Engine"
+    ],
+    eventsConsumed: [
+      "MISSION_UPDATED",
+      "HIGH_IMPACT_ACTION_SELECTED",
+      "EXECUTION_BLOCKED",
+      "LEARNING_CREATED",
+      "REFLECTION_CREATED"
+    ],
+    eventsProduced: [],
+    status: "ACTIVE"
+  },
+  {
     id: "reflective-cognition",
     name: "Reflective Cognition & Executive Wisdom",
     description: "Strengthens VGOS judgment by explaining assumptions, assessing evidence, finding counter-evidence, comparing tradeoffs, reflecting on outcomes, and recalibrating confidence.",
