@@ -56,6 +56,30 @@ capabilities:
     dependsOn:
       - cap-intelligence-kernel
 
+  - id: cap-enterprise-events-foundation
+    name: Enterprise Events Foundation
+    domain: Platform
+    status: production-alpha
+    version: 1.0.0
+    purpose: Lightweight event model that prepares Founder OS to derive EnterpriseState from GitHub, Vercel, founder, mission, content, product, and customer signals.
+    owner: APJ Platform
+    inputs:
+      - GitHub Signals
+      - Vercel Signals
+      - Founder Reflections
+      - Mission Updates
+      - Decisions
+      - Content Activity
+      - Product Activity
+      - Customer Feedback
+    outputs:
+      - Enterprise Events
+      - Demo Event Feed
+      - Event-informed Enterprise State
+      - Founder Event Timeline
+    dependsOn:
+      - cap-connected-intelligence
+
   - id: cap-executive-brief
     name: Executive Brief
     domain: Experience

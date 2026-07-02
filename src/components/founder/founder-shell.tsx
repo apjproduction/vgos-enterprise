@@ -3,6 +3,7 @@ import { DailyWin } from "@/components/founder/daily-win";
 import { DecisionCenter } from "@/components/founder/decision-center";
 import { EnterprisePulse } from "@/components/founder/enterprise-pulse";
 import { EnterpriseRadar } from "@/components/founder/enterprise-radar";
+import { EventTimeline } from "@/components/founder/event-timeline";
 import { ExecutiveAttention } from "@/components/founder/executive-attention";
 import { ExecutiveNarrative } from "@/components/founder/executive-narrative";
 import { NextAction } from "@/components/founder/next-action";
@@ -26,6 +27,7 @@ export function FounderShell({ data, embedded = false }: { data: FounderWorkspac
         <div className="grid content-start gap-4">
           <EnterprisePulse pulse={data.pulse} />
           <EnterpriseRadar radar={data.radar} />
+          <EventTimeline events={data.recentEvents} />
         </div>
       </section>
 

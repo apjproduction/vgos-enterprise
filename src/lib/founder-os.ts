@@ -1,4 +1,5 @@
 import { getEnterpriseState, type EnterpriseState } from "@/lib/enterprise-state";
+import type { EnterpriseEventSeverity, EnterpriseEventSource, EnterpriseEventType } from "@/lib/enterprise-events";
 import type { PlatformState, Priority } from "@/lib/vgos-data";
 
 export type FounderNarrative = {
@@ -75,6 +76,16 @@ export type FounderReflectionPrompt = {
   placeholder: string;
 };
 
+export type FounderEvent = {
+  id: string;
+  type: EnterpriseEventType;
+  source: EnterpriseEventSource;
+  severity: EnterpriseEventSeverity;
+  title: string;
+  summary: string;
+  occurredAt: string;
+};
+
 export type FounderWorkspaceData = {
   narrative: FounderNarrative;
   dailyWin: FounderDailyWin;
@@ -86,6 +97,8 @@ export type FounderWorkspaceData = {
   risks: FounderRisk[];
   nextAction: FounderNextAction;
   reflection: FounderReflectionPrompt[];
+  recentEvents: FounderEvent[];
+  eventSummary: EnterpriseState["eventSummary"];
 };
 
 function isEnterpriseState(state?: EnterpriseState | PlatformState): state is EnterpriseState {
@@ -103,7 +116,17 @@ export function mapEnterpriseStateToFounderWorkspace(state: EnterpriseState): Fo
     opportunities: state.opportunities.slice(0, 3),
     risks: state.risks.slice(0, 3),
     nextAction: state.nextAction,
-    reflection: state.reflection
+    reflection: state.reflection,
+    recentEvents: state.recentEvents.slice(0, 5).map((event) => ({
+      id: event.id,
+      type: event.type,
+      source: event.source,
+      severity: event.severity,
+      title: event.title,
+      summary: event.summary,
+      occurredAt: event.occurredAt
+    })),
+    eventSummary: state.eventSummary
   };
 }
 

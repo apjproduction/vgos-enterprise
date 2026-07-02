@@ -2,6 +2,7 @@ import { buildAdvisorContext, generateDailyBrief } from "@/kernel/advisor/adviso
 import { selectTopDailyPriorities } from "@/kernel/decisions/decision-engine";
 import { getOpenSituations } from "@/kernel/deliberation/decision-situation-engine";
 import { deliberate } from "@/kernel/deliberation/deliberation-engine";
+import { getDemoEnterpriseEvents, type EnterpriseEvent } from "@/lib/enterprise-events";
 import {
   initialPlatformState,
   workspaceId as defaultWorkspaceId,
@@ -92,10 +93,22 @@ export type EnterpriseReflectionPrompt = {
   placeholder: string;
 };
 
+export type EnterpriseEventSummary = {
+  headline: string;
+  interpretation: string;
+  totalSignals: number;
+  positiveSignals: number;
+  riskSignals: number;
+  lastSignalAt: string | null;
+};
+
 export type EnterpriseState = {
   enterpriseId: string;
   enterpriseName: string;
   generatedAt: string;
+  events: EnterpriseEvent[];
+  recentEvents: EnterpriseEvent[];
+  eventSummary: EnterpriseEventSummary;
   health: EnterpriseHealth;
   focus: EnterpriseFocus;
   narrative: EnterpriseNarrative;
@@ -231,6 +244,254 @@ function pulseTone(score: number): EnterprisePulse["tone"] {
   return "risk";
 }
 
+function clampScore(score: number) {
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function sortEvents(events: EnterpriseEvent[]) {
+  return [...events].sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt));
+}
+
+function eventPayloadEquals(event: EnterpriseEvent, key: string, value: string) {
+  const payloadValue = event.payload[key];
+  return typeof payloadValue === "string" && payloadValue.toUpperCase() === value.toUpperCase();
+}
+
+function eventPayloadFlag(event: EnterpriseEvent, key: string) {
+  return event.payload[key] === true;
+}
+
+function eventPulse(label: EnterprisePulse["label"], score: number, status: string): EnterprisePulse {
+  const normalizedScore = clampScore(score);
+  return { label, score: normalizedScore, status, tone: pulseTone(normalizedScore) };
+}
+
+function mergePulse(base: EnterprisePulse[], eventPulseItems?: EnterprisePulse[]) {
+  if (!eventPulseItems?.length) return base;
+
+  const eventPulseByLabel = new Map(eventPulseItems.map((item) => [item.label, item]));
+  return base.map((item) => {
+    const eventItem = eventPulseByLabel.get(item.label);
+    if (!eventItem) return item;
+
+    const score = clampScore(Math.round(item.score * 0.7 + eventItem.score * 0.3));
+    return {
+      ...item,
+      score,
+      status: eventItem.status,
+      tone: pulseTone(score)
+    };
+  });
+}
+
+function mergeRadar(base: EnterpriseRadar[], eventRadarItems?: EnterpriseRadar[]) {
+  if (!eventRadarItems?.length) return base;
+
+  const eventRadarByArea = new Map(eventRadarItems.map((item) => [item.area, item]));
+  return base.map((item) => eventRadarByArea.get(item.area) ?? item);
+}
+
+function mergeRisks(base: EnterpriseRisk[], eventRisks?: EnterpriseRisk[]) {
+  const risksById = new Map<string, EnterpriseRisk>();
+
+  for (const risk of [...(eventRisks ?? []), ...base]) {
+    if (!risksById.has(risk.id)) {
+      risksById.set(risk.id, risk);
+    }
+  }
+
+  return Array.from(risksById.values()).slice(0, 3);
+}
+
+export function deriveEnterpriseStateFromEvents(events: EnterpriseEvent[]): Partial<EnterpriseState> {
+  const sortedEvents = sortEvents(events);
+  const deploymentSucceeded = events.some((event) => event.type === "VERCEL_DEPLOYMENT_SUCCEEDED");
+  const deploymentFailed = events.some((event) => event.type === "VERCEL_DEPLOYMENT_FAILED");
+  const contentPublished = events.some((event) => event.type === "CONTENT_PUBLISHED");
+  const founderReflectionSubmitted = events.some((event) => event.type === "FOUNDER_REFLECTION_SUBMITTED");
+  const productDemoCompleted = events.some((event) => event.type === "PRODUCT_DEMO_COMPLETED");
+  const productDemoPending = events.some(
+    (event) =>
+      event.type === "MISSION_UPDATED" &&
+      (eventPayloadEquals(event, "demoStatus", "PENDING") || eventPayloadFlag(event, "proofAssetRisk"))
+  );
+  const publishingInactive = events.some(
+    (event) =>
+      event.source === "CONTENT" &&
+      event.type === "FOUNDER_REFLECTION_SUBMITTED" &&
+      typeof event.payload.inactiveDays === "number" &&
+      event.payload.inactiveDays >= 3
+  );
+  const decisionAccepted = events.some((event) => event.type === "DECISION_ACCEPTED");
+  const launchReadinessImproved = events.some(
+    (event) => event.type === "MISSION_UPDATED" && eventPayloadEquals(event, "readinessTrend", "IMPROVING")
+  );
+
+  let momentumScore = 68;
+  let executionScore = 66;
+  let growthScore = 58;
+  let learningScore = 62;
+  let founderCapacityScore = 70;
+
+  if (deploymentSucceeded) {
+    executionScore += 8;
+    momentumScore += 3;
+  }
+
+  if (deploymentFailed) {
+    executionScore -= 18;
+    momentumScore -= 8;
+  }
+
+  if (contentPublished) {
+    growthScore += 12;
+    momentumScore += 6;
+  }
+
+  if (founderReflectionSubmitted) {
+    learningScore += 10;
+  }
+
+  if (productDemoCompleted) {
+    executionScore += 8;
+    growthScore += 8;
+    momentumScore += 8;
+  }
+
+  if (productDemoPending) {
+    growthScore -= 6;
+    momentumScore -= 3;
+  }
+
+  if (publishingInactive) {
+    growthScore -= 8;
+    founderCapacityScore -= 4;
+  }
+
+  if (decisionAccepted) {
+    founderCapacityScore += 4;
+    momentumScore += 4;
+  }
+
+  if (launchReadinessImproved) {
+    momentumScore += 5;
+  }
+
+  const enterpriseFitnessScore = Math.round(
+    (momentumScore + executionScore + growthScore + learningScore + founderCapacityScore) / 5
+  );
+
+  const pulse: EnterprisePulse[] = [
+    eventPulse(
+      "Momentum",
+      momentumScore,
+      launchReadinessImproved ? "Launch readiness improving" : "Needs visible proof"
+    ),
+    eventPulse(
+      "Execution",
+      executionScore,
+      deploymentFailed ? "Deployment risk" : deploymentSucceeded ? "Deployment stable" : "Awaiting signal"
+    ),
+    eventPulse(
+      "Growth",
+      growthScore,
+      contentPublished ? "Publishing active" : publishingInactive ? "Publishing gap" : "Waiting on proof"
+    ),
+    eventPulse(
+      "Learning",
+      learningScore,
+      founderReflectionSubmitted ? "Founder signal captured" : "Needs fresh signal"
+    ),
+    eventPulse("Founder Capacity", founderCapacityScore, decisionAccepted ? "Decision narrowed" : "Needs focus"),
+    eventPulse(
+      "Enterprise Fitness",
+      enterpriseFitnessScore,
+      enterpriseFitnessScore >= 70 ? "Reality signals improving" : "Reality signals need follow-through"
+    )
+  ];
+
+  const radar: EnterpriseRadar[] = [
+    {
+      area: "VidMaker",
+      status: productDemoCompleted ? "Proof asset complete" : productDemoPending ? "Proof still pending" : "Readiness improving",
+      note: productDemoPending
+        ? "The product demo remains the proof constraint before wider launch promotion."
+        : "Launch readiness is moving in the right direction."
+    },
+    {
+      area: "VGOS / Founder OS",
+      status: "Reality bridge ready",
+      note: "Enterprise Events now provide the path from live signals into Founder OS state."
+    },
+    {
+      area: "Engineering",
+      status: deploymentFailed ? "Deployment risk" : deploymentSucceeded ? "Deployment stable" : "Awaiting deploy signal",
+      note: deploymentFailed
+        ? "A failed deployment should hold promotion until the operating surface is stable."
+        : "The Founder OS deployment signal supports continued execution."
+    },
+    {
+      area: "Marketing",
+      status: contentPublished ? "Publishing active" : publishingInactive ? "Publishing gap" : "Proof-led",
+      note: publishingInactive
+        ? "Founder publishing needs to restart from the strongest available proof."
+        : "Founder-led content should follow proof rather than precede it."
+    }
+  ];
+
+  const risks: EnterpriseRisk[] = [];
+
+  if (deploymentFailed) {
+    risks.push({
+      id: "event-risk-vercel-deployment-failed",
+      risk: "A failed deployment is blocking reliable promotion.",
+      severity: "CRITICAL",
+      mitigation: "Stabilize the deployment before asking launch channels to trust the product surface."
+    });
+  }
+
+  if (productDemoPending) {
+    risks.push({
+      id: "event-risk-product-demo-pending",
+      risk: "Product demo is still pending while launch attention is active.",
+      severity: "HIGH",
+      mitigation: "Keep the proof asset visible as today's constraint before widening promotion."
+    });
+  }
+
+  if (publishingInactive) {
+    risks.push({
+      id: "event-risk-founder-publishing-inactive",
+      risk: "Founder publishing has been inactive for several days.",
+      severity: "MEDIUM",
+      mitigation: "Restart with one proof-backed founder post after the demo narrative is credible."
+    });
+  }
+
+  const positiveSignals = events.filter((event) => event.severity === "POSITIVE").length;
+  const riskSignals = events.filter((event) => ["WARNING", "CRITICAL"].includes(event.severity)).length;
+  const latestEvent = sortedEvents[0];
+
+  return {
+    events: sortedEvents,
+    recentEvents: sortedEvents.slice(0, 5),
+    eventSummary: {
+      headline: latestEvent?.title ?? "No enterprise events captured yet.",
+      interpretation:
+        riskSignals > 0
+          ? "Reality signals show progress, but proof and publishing still need disciplined follow-through."
+          : "Reality signals are supporting today's operating plan.",
+      totalSignals: events.length,
+      positiveSignals,
+      riskSignals,
+      lastSignalAt: latestEvent?.occurredAt ?? null
+    },
+    pulse,
+    radar,
+    risks
+  };
+}
+
 function buildPulse(state: PlatformState, workspaceId: string): EnterprisePulse[] {
   const context = buildAdvisorContext(state, workspaceId);
   const activeMissions = state.missions.filter((item) => item.workspaceId === workspaceId && ["ACTIVE", "AT_RISK"].includes(item.status));
@@ -330,18 +591,31 @@ export function getEnterpriseState(
   state: PlatformState = initialPlatformState,
   workspaceId: string = defaultWorkspaceId
 ): EnterpriseState {
+  const events = getDemoEnterpriseEvents();
+  const eventDerivedState = deriveEnterpriseStateFromEvents(events);
   const narrative = buildNarrative(state, workspaceId);
   const priorities = buildPriorities(state, workspaceId);
   const decisions = buildDecisions(state, workspaceId);
-  const pulse = buildPulse(state, workspaceId);
-  const radar = buildRadar(state, workspaceId);
+  const pulse = mergePulse(buildPulse(state, workspaceId), eventDerivedState.pulse);
+  const radar = mergeRadar(buildRadar(state, workspaceId), eventDerivedState.radar);
   const opportunities = buildOpportunities(state, workspaceId);
-  const risks = buildRisks(state, workspaceId);
+  const risks = mergeRisks(buildRisks(state, workspaceId), eventDerivedState.risks);
 
   return {
     enterpriseId: workspaceId,
     enterpriseName: enterpriseNameFor(state, workspaceId),
     generatedAt: new Date().toISOString(),
+    events,
+    recentEvents: eventDerivedState.recentEvents ?? events.slice(0, 5),
+    eventSummary:
+      eventDerivedState.eventSummary ?? {
+        headline: "No enterprise events captured yet.",
+        interpretation: "Founder OS is waiting for reality signals.",
+        totalSignals: 0,
+        positiveSignals: 0,
+        riskSignals: 0,
+        lastSignalAt: null
+      },
     health: buildHealth(pulse, risks),
     focus: buildFocus(narrative, priorities),
     narrative,

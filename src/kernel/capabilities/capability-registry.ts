@@ -316,6 +316,51 @@ export const capabilityRegistry: CapabilityDefinition[] = [
     status: "ACTIVE"
   },
   {
+    id: "enterprise-events-foundation",
+    name: "Enterprise Events Foundation",
+    description: "Defines EnterpriseEvent as the lightweight bridge from real operational signals into event-informed EnterpriseState and Founder OS.",
+    version: "1.0.0",
+    inputs: [
+      "GitHub Signals",
+      "Vercel Signals",
+      "Founder Reflections",
+      "Mission Updates",
+      "Decisions",
+      "Content Activity",
+      "Product Activity",
+      "Customer Feedback"
+    ],
+    outputs: [
+      "EnterpriseEvent",
+      "Demo Enterprise Event Feed",
+      "Event-informed EnterpriseState",
+      "Founder Event Timeline"
+    ],
+    dependencies: [
+      "Enterprise State Foundation",
+      "Founder OS",
+      "Runtime",
+      "Connected Intelligence"
+    ],
+    eventsConsumed: [
+      "GITHUB_COMMIT_CREATED",
+      "GITHUB_PULL_REQUEST_OPENED",
+      "GITHUB_PULL_REQUEST_MERGED",
+      "VERCEL_DEPLOYMENT_CREATED",
+      "VERCEL_DEPLOYMENT_SUCCEEDED",
+      "VERCEL_DEPLOYMENT_FAILED",
+      "FOUNDER_REFLECTION_SUBMITTED",
+      "MISSION_UPDATED",
+      "DECISION_ACCEPTED",
+      "DECISION_POSTPONED",
+      "CONTENT_PUBLISHED",
+      "PRODUCT_DEMO_COMPLETED",
+      "CUSTOMER_FEEDBACK_RECEIVED"
+    ],
+    eventsProduced: [],
+    status: "ACTIVE"
+  },
+  {
     id: "reflective-cognition",
     name: "Reflective Cognition & Executive Wisdom",
     description: "Strengthens VGOS judgment by explaining assumptions, assessing evidence, finding counter-evidence, comparing tradeoffs, reflecting on outcomes, and recalibrating confidence.",

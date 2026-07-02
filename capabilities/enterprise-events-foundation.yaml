@@ -1,0 +1,57 @@
+id: enterprise-events-foundation
+name: Enterprise Events Foundation
+version: 1.0.0
+status: ACTIVE
+description: >-
+  Establishes EnterpriseEvent as the lightweight bridge between real operational
+  signals and Founder OS, preparing EnterpriseState for GitHub, Vercel, founder,
+  mission, content, product, and customer events without adding a new cognitive
+  engine.
+dependencies:
+  - Enterprise State Foundation
+  - Founder OS
+  - Runtime
+  - Connected Intelligence
+inputs:
+  - GitHub Signals
+  - Vercel Signals
+  - Founder Reflections
+  - Mission Updates
+  - Decisions
+  - Content Activity
+  - Product Activity
+  - Customer Feedback
+outputs:
+  - EnterpriseEvent model
+  - Demo event feed
+  - Event-informed EnterpriseState
+  - Founder event timeline
+runtime:
+  events_path: src/lib/enterprise-events.ts
+  state_path: src/lib/enterprise-state.ts
+  adapter_path: src/lib/founder-os.ts
+  component_path: src/components/founder/event-timeline.tsx
+  pages:
+    - /founder
+events:
+  consumed:
+    - GITHUB_COMMIT_CREATED
+    - GITHUB_PULL_REQUEST_OPENED
+    - GITHUB_PULL_REQUEST_MERGED
+    - VERCEL_DEPLOYMENT_CREATED
+    - VERCEL_DEPLOYMENT_SUCCEEDED
+    - VERCEL_DEPLOYMENT_FAILED
+    - FOUNDER_REFLECTION_SUBMITTED
+    - MISSION_UPDATED
+    - DECISION_ACCEPTED
+    - DECISION_POSTPONED
+    - CONTENT_PUBLISHED
+    - PRODUCT_DEMO_COMPLETED
+    - CUSTOMER_FEEDBACK_RECEIVED
+  produced: []
+quality_gates:
+  - enterprise_event_model_defined
+  - demo_event_feed_available
+  - enterprise_state_accepts_events
+  - founder_os_route_stays_stable
+  - no_external_api_tokens_required
