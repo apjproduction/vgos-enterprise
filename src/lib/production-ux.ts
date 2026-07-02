@@ -32,7 +32,7 @@ export const personaModes: PersonaMode[] = ["Founder", "Marketing", "SEO", "Prod
 export const operatorNavigationGroups: NavigationGroup[] = [
   {
     label: "Operator Mode",
-    pages: ["executiveBrief", "workQueue", "decisions", "missions", "plans", "executions", "results", "advisor", "settings"]
+    pages: ["founder", "executiveBrief", "workQueue", "decisions", "missions", "plans", "executions", "results", "advisor", "settings"]
   }
 ];
 
@@ -54,7 +54,7 @@ export const intelligenceStudioNavigationGroups: NavigationGroup[] = [
 export const developerNavigationGroups: NavigationGroup[] = [
   {
     label: "Executive",
-    pages: ["executiveBrief", "workQueue", "advisor", "results"]
+    pages: ["founder", "executiveBrief", "workQueue", "advisor", "results"]
   },
   {
     label: "Command Center",
@@ -85,7 +85,7 @@ export const developerNavigationGroups: NavigationGroup[] = [
 export const navigationGroups = operatorNavigationGroups;
 
 const personaShortcutMap: Record<PersonaMode, PageId[]> = {
-  Founder: ["executiveBrief", "missions", "workQueue", "decisions", "results", "advisor", "settings"],
+  Founder: ["founder", "executiveBrief", "missions", "workQueue", "decisions", "results", "advisor", "settings"],
   Marketing: ["contentEngine", "approvals", "results", "recommendedActions", "workQueue", "advisor"],
   SEO: ["searchEngine", "opportunityQueue", "contentEngine", "authorityEngine", "results", "advisor"],
   Product: ["productEngine", "blockers", "executions", "results", "signals", "advisor"],
@@ -96,19 +96,19 @@ const personaNavigationMap: Partial<Record<PersonaMode, NavigationGroup[]>> = {
   Marketing: [
     {
       label: "Marketing Focus",
-      pages: ["executiveBrief", "workQueue", "decisions", "contentEngine", "approvals", "results", "recommendedActions", "advisor", "settings"]
+      pages: ["founder", "executiveBrief", "workQueue", "decisions", "contentEngine", "approvals", "results", "recommendedActions", "advisor", "settings"]
     }
   ],
   SEO: [
     {
       label: "SEO Focus",
-      pages: ["executiveBrief", "workQueue", "decisions", "searchEngine", "opportunityQueue", "contentEngine", "authorityEngine", "results", "advisor"]
+      pages: ["founder", "executiveBrief", "workQueue", "decisions", "searchEngine", "opportunityQueue", "contentEngine", "authorityEngine", "results", "advisor"]
     }
   ],
   Product: [
     {
       label: "Product Focus",
-      pages: ["executiveBrief", "workQueue", "decisions", "productEngine", "blockers", "executions", "signals", "results", "advisor"]
+      pages: ["founder", "executiveBrief", "workQueue", "decisions", "productEngine", "blockers", "executions", "signals", "results", "advisor"]
     }
   ]
 };
@@ -459,6 +459,9 @@ export function getPageIntro(page: PageDefinition) {
   const byPage: Partial<Record<PageId, { whyItMatters: string; nextActionLabel?: string }>> = {
     missionControl: {
       whyItMatters: "System Mission Control keeps the technical operating surface available under Intelligence Studio."
+    },
+    founder: {
+      whyItMatters: "Founder OS keeps the day focused on one win, three priorities, the decision that needs attention, and the next action."
     },
     onboarding: {
       whyItMatters: "VGOS uses onboarding answers to seed the workspace context, first mission, first plan, and recommended actions.",

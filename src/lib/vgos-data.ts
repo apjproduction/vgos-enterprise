@@ -1471,6 +1471,7 @@ export type PlatformState = {
 };
 
 export type PageId =
+  | "founder"
   | "executiveBrief"
   | "advisor"
   | "workQueue"
@@ -1638,6 +1639,12 @@ const score = (
   competitionScore;
 
 export const pageDefinitions: PageDefinition[] = [
+  {
+    id: "founder",
+    label: "Founder OS",
+    description: "Focused daily founder workspace for the win, priorities, decisions, risks, opportunities, and next action.",
+    icon: BriefcaseBusiness
+  },
   {
     id: "executiveBrief",
     label: "Executive Brief",

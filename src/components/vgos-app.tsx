@@ -25,6 +25,7 @@ import {
   X
 } from "lucide-react";
 import { CommandPalette, type CommandPaletteItem } from "@/components/command-palette";
+import { FounderShell } from "@/components/founder/founder-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -111,6 +112,7 @@ import { getHealthColor } from "@/kernel/missions/mission-health";
 import { calculateRecommendationConfidence } from "@/kernel/quality/confidence-engine";
 import { assessDuplicateRisk } from "@/kernel/quality/duplicate-detection";
 import { createAuditLogEntry } from "@/lib/observability/audit-log";
+import { getFounderWorkspaceData } from "@/lib/founder-os";
 import { connectorRegistry } from "@/kernel/connectors/connector-registry";
 import {
   createConnector,
@@ -1076,6 +1078,7 @@ export function VgosApp({ initialPage = "executiveBrief" }: { initialPage?: Page
     [state, activeWorkspaceId]
   );
   const commandItems: CommandPaletteItem[] = [
+    { id: "go-founder-os", label: "Go to Founder OS", description: "Open today's focused founder workspace.", action: () => navigateTo("founder") },
     { id: "go-executive-brief", label: "Go to Executive Brief", description: "Open today's daily executive brief.", action: () => navigateTo("executiveBrief") },
     { id: "go-missions", label: "Go to Missions", description: "Open strategic missions.", action: () => navigateTo("missions") },
     { id: "go-work-queue", label: "Go to Work Queue", description: "Open today's execution queue.", action: () => navigateTo("workQueue") },
@@ -2744,7 +2747,7 @@ export function VgosApp({ initialPage = "executiveBrief" }: { initialPage?: Page
         </aside>
 
         <section className="min-w-0 space-y-4">
-          {!["executiveBrief", "advisor", "workQueue", "results", "missionControl", "onboarding"].includes(activePage) ? (
+          {!["founder", "executiveBrief", "advisor", "workQueue", "results", "missionControl", "onboarding"].includes(activePage) ? (
             <PageIntro
               title={pageIntro.title}
               description={pageIntro.description}
@@ -2753,7 +2756,9 @@ export function VgosApp({ initialPage = "executiveBrief" }: { initialPage?: Page
               nextAction={canCreatePageRecord && page.collection ? () => openCreate(page.collection!) : undefined}
             />
           ) : null}
-          {activePage === "executiveBrief" ? (
+          {activePage === "founder" ? (
+            <FounderShell data={getFounderWorkspaceData(state, activeWorkspaceId)} embedded />
+          ) : activePage === "executiveBrief" ? (
             <ExecutiveBriefPage
               state={state}
               activeWorkspaceId={activeWorkspaceId}
