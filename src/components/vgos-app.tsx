@@ -156,6 +156,21 @@ import {
   summarizeMissionCognition
 } from "@/kernel/cognition/judgment-engine";
 import {
+  validateRecommendation
+} from "@/kernel/beliefs/decision-validation";
+import {
+  buildRealityModel,
+  summarizeRealityModel
+} from "@/kernel/beliefs/reality-model";
+import type {
+  DecisionValidation,
+  BeliefStatus,
+  BeliefType,
+  ClaimStatus,
+  ClaimType,
+  DecisionValidationStatus
+} from "@/kernel/beliefs/belief-types";
+import {
   createSituationFromWorkQueueConflict,
   getOpenSituations
 } from "@/kernel/deliberation/decision-situation-engine";
@@ -270,7 +285,16 @@ const statusOptions = [
   "CANCELLED",
   "REVIEWED",
   "DRAFT",
-  "COMMITTED"
+  "COMMITTED",
+  "SUPPORTED",
+  "CHALLENGED",
+  "CORE",
+  "RETIRED",
+  "STRONGLY_SUPPORTED",
+  "MIXED",
+  "WEAKLY_SUPPORTED",
+  "CONTRADICTED",
+  "INSUFFICIENT_EVIDENCE"
 ];
 
 const priorityOptions: Priority[] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
@@ -625,6 +649,11 @@ const cognitionEvidenceTypeOptions = [
   "HISTORICAL_PATTERN",
   "COUNTER_EVIDENCE"
 ];
+const claimTypeOptions: ClaimType[] = ["MARKET", "CUSTOMER", "PRODUCT", "GROWTH", "SEO", "AEO", "GEO", "CHANNEL", "COMPETITOR", "OPERATIONAL", "STRATEGIC", "PHILOSOPHICAL", "CUSTOM"];
+const claimStatusOptions: ClaimStatus[] = ["PROPOSED", "SUPPORTED", "CHALLENGED", "VALIDATED", "INVALIDATED", "ARCHIVED"];
+const beliefTypeOptions: BeliefType[] = ["MARKET_BELIEF", "CUSTOMER_BELIEF", "PRODUCT_BELIEF", "GROWTH_BELIEF", "STRATEGIC_BELIEF", "OPERATING_BELIEF", "PHILOSOPHICAL_BELIEF", "CUSTOM"];
+const beliefStatusOptions: BeliefStatus[] = ["ACTIVE", "WATCHING", "CORE", "CHALLENGED", "RETIRED"];
+const decisionValidationStatusOptions: DecisionValidationStatus[] = ["STRONGLY_SUPPORTED", "SUPPORTED", "MIXED", "WEAKLY_SUPPORTED", "CONTRADICTED", "INSUFFICIENT_EVIDENCE"];
 const decisionSituationTypeOptions = [
   "PRIORITY_DECISION",
   "STRATEGY_DECISION",
@@ -664,12 +693,39 @@ function priorityTone(priority?: Priority) {
 }
 
 function statusTone(status?: string) {
-  if (status === "LIVE" || status === "PUBLISHED" || status === "ACTIVE" || status === "COMPLETED" || status === "APPROVED" || status === "RESOLVED" || status === "HEALTHY" || status === "IMPROVING" || status === "ACCEPTED" || status === "IMPLEMENTED" || status === "CONNECTED" || status === "MOCK" || status === "ROUTED" || status === "DECIDED" || status === "REVIEWED") return "green";
-  if (status === "IN_PROGRESS" || status === "RESEARCHING" || status === "DRAFT" || status === "READY" || status === "IN_REVIEW" || status === "STARTED" || status === "RECEIVED" || status === "NORMALIZED" || status === "OPEN" || status === "DELIBERATING" || status === "COMMITTED") return "blue";
-  if (status === "BLOCKED" || status === "FAILED" || status === "REJECTED" || status === "DECLINING" || status === "AT_RISK" || status === "ERROR" || status === "INVALIDATED") return "red";
+  if (status === "LIVE" || status === "PUBLISHED" || status === "ACTIVE" || status === "COMPLETED" || status === "APPROVED" || status === "RESOLVED" || status === "HEALTHY" || status === "IMPROVING" || status === "ACCEPTED" || status === "IMPLEMENTED" || status === "CONNECTED" || status === "MOCK" || status === "ROUTED" || status === "DECIDED" || status === "REVIEWED" || status === "CORE" || status === "STRONGLY_SUPPORTED" || status === "SUPPORTED") return "green";
+  if (status === "IN_PROGRESS" || status === "RESEARCHING" || status === "DRAFT" || status === "READY" || status === "IN_REVIEW" || status === "STARTED" || status === "RECEIVED" || status === "NORMALIZED" || status === "OPEN" || status === "DELIBERATING" || status === "COMMITTED" || status === "PROPOSED") return "blue";
+  if (status === "BLOCKED" || status === "FAILED" || status === "REJECTED" || status === "DECLINING" || status === "AT_RISK" || status === "ERROR" || status === "INVALIDATED" || status === "CONTRADICTED") return "red";
   if (status === "SUBMITTED" || status === "QUEUED" || status === "PARTIAL" || status === "VALIDATED") return "teal";
-  if (status === "ARCHIVED" || status === "PAUSED" || status === "CANCELLED" || status === "IGNORED" || status === "STALLED" || status === "DISCONNECTED") return "slate";
+  if (status === "ARCHIVED" || status === "PAUSED" || status === "CANCELLED" || status === "IGNORED" || status === "STALLED" || status === "DISCONNECTED" || status === "RETIRED") return "slate";
   return "amber";
+}
+
+function validationItemLabel(item: unknown) {
+  if (typeof item === "string") return formatEnum(item);
+  if (item && typeof item === "object") {
+    const record = item as { title?: unknown; id?: unknown; status?: unknown };
+    const title = typeof record.title === "string" ? record.title : typeof record.id === "string" ? formatEnum(record.id) : "Validation item";
+    const status = typeof record.status === "string" ? ` (${formatEnum(record.status)})` : "";
+    return `${title}${status}`;
+  }
+  return "Validation item";
+}
+
+function validationItems(items: unknown[], fallback: string) {
+  return items.length ? items.slice(0, 4).map(validationItemLabel) : [fallback];
+}
+
+function validationEvidenceStrength(validation: Pick<DecisionValidation, "supportingClaims">) {
+  const scores = validation.supportingClaims
+    .map((item) => (item && typeof item === "object" ? Number((item as { evidenceStrength?: unknown }).evidenceStrength) : NaN))
+    .filter((score) => Number.isFinite(score));
+  if (!scores.length) return "Not quantified";
+  return `${Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 100)}%`;
+}
+
+function validationNeedsMoreEvidence(validation: Pick<DecisionValidation, "validationStatus" | "confidenceScore">) {
+  return validation.confidenceScore < 0.68 || ["MIXED", "WEAKLY_SUPPORTED", "CONTRADICTED", "INSUFFICIENT_EVIDENCE"].includes(validation.validationStatus);
 }
 
 function intentLabel(intent?: string) {
@@ -730,6 +786,12 @@ function sourceTypeToCollection(sourceType: string): EditableCollection {
     TradeoffAnalysis: "tradeoffAnalyses",
     JudgmentRecord: "judgmentRecords",
     Reflection: "reflections",
+    Claim: "claims",
+    ClaimEvidence: "claimEvidence",
+    Belief: "beliefs",
+    BeliefClaim: "beliefClaims",
+    BeliefRevision: "beliefRevisions",
+    DecisionValidation: "decisionValidations",
     DecisionSituation: "decisionSituations",
     DecisionOption: "decisionOptions",
     OptionEvaluation: "optionEvaluations",
@@ -803,6 +865,12 @@ function collectionToSourceType(collection: EditableCollection) {
     tradeoffAnalyses: "TradeoffAnalysis",
     judgmentRecords: "JudgmentRecord",
     reflections: "Reflection",
+    claims: "Claim",
+    claimEvidence: "ClaimEvidence",
+    beliefs: "Belief",
+    beliefClaims: "BeliefClaim",
+    beliefRevisions: "BeliefRevision",
+    decisionValidations: "DecisionValidation",
     decisionSituations: "DecisionSituation",
     decisionOptions: "DecisionOption",
     optionEvaluations: "OptionEvaluation",
@@ -859,6 +927,12 @@ function eventTypeForCollection(collection: EditableCollection) {
     tradeoffAnalyses: "TRADEOFF_ANALYZED",
     judgmentRecords: "JUDGMENT_CREATED",
     reflections: "REFLECTION_CREATED",
+    claims: "CLAIM_CREATED",
+    claimEvidence: "EVIDENCE_ADDED",
+    beliefs: "BELIEF_CREATED",
+    beliefClaims: "BELIEF_UPDATED",
+    beliefRevisions: "BELIEF_REVISED",
+    decisionValidations: "DECISION_VALIDATED",
     decisionSituations: "DECISION_SITUATION_CREATED",
     decisionOptions: "DECISION_OPTION_CREATED",
     optionEvaluations: "OPTION_EVALUATED",
@@ -3080,6 +3154,8 @@ export function VgosApp({ initialPage = "executiveBrief" }: { initialPage?: Page
               onEdit={openEdit}
               onConvert={(conversion, item, collection) => handleConversion(conversion, item, collection)}
             />
+          ) : activePage === "realityModel" ? (
+            <RealityModelPage state={state} activeWorkspaceId={activeWorkspaceId} onNavigate={navigateTo} />
           ) : activePage === "systemHealth" ? (
             <SystemHealthPage
               state={state}
@@ -3201,38 +3277,47 @@ function ExecutiveBriefPage({
             </Button>
           </CardHeader>
           <CardContent className="grid gap-3 lg:grid-cols-2">
-            {brief.priorities.map((priority) => (
-              <div key={priority.id} className="rounded-md border border-border bg-background p-4">
-                <div className="flex flex-wrap gap-2">
-                  <Badge tone={priority.sourceAction.impactScore >= 85 ? "red" : "amber"}>
-                    Impact {priority.sourceAction.impactScore}
-                  </Badge>
-                  <Badge tone="blue">Confidence {Math.round(priority.confidenceScore * 100)}%</Badge>
-                </div>
-                <h3 className="mt-3 text-sm font-semibold">{priority.title}</h3>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">{priority.whyItMatters}</p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <FocusRow label="Expected impact" value={priority.expectedImpact} />
-                  <FocusRow label="Effort" value={priority.estimatedEffort} />
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {priority.relatedMission ? <Badge tone="slate">{priority.relatedMission.title}</Badge> : null}
-                  <Button size="sm" onClick={() => onStartPriority(priority)}>
-                    <Play className="h-4 w-4" />
-                    Start Work
-                  </Button>
-                </div>
-                <details className="mt-3 rounded-md border border-border bg-muted/30 p-3">
-                  <summary className="cursor-pointer text-xs font-semibold text-foreground">Why?</summary>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <InlineList title="Supporting evidence" items={priority.supportingEvidence} />
-                    <InlineList title="Related signals" items={priority.relatedSignals.length ? priority.relatedSignals : ["Recent launch and proof-demand signals."]} />
-                    <InlineList title="Missing evidence" items={priority.missingEvidence.length ? priority.missingEvidence : ["No major missing evidence."]} />
-                    <InlineList title="Recommendation" items={[priority.sourceAction.confidenceExplanation || priority.sourceAction.reasoning]} />
+            {brief.priorities.map((priority) => {
+              const validation = validateRecommendation(state, activeWorkspaceId, priority.id);
+              return (
+                <div key={priority.id} className="rounded-md border border-border bg-background p-4">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge tone={priority.sourceAction.impactScore >= 85 ? "red" : "amber"}>
+                      Impact {priority.sourceAction.impactScore}
+                    </Badge>
+                    <Badge tone="blue">Confidence {Math.round(priority.confidenceScore * 100)}%</Badge>
+                    <Badge tone={statusTone(validation.validationStatus)}>
+                      Belief {Math.round(validation.confidenceScore * 100)}%
+                    </Badge>
+                    {validationNeedsMoreEvidence(validation) ? <Badge tone="amber">Needs evidence</Badge> : null}
                   </div>
-                </details>
-              </div>
-            ))}
+                  <h3 className="mt-3 text-sm font-semibold">{priority.title}</h3>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">{priority.whyItMatters}</p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <FocusRow label="Expected impact" value={priority.expectedImpact} />
+                    <FocusRow label="Effort" value={priority.estimatedEffort} />
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {priority.relatedMission ? <Badge tone="slate">{priority.relatedMission.title}</Badge> : null}
+                    <Button size="sm" onClick={() => onStartPriority(priority)}>
+                      <Play className="h-4 w-4" />
+                      Start Work
+                    </Button>
+                  </div>
+                  <details className="mt-3 rounded-md border border-border bg-muted/30 p-3">
+                    <summary className="cursor-pointer text-xs font-semibold text-foreground">Why?</summary>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <InlineList title="Supporting evidence" items={priority.supportingEvidence} />
+                      <InlineList title="Related signals" items={priority.relatedSignals.length ? priority.relatedSignals : ["Recent launch and proof-demand signals."]} />
+                      <InlineList title="Belief support" items={validationItems(validation.supportedBeliefs, "No supporting beliefs attached yet.")} />
+                      <InlineList title="Supporting claims" items={validationItems(validation.supportingClaims, "No supporting claims attached yet.")} />
+                      <InlineList title="Missing evidence" items={priority.missingEvidence.length ? priority.missingEvidence : [validationNeedsMoreEvidence(validation) ? "More claim evidence would improve confidence." : "No major missing evidence."]} />
+                      <InlineList title="Recommendation" items={[priority.sourceAction.confidenceExplanation || priority.sourceAction.reasoning]} />
+                    </div>
+                  </details>
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
 
@@ -3278,6 +3363,16 @@ function ExecutiveBriefPage({
                 <FocusRow label="Confidence" value={`${Math.round(judgment.confidenceScore * 100)}%`} />
               </div>
               <InlineList title="What would change this" items={judgment.whatWouldChangeRecommendation} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Beliefs Updated</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">What changed in VGOS judgment since the last operating pass.</p>
+            </CardHeader>
+            <CardContent>
+              <InlineList title="Updated beliefs" items={brief.beliefsUpdated.length ? brief.beliefsUpdated : ["No belief confidence changes need attention today."]} />
             </CardContent>
           </Card>
 
@@ -3356,6 +3451,128 @@ function ExecutiveBriefPage({
             ))}
           </CardContent>
         </Card>
+      </section>
+    </div>
+  );
+}
+
+function RealityModelPage({
+  state,
+  activeWorkspaceId,
+  onNavigate
+}: {
+  state: PlatformState;
+  activeWorkspaceId: string;
+  onNavigate: (page: PageId) => void;
+}) {
+  const model = useMemo(() => buildRealityModel(state, activeWorkspaceId), [state, activeWorkspaceId]);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle>Reality Model</CardTitle>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{summarizeRealityModel(model)}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => onNavigate("beliefs")}>
+              <ArrowRight className="h-4 w-4" />
+              Beliefs
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onNavigate("decisionValidations")}>
+              <ShieldCheck className="h-4 w-4" />
+              Validations
+            </Button>
+          </div>
+        </CardHeader>
+      </Card>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Strongest Beliefs</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {model.strongestBeliefs.map((belief) => (
+              <div key={belief.id} className="rounded-md border border-border bg-background p-3">
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone={statusTone(belief.status)}>{formatEnum(belief.status)}</Badge>
+                  <Badge tone="blue">{Math.round(belief.confidenceScore * 100)}%</Badge>
+                  <Badge tone="slate">Impact {belief.impactScore}</Badge>
+                </div>
+                <p className="mt-2 text-sm font-semibold">{belief.title}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{belief.statement}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Challenged Beliefs</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {model.challengedBeliefs.length ? model.challengedBeliefs.map((belief) => (
+              <div key={belief.id} className="rounded-md border border-border bg-background p-3">
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone="amber">{formatEnum(belief.status)}</Badge>
+                  <Badge tone="blue">{Math.round(belief.confidenceScore * 100)}%</Badge>
+                </div>
+                <p className="mt-2 text-sm font-semibold">{belief.title}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{belief.statement}</p>
+              </div>
+            )) : (
+              <p className="text-sm text-muted-foreground">No challenged belief is currently blocking decision confidence.</p>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_390px]">
+        <Card>
+          <CardHeader>
+            <CardTitle>High-Confidence Claims</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {model.highestConfidenceClaims.map((claim) => (
+              <div key={claim.id} className="rounded-md border border-border bg-background p-3">
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone={statusTone(claim.status)}>{formatEnum(claim.status)}</Badge>
+                  <Badge tone="blue">Evidence {Math.round(claim.evidenceStrength * 100)}%</Badge>
+                </div>
+                <p className="mt-2 text-sm font-semibold">{claim.title}</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">{claim.statement}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Weak Evidence Areas</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {model.weakestEvidenceAreas.map((area) => (
+                <div key={`${area.domain}-${area.summary}`} className="rounded-md border border-border bg-background p-3">
+                  <Badge tone="amber">{area.domain}</Badge>
+                  <p className="mt-2 text-sm font-semibold">{area.summary}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Evidence {Math.round(area.evidenceStrength * 100)}%</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Strategic Assumptions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <InlineList title="Current assumptions" items={model.currentStrategicAssumptions} />
+            </CardContent>
+          </Card>
+        </div>
       </section>
     </div>
   );
@@ -5294,60 +5511,84 @@ function RecommendedActionsPage({
           hasPriority
         />
         <div className="grid gap-3">
-          {items.map((action) => (
-            <div key={action.id} className="rounded-md border border-border bg-background p-3">
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap gap-2">
-                    <Badge tone={priorityTone(action.priority)}>{formatEnum(action.priority)}</Badge>
-                    <Badge tone={statusTone(action.status as any)}>{formatEnum(action.status)}</Badge>
-                    <Badge tone="violet">{formatEnum(action.actionType)}</Badge>
+          {items.map((action) => {
+            const validation = validateRecommendation(state, activeWorkspaceId, action.id);
+            return (
+              <div key={action.id} className="rounded-md border border-border bg-background p-3">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap gap-2">
+                      <Badge tone={priorityTone(action.priority)}>{formatEnum(action.priority)}</Badge>
+                      <Badge tone={statusTone(action.status as any)}>{formatEnum(action.status)}</Badge>
+                      <Badge tone="violet">{formatEnum(action.actionType)}</Badge>
+                      <Badge tone={statusTone(validation.validationStatus)}>{formatEnum(validation.validationStatus)}</Badge>
+                      <Badge tone="blue">Belief {Math.round(validation.confidenceScore * 100)}%</Badge>
+                      {validationNeedsMoreEvidence(validation) ? <Badge tone="amber">More evidence</Badge> : null}
+                    </div>
+                    <p className="mt-2 text-sm font-semibold">{action.title}</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{action.reasoning}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Source: {action.sourceType} - Due {formatDate(action.dueDate)} - Owner {action.owner}
+                    </p>
+                    <details className="mt-3 rounded-md border border-border bg-muted/30 p-3">
+                      <summary className="cursor-pointer text-xs font-semibold text-foreground">Belief validation</summary>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <InlineList title="Supported beliefs" items={validationItems(validation.supportedBeliefs, "No supporting beliefs attached yet.")} />
+                        <InlineList title="Challenged beliefs" items={validationItems(validation.challengedBeliefs, "No belief conflict visible.")} />
+                        <InlineList title="Supporting claims" items={validationItems(validation.supportingClaims, "No supporting claims attached yet.")} />
+                        <InlineList title="Challenged claims" items={validationItems(validation.challengedClaims, "No challenged claims visible.")} />
+                        <InlineList
+                          title="Evidence strength"
+                          items={[
+                            `Claim evidence: ${validationEvidenceStrength(validation)}`,
+                            `Alignment score: ${Math.round(validation.confidenceScore * 100)}%`,
+                            validationNeedsMoreEvidence(validation) ? "More evidence is needed before raising confidence." : "Current evidence is enough for a bounded commitment."
+                          ]}
+                        />
+                        <InlineList title="Risk read" items={[validation.riskSummary]} />
+                      </div>
+                    </details>
                   </div>
-                  <p className="mt-2 text-sm font-semibold">{action.title}</p>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{action.reasoning}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Source: {action.sourceType} - Due {formatDate(action.dueDate)} - Owner {action.owner}
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      const source = findSourceRecord(state, action.sourceType, action.sourceId);
-                      onEdit(sourceTypeToCollection(action.sourceType), source ?? action);
-                    }}
-                  >
-                    View source
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => onStartAction(action)}>
-                    <Play className="h-4 w-4" />
-                    Start
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => markActionCompleted(action.id)}>
-                    <CheckCircle2 className="h-4 w-4" />
-                    Mark Complete
-                  </Button>
-                  <Button size="sm" onClick={() => onConvertToExecution(action)}>
-                    <ArrowRight className="h-4 w-4" />
-                    Convert to Execution
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => onSnoozeAction(action)}>
-                    <CalendarClock className="h-4 w-4" />
-                    Snooze
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => convertActionToTask(action)}>
-                    <Plus className="h-4 w-4" />
-                    Task
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => onArchiveAction(action)}>
-                    <Archive className="h-4 w-4" />
-                    Archive
-                  </Button>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const source = findSourceRecord(state, action.sourceType, action.sourceId);
+                        onEdit(sourceTypeToCollection(action.sourceType), source ?? action);
+                      }}
+                    >
+                      View source
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => onStartAction(action)}>
+                      <Play className="h-4 w-4" />
+                      Start
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => markActionCompleted(action.id)}>
+                      <CheckCircle2 className="h-4 w-4" />
+                      Mark Complete
+                    </Button>
+                    <Button size="sm" onClick={() => onConvertToExecution(action)}>
+                      <ArrowRight className="h-4 w-4" />
+                      Convert to Execution
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => onSnoozeAction(action)}>
+                      <CalendarClock className="h-4 w-4" />
+                      Snooze
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => convertActionToTask(action)}>
+                      <Plus className="h-4 w-4" />
+                      Task
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => onArchiveAction(action)}>
+                      <Archive className="h-4 w-4" />
+                      Archive
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {items.length === 0 ? (
             <EmptyState
               title="No recommendations yet."
@@ -8538,6 +8779,9 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
   const missionOptions = state.missions.map((mission) => mission.id);
   const connectorOptions = state.connectors.map((connector) => connector.id);
   const rawSignalOptions = state.rawSignals.map((signal) => signal.id);
+  const claimOptions = state.claims.map((claim) => claim.id);
+  const beliefOptions = state.beliefs.map((belief) => belief.id);
+  const recommendedActionOptions = state.recommendedActions.map((action) => action.id);
   const decisionSituationOptions = state.decisionSituations.map((situation) => situation.id);
   const decisionOptionOptions = state.decisionOptions.map((option) => option.id);
   const deliberationOptions = state.deliberations.map((deliberation) => deliberation.id);
@@ -8639,6 +8883,81 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
       { key: "whatChanged", label: "What Changed", kind: "textarea" },
       { key: "lesson", label: "Lesson", kind: "textarea" },
       { key: "recalibrationSuggestion", label: "Recalibration Suggestion", kind: "textarea" }
+    ];
+  }
+
+  if (collection === "claims") {
+    return [
+      { key: "title", label: "Title" },
+      { key: "statement", label: "Statement", kind: "textarea" },
+      { key: "claimType", label: "Claim Type", kind: "select", options: claimTypeOptions },
+      { key: "status", label: "Status", kind: "select", options: claimStatusOptions },
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" },
+      { key: "evidenceStrength", label: "Evidence Strength", kind: "number" },
+      { key: "sourceType", label: "Source Type" },
+      { key: "sourceId", label: "Source ID" }
+    ];
+  }
+
+  if (collection === "claimEvidence") {
+    return [
+      { key: "claimId", label: "Claim", kind: "select", options: claimOptions },
+      { key: "evidenceType", label: "Evidence Type" },
+      { key: "sourceType", label: "Source Type" },
+      { key: "sourceId", label: "Source ID" },
+      { key: "summary", label: "Summary", kind: "textarea" },
+      { key: "strengthScore", label: "Strength Score", kind: "number" },
+      { key: "supportsClaim", label: "Supports Claim" },
+      { key: "weakensClaim", label: "Weakens Claim" }
+    ];
+  }
+
+  if (collection === "beliefs") {
+    return [
+      { key: "title", label: "Title" },
+      { key: "statement", label: "Statement", kind: "textarea" },
+      { key: "beliefType", label: "Belief Type", kind: "select", options: beliefTypeOptions },
+      { key: "status", label: "Status", kind: "select", options: beliefStatusOptions },
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" },
+      { key: "stabilityScore", label: "Stability Score", kind: "number" },
+      { key: "impactScore", label: "Impact Score", kind: "number" },
+      { key: "lastChallengedAt", label: "Last Challenged At" }
+    ];
+  }
+
+  if (collection === "beliefClaims") {
+    return [
+      { key: "beliefId", label: "Belief", kind: "select", options: beliefOptions },
+      { key: "claimId", label: "Claim", kind: "select", options: claimOptions },
+      { key: "weight", label: "Weight", kind: "number" }
+    ];
+  }
+
+  if (collection === "beliefRevisions") {
+    return [
+      { key: "beliefId", label: "Belief", kind: "select", options: beliefOptions },
+      { key: "previousConfidence", label: "Previous Confidence", kind: "number" },
+      { key: "newConfidence", label: "New Confidence", kind: "number" },
+      { key: "reason", label: "Reason", kind: "textarea" },
+      { key: "triggeredByType", label: "Triggered By Type" },
+      { key: "triggeredById", label: "Triggered By ID" }
+    ];
+  }
+
+  if (collection === "decisionValidations") {
+    return [
+      { key: "decisionId", label: "Decision", kind: "select", options: ["", ...decisionSituationOptions] },
+      { key: "recommendationId", label: "Recommendation", kind: "select", options: ["", ...recommendedActionOptions] },
+      { key: "missionId", label: "Mission", kind: "select", options: ["", ...missionOptions] },
+      { key: "title", label: "Title" },
+      { key: "validationStatus", label: "Validation Status", kind: "select", options: decisionValidationStatusOptions },
+      { key: "supportedBeliefs", label: "Supported Beliefs", kind: "tags" },
+      { key: "challengedBeliefs", label: "Challenged Beliefs", kind: "tags" },
+      { key: "supportingClaims", label: "Supporting Claims", kind: "tags" },
+      { key: "challengedClaims", label: "Challenged Claims", kind: "tags" },
+      { key: "evidenceSummary", label: "Evidence Summary", kind: "textarea" },
+      { key: "riskSummary", label: "Risk Summary", kind: "textarea" },
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" }
     ];
   }
 
@@ -9568,6 +9887,14 @@ function ContextBadges({ item }: { item: AnyRecord }) {
     item.optionType ? ["Option", formatEnum(item.optionType), "blue"] : null,
     item.commitmentType ? ["Commitment", formatEnum(item.commitmentType), "teal"] : null,
     item.decisionQuality ? ["Quality", formatEnum(item.decisionQuality), item.decisionQuality === "STRONG" ? "green" : item.decisionQuality === "MIXED" || item.decisionQuality === "WEAK" ? "amber" : "blue"] : null,
+    item.claimType ? ["Claim", formatEnum(item.claimType), "violet"] : null,
+    item.beliefType ? ["Belief", formatEnum(item.beliefType), "violet"] : null,
+    item.validationStatus ? ["Validation", formatEnum(item.validationStatus), statusTone(item.validationStatus)] : null,
+    item.evidenceStrength !== undefined ? ["Evidence", `${Math.round(Number(item.evidenceStrength) * 100)}%`, "teal"] : null,
+    item.stabilityScore !== undefined ? ["Stability", item.stabilityScore, "blue"] : null,
+    item.impactScore !== undefined ? ["Impact", item.impactScore, "amber"] : null,
+    item.weight !== undefined ? ["Weight", Number(item.weight).toFixed(2), "blue"] : null,
+    item.newConfidence !== undefined ? ["New confidence", `${Math.round(Number(item.newConfidence) * 100)}%`, "green"] : null,
     item.riskLevel ? ["Risk", formatEnum(item.riskLevel), priorityTone(item.riskLevel as Priority)] : null,
     item.evidenceType ? ["Evidence", formatEnum(item.evidenceType), "teal"] : null,
     item.overallScore !== undefined ? ["Score", `${Number(item.overallScore) > 1 ? Math.round(Number(item.overallScore)) : Math.round(Number(item.overallScore) * 100)}%`, "blue"] : null,

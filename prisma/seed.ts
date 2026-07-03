@@ -2,6 +2,10 @@ import {
   ActionStatus,
   ActionType,
   AssumptionStatus,
+  BeliefStatus,
+  BeliefType,
+  ClaimStatus,
+  ClaimType,
   ContentType,
   CognitionEvidenceType,
   CognitionRiskLevel,
@@ -11,6 +15,7 @@ import {
   DecisionQuality,
   DecisionSituationStatus,
   DecisionSituationType,
+  DecisionValidationStatus,
   DeliberationStatus,
   EventSeverity,
   EventStatus,
@@ -4473,6 +4478,228 @@ async function seedDeliberationLayer() {
   );
 }
 
+async function seedBeliefClaimDecisionValidation() {
+  const claimSeeds = [
+    ["claim-founder-content-trust", "Founder-led content produces more trust than company posts.", "Founder-led proof narratives create stronger qualitative trust than company-page publishing for VidMaker.", ClaimType.CHANNEL, ClaimStatus.VALIDATED, 0.83, 0.78, "Learning", "learning-05"],
+    ["claim-product-page-demos-trust", "Product-page demos increase conversion trust.", "Source-to-output product-page demos reduce skepticism before BOFU conversion messaging scales.", ClaimType.PRODUCT, ClaimStatus.SUPPORTED, 0.84, 0.82, "Observation", "observation-product-hunt-comments"],
+    ["claim-vpi-category", "Video Production Intelligence can become a category.", "VidMaker can define Video Production Intelligence as a differentiated category beyond generic AI video tools.", ClaimType.STRATEGIC, ClaimStatus.SUPPORTED, 0.76, 0.68, "ContentAsset", "content-blog-004"],
+    ["claim-purpose-specific-ai-differentiates", "Purpose-Specific AI differentiates VidMaker from generic video tools.", "Purpose-Specific AI clarifies why VidMaker's workflow differs from generic video generation.", ClaimType.STRATEGIC, ClaimStatus.SUPPORTED, 0.74, 0.66, "RecommendedAction", "action-29"],
+    ["claim-directory-submissions-slow", "Directory submissions are slower than expected.", "Directory approvals are lagging enough to weaken immediate authority forecasts.", ClaimType.OPERATIONAL, ClaimStatus.CHALLENGED, 0.58, 0.74, "Learning", "learning-03"],
+    ["claim-product-hunt-url-proof-demand", "Product Hunt comments show demand for URL-to-video proof.", "Launch comments are asking for URL-to-video and product-page proof before trusting the product claim.", ClaimType.CUSTOMER, ClaimStatus.VALIDATED, 0.86, 0.82, "Observation", "observation-product-hunt-comments"]
+  ] as const;
+
+  await Promise.all(
+    claimSeeds.map(([id, title, statement, claimType, status, confidenceScore, evidenceStrength, sourceType, sourceId]) =>
+      prisma.claim.upsert({
+        where: { id },
+        update: { title, statement, claimType, status, confidenceScore, evidenceStrength, sourceType, sourceId },
+        create: {
+          ...tenant,
+          id,
+          title,
+          statement,
+          claimType,
+          status,
+          confidenceScore,
+          evidenceStrength,
+          sourceType,
+          sourceId
+        }
+      })
+    )
+  );
+
+  const evidenceSeeds = [
+    ["claim-evidence-founder-post-engagement", "claim-founder-content-trust", "LEARNING", "Learning", "learning-05", "Founder post engagement produced stronger qualitative comments than company posts.", 0.78, true, false],
+    ["claim-evidence-product-hunt-proof-comments", "claim-product-page-demos-trust", "SIGNAL", "Observation", "observation-product-hunt-comments", "Product Hunt comments asked for URL-to-video and product-page proof before trusting the claim.", 0.82, true, false],
+    ["claim-evidence-vpi-blog-positioning", "claim-vpi-category", "CONTENT", "ContentAsset", "content-blog-004", "Video Production Intelligence content clarifies a category story for answer and generative engines.", 0.68, true, false],
+    ["claim-evidence-purpose-specific-faq", "claim-purpose-specific-ai-differentiates", "RECOMMENDATION", "RecommendedAction", "action-29", "Purpose-Specific AI FAQ is expected to answer objections without replacing product proof.", 0.66, true, false],
+    ["claim-evidence-directory-approval-delays", "claim-directory-submissions-slow", "COUNTER_EVIDENCE", "Learning", "learning-03", "Directory approvals lag submissions, weakening confidence in immediate authority outcomes.", 0.74, false, true],
+    ["claim-evidence-product-hunt-comments", "claim-product-hunt-url-proof-demand", "SIGNAL", "Observation", "observation-product-hunt-comments", "Product Hunt comments asked directly for URL-to-video and product-page proof.", 0.82, true, false]
+  ] as const;
+
+  await Promise.all(
+    evidenceSeeds.map(([id, claimId, evidenceType, sourceType, sourceId, summary, strengthScore, supportsClaim, weakensClaim]) =>
+      prisma.claimEvidence.upsert({
+        where: { id },
+        update: { claimId, evidenceType, sourceType, sourceId, summary, strengthScore, supportsClaim, weakensClaim },
+        create: {
+          ...tenant,
+          id,
+          claimId,
+          evidenceType,
+          sourceType,
+          sourceId,
+          summary,
+          strengthScore,
+          supportsClaim,
+          weakensClaim
+        }
+      })
+    )
+  );
+
+  const beliefSeeds = [
+    ["belief-product-proof-trust", "Product proof increases buyer trust.", "Visible product proof should precede broad conversion and launch promotion.", BeliefType.PRODUCT_BELIEF, BeliefStatus.CORE, 0.86, 84, 92, null],
+    ["belief-founder-authority-compounds", "Founder authority compounds faster than company-page publishing.", "Founder-led proof content should carry the strongest trust-building narratives.", BeliefType.GROWTH_BELIEF, BeliefStatus.CORE, 0.82, 78, 88, null],
+    ["belief-category-content-aeo-geo", "Category-definition content supports AEO/GEO.", "Clear category language improves answer-engine and generative-engine visibility.", BeliefType.STRATEGIC_BELIEF, BeliefStatus.ACTIVE, 0.76, 72, 82, null],
+    ["belief-proof-first-bofu", "Proof-first messaging improves BOFU conversion.", "BOFU content should wait for or include visible proof assets before stronger promotion.", BeliefType.GROWTH_BELIEF, BeliefStatus.ACTIVE, 0.84, 80, 90, null],
+    ["belief-low-quality-directories-limited", "Low-quality directories have limited authority impact.", "Broad low-quality directory submissions should not outrank proof assets or high-authority opportunities.", BeliefType.OPERATING_BELIEF, BeliefStatus.CHALLENGED, 0.61, 58, 68, dateFromNow(-1)]
+  ] as const;
+
+  await Promise.all(
+    beliefSeeds.map(([id, title, statement, beliefType, status, confidenceScore, stabilityScore, impactScore, lastChallengedAt]) =>
+      prisma.belief.upsert({
+        where: { id },
+        update: { title, statement, beliefType, status, confidenceScore, stabilityScore, impactScore, lastChallengedAt },
+        create: {
+          ...tenant,
+          id,
+          title,
+          statement,
+          beliefType,
+          status,
+          confidenceScore,
+          stabilityScore,
+          impactScore,
+          lastChallengedAt
+        }
+      })
+    )
+  );
+
+  const beliefClaimSeeds = [
+    ["belief-claim-product-proof-01", "belief-product-proof-trust", "claim-product-page-demos-trust", 0.92],
+    ["belief-claim-product-proof-02", "belief-product-proof-trust", "claim-product-hunt-url-proof-demand", 0.9],
+    ["belief-claim-founder-01", "belief-founder-authority-compounds", "claim-founder-content-trust", 0.88],
+    ["belief-claim-category-01", "belief-category-content-aeo-geo", "claim-vpi-category", 0.78],
+    ["belief-claim-category-02", "belief-category-content-aeo-geo", "claim-purpose-specific-ai-differentiates", 0.74],
+    ["belief-claim-bofu-01", "belief-proof-first-bofu", "claim-product-page-demos-trust", 0.9],
+    ["belief-claim-directory-01", "belief-low-quality-directories-limited", "claim-directory-submissions-slow", 0.82]
+  ] as const;
+
+  await Promise.all(
+    beliefClaimSeeds.map(([id, beliefId, claimId, weight]) =>
+      prisma.beliefClaim.upsert({
+        where: { id },
+        update: { beliefId, claimId, weight },
+        create: {
+          ...tenant,
+          id,
+          beliefId,
+          claimId,
+          weight
+        }
+      })
+    )
+  );
+
+  const revisionSeeds = [
+    ["belief-revision-directory-authority-reduced", "belief-low-quality-directories-limited", 0.74, 0.61, "Directory authority confidence reduced after slow approvals.", "Learning", "learning-03", -1],
+    ["belief-revision-product-demo-increased", "belief-product-proof-trust", 0.78, 0.86, "Product demo confidence increased after Product Hunt comments.", "Observation", "observation-product-hunt-comments", -2],
+    ["belief-revision-founder-content-increased", "belief-founder-authority-compounds", 0.76, 0.82, "Founder content confidence increased after LinkedIn engagement.", "Learning", "learning-05", -3]
+  ] as const;
+
+  await Promise.all(
+    revisionSeeds.map(([id, beliefId, previousConfidence, newConfidence, reason, triggeredByType, triggeredById, createdOffset]) =>
+      prisma.beliefRevision.upsert({
+        where: { id },
+        update: { beliefId, previousConfidence, newConfidence, reason, triggeredByType, triggeredById },
+        create: {
+          ...tenant,
+          id,
+          beliefId,
+          previousConfidence,
+          newConfidence,
+          reason,
+          triggeredByType,
+          triggeredById,
+          createdAt: dateFromNow(createdOffset)
+        }
+      })
+    )
+  );
+
+  const validationSeeds = [
+    ["decision-validation-blog-005", "decision-situation-blog-005-demo", null, "mission-product-page-to-video", "Validate publishing BLOG-005.", DecisionValidationStatus.MIXED, ["belief-category-content-aeo-geo"], ["belief-proof-first-bofu"], ["claim-vpi-category"], ["claim-product-page-demos-trust"], "Category content supports BLOG-005, but proof-first BOFU belief says demo evidence should come first.", "Publishing before proof can create traffic without conversion trust.", 0.66],
+    ["decision-validation-demo-first", "decision-situation-product-page-capacity", "action-02", "mission-product-page-to-video", "Validate finishing product-page-to-video demo first.", DecisionValidationStatus.STRONGLY_SUPPORTED, ["belief-product-proof-trust", "belief-proof-first-bofu"], [], ["claim-product-page-demos-trust", "claim-product-hunt-url-proof-demand"], [], "Product proof and Product Hunt comments strongly support demo-first execution.", "Main risk is delaying content momentum, not belief conflict.", 0.88],
+    ["decision-validation-pause-directories", "decision-situation-directory-pause", "action-05", "mission-product-hunt-momentum", "Validate pausing low-confidence directory submissions.", DecisionValidationStatus.SUPPORTED, ["belief-low-quality-directories-limited"], [], ["claim-directory-submissions-slow"], [], "Slow approval evidence supports pausing lower-confidence directory work.", "Risk is slower backlink coverage while proof work catches up.", 0.74],
+    ["decision-validation-founder-content", "decision-situation-founder-content", "action-08", "mission-founder-authority", "Validate increasing founder-led content.", DecisionValidationStatus.SUPPORTED, ["belief-founder-authority-compounds"], [], ["claim-founder-content-trust"], [], "Founder engagement and trust claims support increasing founder-led content.", "Founder review capacity remains the operating constraint.", 0.81],
+    ["decision-validation-purpose-specific-faq", null, "action-06", "mission-founder-authority", "Validate creating FAQ for Purpose-Specific AI.", DecisionValidationStatus.SUPPORTED, ["belief-category-content-aeo-geo"], [], ["claim-purpose-specific-ai-differentiates"], [], "Purpose-Specific AI FAQ supports category clarity and answer-engine coverage.", "FAQ should support proof, not substitute for the product demo.", 0.76]
+  ] as const;
+
+  await Promise.all(
+    validationSeeds.map(([id, decisionId, recommendationId, missionId, title, validationStatus, supportedBeliefs, challengedBeliefs, supportingClaims, challengedClaims, evidenceSummary, riskSummary, confidenceScore]) =>
+      prisma.decisionValidation.upsert({
+        where: { id },
+        update: {
+          decisionId,
+          recommendationId,
+          missionId,
+          title,
+          validationStatus,
+          supportedBeliefs: [...supportedBeliefs],
+          challengedBeliefs: [...challengedBeliefs],
+          supportingClaims: [...supportingClaims],
+          challengedClaims: [...challengedClaims],
+          evidenceSummary,
+          riskSummary,
+          confidenceScore
+        },
+        create: {
+          ...tenant,
+          id,
+          decisionId,
+          recommendationId,
+          missionId,
+          title,
+          validationStatus,
+          supportedBeliefs: [...supportedBeliefs],
+          challengedBeliefs: [...challengedBeliefs],
+          supportingClaims: [...supportingClaims],
+          challengedClaims: [...challengedClaims],
+          evidenceSummary,
+          riskSummary,
+          confidenceScore
+        }
+      })
+    )
+  );
+
+  const validationEvents = [
+    [EventType.CLAIM_CREATED, "Claim", "claim-product-page-demos-trust", "Product-page demo trust claim created.", EventSeverity.HIGH, EventStatus.PROCESSED],
+    [EventType.CLAIM_VALIDATED, "Claim", "claim-product-hunt-url-proof-demand", "Product Hunt proof-demand claim validated.", EventSeverity.HIGH, EventStatus.PROCESSED],
+    [EventType.CLAIM_CHALLENGED, "Claim", "claim-directory-submissions-slow", "Directory submission claim challenged authority timing.", EventSeverity.MEDIUM, EventStatus.PROCESSED],
+    [EventType.BELIEF_CREATED, "Belief", "belief-product-proof-trust", "Product proof trust belief created.", EventSeverity.HIGH, EventStatus.PROCESSED],
+    [EventType.BELIEF_CHALLENGED, "Belief", "belief-low-quality-directories-limited", "Low-quality directory authority belief challenged.", EventSeverity.HIGH, EventStatus.PROCESSED],
+    [EventType.BELIEF_REVISED, "BeliefRevision", "belief-revision-product-demo-increased", "Product proof belief confidence revised upward.", EventSeverity.HIGH, EventStatus.PROCESSED],
+    [EventType.DECISION_VALIDATED, "DecisionValidation", "decision-validation-demo-first", "Demo-first decision validated by beliefs and claims.", EventSeverity.CRITICAL, EventStatus.PROCESSED],
+    [EventType.REALITY_MODEL_UPDATED, "RealityModel", workspaceId, "Reality model updated from claims, beliefs, and revisions.", EventSeverity.HIGH, EventStatus.PENDING]
+  ] as const;
+
+  await Promise.all(
+    validationEvents.map(([eventType, sourceType, sourceId, title, severity, status], index) =>
+      prisma.event.upsert({
+        where: { id: `belief-validation-event-${String(index + 1).padStart(2, "0")}` },
+        update: { eventType, sourceType, sourceId, title, severity, status },
+        create: {
+          ...tenant,
+          id: `belief-validation-event-${String(index + 1).padStart(2, "0")}`,
+          eventType,
+          sourceType,
+          sourceId,
+          title,
+          description: title,
+          metadata: { capability: "belief-claim-decision-validation" },
+          severity,
+          status,
+          processedAt: status === EventStatus.PROCESSED ? new Date() : undefined
+        }
+      })
+    )
+  );
+}
+
 async function main() {
   await seedFoundation();
   const personas = await seedPersonas();
@@ -4494,6 +4721,7 @@ async function main() {
   await seedIntelligenceQualityHardening();
   await seedReflectiveCognition();
   await seedDeliberationLayer();
+  await seedBeliefClaimDecisionValidation();
 }
 
 main()

@@ -445,6 +445,47 @@ export const capabilityRegistry: CapabilityDefinition[] = [
     status: "ACTIVE"
   },
   {
+    id: "belief-claim-decision-validation",
+    name: "Belief, Claim & Decision Validation",
+    description: "Connects evidence to claims, claims to beliefs, and beliefs to decision validation so VGOS can explain what it believes and whether recommendations are supported.",
+    version: "1.0.0",
+    inputs: ["Evidence", "Claims", "Beliefs", "Recommendations", "Decisions", "Reflections"],
+    outputs: [
+      "Claims",
+      "Claim Evidence",
+      "Beliefs",
+      "Belief Revisions",
+      "Decision Validations",
+      "Reality Model"
+    ],
+    dependencies: [
+      "Reflective Cognition & Executive Wisdom",
+      "Deliberation Layer",
+      "Executive Intelligence Experience",
+      "Recommendation Engine"
+    ],
+    eventsConsumed: [
+      "EVIDENCE_ADDED",
+      "REFLECTION_CREATED",
+      "DECISION_COMMITTED",
+      "DECISION_REVIEWED",
+      "HIGH_IMPACT_ACTION_SELECTED"
+    ],
+    eventsProduced: [
+      "CLAIM_CREATED",
+      "CLAIM_VALIDATED",
+      "CLAIM_CHALLENGED",
+      "CLAIM_INVALIDATED",
+      "BELIEF_CREATED",
+      "BELIEF_UPDATED",
+      "BELIEF_CHALLENGED",
+      "BELIEF_REVISED",
+      "DECISION_VALIDATED",
+      "REALITY_MODEL_UPDATED"
+    ],
+    status: "ACTIVE"
+  },
+  {
     id: "event-system",
     name: "Event System",
     description: "Records workspace-scoped events that trigger workflows and kernel updates.",

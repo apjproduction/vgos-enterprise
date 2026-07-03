@@ -39,7 +39,7 @@ export const operatorNavigationGroups: NavigationGroup[] = [
 export const intelligenceStudioNavigationGroups: NavigationGroup[] = [
   {
     label: "Intelligence Studio",
-    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning", "assumptions", "evidence", "judgments", "tradeoffs", "reflections", "decisions", "deliberations", "options"]
+    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning", "assumptions", "evidence", "claims", "beliefs", "beliefRevisions", "decisionValidations", "realityModel", "judgments", "tradeoffs", "reflections", "decisions", "deliberations", "options"]
   },
   {
     label: "Connections",
@@ -70,7 +70,7 @@ export const developerNavigationGroups: NavigationGroup[] = [
   },
   {
     label: "Intelligence",
-    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning", "assumptions", "evidence", "judgments", "tradeoffs", "reflections", "decisions", "deliberations", "options", "learnings"]
+    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning", "assumptions", "evidence", "claims", "beliefs", "beliefRevisions", "decisionValidations", "realityModel", "judgments", "tradeoffs", "reflections", "decisions", "deliberations", "options", "learnings"]
   },
   {
     label: "Connections",
@@ -473,6 +473,21 @@ export function getPageIntro(page: PageDefinition) {
     decisions: {
       whyItMatters: "VGOS compares options, challenges assumptions, and commits deliberately before spending scarce execution capacity."
     },
+    claims: {
+      whyItMatters: "Claims turn evidence into explicit statements VGOS can support, challenge, validate, or invalidate before they become beliefs."
+    },
+    beliefs: {
+      whyItMatters: "Beliefs are the operating truths VGOS uses to interpret recommendations, missions, and decisions."
+    },
+    beliefRevisions: {
+      whyItMatters: "Belief revisions preserve how confidence changed when evidence, outcomes, or reflections changed VGOS judgment."
+    },
+    decisionValidations: {
+      whyItMatters: "Decision validations compare recommendations and decisions against supported beliefs, challenged beliefs, and claim strength."
+    },
+    realityModel: {
+      whyItMatters: "The Reality Model summarizes the strongest beliefs, weak evidence areas, challenged assumptions, and decision alignment."
+    },
     deliberations: {
       whyItMatters: "Deliberations preserve the final judgment, dissenting view, confidence, and what would change the decision."
     },
@@ -564,6 +579,36 @@ export function getEmptyStateCopy(collection: CollectionKey, label?: string) {
       description: "Create reflections after work ships, measurement arrives, or a learning changes future judgment.",
       actionLabel: "Create Reflection",
       secondaryText: "Reflections recalibrate future recommendations."
+    },
+    claims: {
+      title: "No claims yet.",
+      description: "Create claims when evidence supports or challenges a statement VGOS may rely on.",
+      actionLabel: "Create Claim",
+      secondaryText: "Claims are the step between raw evidence and durable beliefs."
+    },
+    claimEvidence: {
+      title: "No claim evidence yet.",
+      description: "Attach evidence when a claim needs support, challenge, or validation.",
+      actionLabel: "Add Claim Evidence",
+      secondaryText: "Evidence strength controls how much confidence can rise."
+    },
+    beliefs: {
+      title: "No beliefs yet.",
+      description: "Create beliefs when supported claims should influence recommendations, missions, or decisions.",
+      actionLabel: "Create Belief",
+      secondaryText: "Beliefs should stay explicit, revisable, and evidence-aware."
+    },
+    beliefRevisions: {
+      title: "No belief revisions yet.",
+      description: "Record revisions when evidence changes confidence in an operating belief.",
+      actionLabel: "Create Revision",
+      secondaryText: "Revisions explain why VGOS changed its mind."
+    },
+    decisionValidations: {
+      title: "No decision validations yet.",
+      description: "Validate recommendations and decisions against current beliefs and claims.",
+      actionLabel: "Create Validation",
+      secondaryText: "Validation keeps recommendations tied to evidence rather than preference."
     },
     plans: {
       title: "No plans yet.",

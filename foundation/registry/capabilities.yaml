@@ -80,6 +80,28 @@ capabilities:
     dependsOn:
       - cap-connected-intelligence
 
+  - id: cap-belief-claim-decision-validation
+    name: Belief, Claim and Decision Validation
+    domain: Intelligence
+    status: production-alpha
+    version: 1.0.0
+    purpose: Connect evidence to claims, claims to beliefs, and beliefs to decision validation so VGOS can explain what it believes and whether recommendations are supported.
+    owner: APJ Intelligence
+    inputs:
+      - Evidence
+      - Claims
+      - Recommendations
+      - Decisions
+      - Reflections
+    outputs:
+      - Claim Engine
+      - Belief Engine
+      - Decision Validations
+      - Belief Revisions
+      - Reality Model
+    dependsOn:
+      - cap-intelligence-kernel
+
   - id: cap-executive-brief
     name: Executive Brief
     domain: Experience

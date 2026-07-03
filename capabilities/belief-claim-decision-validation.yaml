@@ -1,0 +1,52 @@
+id: belief-claim-decision-validation
+name: Belief, Claim & Decision Validation
+version: 1.0.0
+status: ACTIVE
+description: >-
+  Adds a validation layer that turns evidence into claims, claims into beliefs,
+  and beliefs into decision validation before VGOS raises recommendation
+  confidence.
+dependencies:
+  - Reflective Cognition & Executive Wisdom
+  - Deliberation Layer
+  - Executive Intelligence Experience
+  - Recommendation Engine
+inputs:
+  - Evidence
+  - Claims
+  - Beliefs
+  - Recommendations
+  - Decisions
+  - Reflections
+outputs:
+  - Claim model
+  - ClaimEvidence model
+  - Belief model
+  - BeliefRevision model
+  - DecisionValidation model
+  - Reality Model
+runtime:
+  logic_path: src/kernel/beliefs
+  pages:
+    - /claims
+    - /beliefs
+    - /belief-revisions
+    - /decision-validations
+    - /reality-model
+events:
+  - CLAIM_CREATED
+  - CLAIM_VALIDATED
+  - CLAIM_CHALLENGED
+  - CLAIM_INVALIDATED
+  - BELIEF_CREATED
+  - BELIEF_UPDATED
+  - BELIEF_CHALLENGED
+  - BELIEF_REVISED
+  - DECISION_VALIDATED
+  - REALITY_MODEL_UPDATED
+quality_gates:
+  - claims_have_evidence_strength
+  - beliefs_link_to_claims
+  - challenged_beliefs_remain_visible
+  - recommendations_show_belief_alignment
+  - reality_model_summarizes_interpreted_state

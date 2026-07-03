@@ -8,6 +8,8 @@ import type {
 } from "@/kernel/advisor/advisor-types";
 import { generateExecutiveJudgment } from "@/kernel/cognition/judgment-engine";
 import { generateTradeoffSummary } from "@/kernel/cognition/tradeoff-engine";
+import { validateRecommendation, validateDecision, validateMissionAgainstBeliefs } from "@/kernel/beliefs/decision-validation";
+import { buildRealityModel, summarizeRealityModel } from "@/kernel/beliefs/reality-model";
 import { getOpenSituations } from "@/kernel/deliberation/decision-situation-engine";
 import { deliberate } from "@/kernel/deliberation/deliberation-engine";
 import type { PlatformState } from "@/lib/vgos-data";
@@ -84,6 +86,25 @@ function addReflectiveCognition(
   };
 }
 
+function summarizeBeliefUpdates(state: PlatformState, workspaceId: string): string[] {
+  const revisions = state.beliefRevisions
+    .filter((revision) => revision.workspaceId === workspaceId)
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, 3)
+    .map((revision) => {
+      const belief = state.beliefs.find((item) => item.id === revision.beliefId);
+      const direction = revision.newConfidence >= revision.previousConfidence ? "increased" : "reduced";
+      return `Confidence ${direction} in "${belief?.title ?? revision.beliefId}". ${revision.reason}`;
+    });
+
+  const coreBeliefs = state.beliefs
+    .filter((belief) => belief.workspaceId === workspaceId && belief.status === "CORE")
+    .slice(0, 2)
+    .map((belief) => `"${belief.title}" remains a core belief.`);
+
+  return [...revisions, ...coreBeliefs].slice(0, 5);
+}
+
 export function generateDailyBrief(state: PlatformState, workspaceId: string, userName = "Tom Promise"): DailyBrief {
   const context = buildAdvisorContext(state, workspaceId);
   const executiveJudgment = generateExecutiveJudgment(state, workspaceId, context.topPriorities[0]?.id);
@@ -106,6 +127,7 @@ export function generateDailyBrief(state: PlatformState, workspaceId: string, us
     priorities: context.topPriorities,
     missionHealth: context.missionHealth.slice(0, 6),
     recentWins: context.recentWins.slice(0, 5),
+    beliefsUpdated: summarizeBeliefUpdates(state, workspaceId),
     executiveRecommendation: context.executiveRecommendation,
     executiveJudgment,
     recommendedFocus: summarizeList(topPriorityTitles.slice(0, 3), "Keep capacity on ready execution items and founder review."),
@@ -459,6 +481,105 @@ function explainDecisionDeliberation(context: AdvisorContext, question: string):
   };
 }
 
+function answerRealityModelQuestion(context: AdvisorContext, question: string): AdvisorAnswer {
+  const model = buildRealityModel(context.state, context.workspaceId);
+  const lower = question.toLowerCase();
+  const relatedBeliefs = /product page|product-page|video|proof/.test(lower)
+    ? context.state.beliefs.filter((belief) =>
+        belief.workspaceId === context.workspaceId && /product|proof|video|bofu/i.test(`${belief.title} ${belief.statement}`)
+      )
+    : model.strongestBeliefs;
+  const relatedClaims = /weak|claims?/.test(lower)
+    ? context.state.claims
+        .filter((claim) => claim.workspaceId === context.workspaceId && (claim.status === "CHALLENGED" || claim.evidenceStrength < 0.65))
+        .slice(0, 5)
+    : model.highestConfidenceClaims.slice(0, 4);
+
+  return {
+    question,
+    answer: /weak|claims?/.test(lower)
+      ? `The weakest claims are ${relatedClaims.map((claim) => claim.title).join(", ") || "not visible yet"}. These should receive stronger evidence before VGOS raises confidence.`
+      : `VGOS currently believes ${relatedBeliefs.map((belief) => belief.title).join(", ") || "the reality model is still forming"}. ${summarizeRealityModel(model)}`,
+    reasoning: [
+      "VGOS now reads beliefs from the claim and evidence loop.",
+      "Core beliefs are sorted by confidence, stability, and impact.",
+      model.decisionValidationSummary
+    ],
+    relatedObjects: [
+      ...relatedBeliefs.slice(0, 3).map((belief) => ({ type: "Belief", id: belief.id, title: belief.title, detail: belief.status })),
+      ...relatedClaims.slice(0, 3).map((claim) => ({ type: "Claim", id: claim.id, title: claim.title, detail: claim.status }))
+    ],
+    suggestedActions: [
+      { label: "Open Beliefs", description: "Review current belief confidence and status.", pageId: "beliefs" },
+      { label: "Open Reality Model", description: "Review the workspace reality summary.", pageId: "realityModel" }
+    ],
+    confidence: 0.86
+  };
+}
+
+function answerBeliefChangeQuestion(context: AdvisorContext, question: string): AdvisorAnswer {
+  const revisions = context.state.beliefRevisions
+    .filter((revision) => revision.workspaceId === context.workspaceId)
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, 5);
+  const challenged = context.state.beliefs.find((belief) => belief.workspaceId === context.workspaceId && belief.status === "CHALLENGED");
+
+  return {
+    question,
+    answer: revisions.length
+      ? `Recent belief changes: ${revisions.map((revision) => revision.reason).join(" ")}`
+      : challenged
+        ? `${challenged.title} was challenged recently and should be reviewed before confidence increases.`
+        : "No recent belief revision is visible yet.",
+    reasoning: [
+      "Belief revisions record previous confidence, new confidence, trigger type, and trigger source.",
+      challenged ? `${challenged.title} is currently challenged.` : "No challenged core belief is blocking the current plan."
+    ],
+    relatedObjects: revisions.map((revision) => ({
+      type: "BeliefRevision",
+      id: revision.id,
+      title: revision.reason,
+      detail: `${Math.round(revision.previousConfidence * 100)}% to ${Math.round(revision.newConfidence * 100)}%`
+    })),
+    suggestedActions: [
+      { label: "Open Revisions", description: "Review belief confidence changes.", pageId: "beliefRevisions" },
+      { label: "Open Beliefs", description: "Review challenged beliefs.", pageId: "beliefs" }
+    ],
+    confidence: 0.84
+  };
+}
+
+function answerDecisionValidationQuestion(context: AdvisorContext, question: string): AdvisorAnswer {
+  const lower = question.toLowerCase();
+  const validation = /mission/.test(lower)
+    ? validateMissionAgainstBeliefs(context.state, context.workspaceId)
+    : /decision/.test(lower)
+      ? validateDecision(context.state, context.workspaceId)
+      : validateRecommendation(context.state, context.workspaceId, context.topPriorities[0]?.id);
+
+  return {
+    question,
+    answer: `${validation.title} is ${validation.validationStatus.toLowerCase().replace(/_/g, " ")} with ${Math.round(validation.confidenceScore * 100)}% belief alignment. ${validation.riskSummary}`,
+    reasoning: [
+      validation.evidenceSummary,
+      "VGOS compares supporting beliefs, challenged beliefs, supporting claims, challenged claims, and evidence strength.",
+      validation.confidenceScore < 0.68 ? "More evidence is needed before this becomes a high-confidence decision." : "Evidence is strong enough for a bounded commitment."
+    ],
+    relatedObjects: [
+      { type: "DecisionValidation", id: validation.id, title: validation.title, detail: validation.validationStatus },
+      ...validation.supportedBeliefs.slice(0, 3).map((item) => {
+        const belief = item as { id?: string; title?: string; status?: string };
+        return { type: "Belief", id: belief.id ?? "belief", title: belief.title ?? "Supporting belief", detail: belief.status };
+      })
+    ],
+    suggestedActions: [
+      { label: "Open Validations", description: "Review belief and claim support.", pageId: "decisionValidations" },
+      { label: "Open Claims", description: "Inspect supporting and challenged claims.", pageId: "claims" }
+    ],
+    confidence: validation.confidenceScore
+  };
+}
+
 export function answerExecutiveQuestion(
   question: string,
   state: PlatformState,
@@ -467,6 +588,9 @@ export function answerExecutiveQuestion(
   const context = buildAdvisorContext(state, workspaceId);
   const lower = question.toLowerCase();
 
+  if (/align.*belief|belief.*support|evidence.*before deciding|before deciding|decision.*safe|more evidence|validate.*recommendation|validate.*decision/.test(lower)) return addReflectiveCognition(answerDecisionValidationQuestion(context, question), state, workspaceId);
+  if (/what changed.*belief|changed our belief|belief.*changed|challenged recently|recently challenged/.test(lower)) return addReflectiveCognition(answerBeliefChangeQuestion(context, question), state, workspaceId);
+  if (/belief|believe|claims?|reality model|product page to video|product-page-to-video/.test(lower)) return addReflectiveCognition(answerRealityModelQuestion(context, question), state, workspaceId);
   if (/what.*assuming|assumption|assumptions|why.*recommendation|what could go wrong|wrong|change.*mind|what would change/.test(lower)) return addReflectiveCognition(explainRecommendation(state, workspaceId), state, workspaceId);
   if (/learn|learned|reflection|outcome/.test(lower)) return addReflectiveCognition(summarizeRecentChanges(state, workspaceId), state, workspaceId);
   if (/option|chosen|choose|reject|rejected|tradeoff|trade-off|defer|delay|do nothing|risk-adjusted|decision.*review|needs review/.test(lower)) return addReflectiveCognition(explainDecisionDeliberation(context, question), state, workspaceId);

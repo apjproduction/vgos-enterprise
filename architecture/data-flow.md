@@ -30,6 +30,19 @@ flowchart LR
 
 ```mermaid
 flowchart LR
+  A["Evidence"] --> B["Claim"]
+  B --> C["Belief"]
+  C --> D["Decision Validation"]
+  D --> E["Recommendation"]
+  E --> F["Execution"]
+  F --> G["Outcome"]
+  G --> H["Reflection"]
+  H --> I["Belief Revision"]
+  I --> J["Updated Reality Model"]
+```
+
+```mermaid
+flowchart LR
   A["Raw market signal"] --> B["Intelligence Pipeline"]
   B --> C["IntelligenceObject"]
   C --> D["KnowledgeObject"]
@@ -112,11 +125,11 @@ flowchart LR
 
 ## Context
 
-Phase Alpha gave VGOS memory, patterns, reasoning traces, objectives, agents, events, and decision ranking. Phase Beta makes those artifacts reusable through canonical knowledge objects, relationships, workflows, and handoffs. The Planning Engine adds structured execution planning on top of recommendations and constraints. The Execution Engine turns plans into owned execution items, proof, approvals, blockers, and results. The Measurement & Learning Engine turns those results into measurable evidence, learning, attribution, strategy adjustment, and better future recommendations. The Mission Engine rolls those layers into top-level business missions with health, velocity, risk, confidence, completion, summaries, and recommendations. Connected Intelligence prepares live external sources while requiring every connector to pass through raw signals, normalized signals, events, and kernel routing. Intelligence Quality adds a deterministic trust gate between normalization and downstream intelligence so quality scoring, duplicate detection, confidence calibration, and audit events happen before System Mission Control acts on new recommendations. Executive Intelligence adds an Advisor Context layer that translates kernel state into Executive Brief, priorities, Work Queue, Results, and Learning review surfaces. Reflective Cognition adds assumptions, evidence assessment, counter-evidence, tradeoffs, reflections, and confidence recalibration. Deliberation adds explicit decision situations, options, evaluations, challenges, commitments, and reviews before VGOS changes capacity or strategy.
+Phase Alpha gave VGOS memory, patterns, reasoning traces, objectives, agents, events, and decision ranking. Phase Beta makes those artifacts reusable through canonical knowledge objects, relationships, workflows, and handoffs. The Planning Engine adds structured execution planning on top of recommendations and constraints. The Execution Engine turns plans into owned execution items, proof, approvals, blockers, and results. The Measurement & Learning Engine turns those results into measurable evidence, learning, attribution, strategy adjustment, and better future recommendations. The Mission Engine rolls those layers into top-level business missions with health, velocity, risk, confidence, completion, summaries, and recommendations. Connected Intelligence prepares live external sources while requiring every connector to pass through raw signals, normalized signals, events, and kernel routing. Intelligence Quality adds a deterministic trust gate between normalization and downstream intelligence so quality scoring, duplicate detection, confidence calibration, and audit events happen before System Mission Control acts on new recommendations. Executive Intelligence adds an Advisor Context layer that translates kernel state into Executive Brief, priorities, Work Queue, Results, and Learning review surfaces. Reflective Cognition adds assumptions, evidence assessment, counter-evidence, tradeoffs, reflections, and confidence recalibration. Deliberation adds explicit decision situations, options, evaluations, challenges, commitments, and reviews before VGOS changes capacity or strategy. Belief, Claim & Decision Validation adds an explicit bridge from evidence to claims, claims to beliefs, and beliefs to decision validation before recommendations increase confidence.
 
 ## Decision
 
-All significant market and growth artifacts can be represented as workspace-scoped knowledge objects. Relationships explain how those artifacts connect. Workflows and agents operate on the same knowledge layer rather than each module owning isolated logic. External sources enter through connectors, raw signals, normalized signals, and events before they reach intelligence or mission systems. Missions become the highest-level business objects. Plans translate objectives, patterns, and recommendations into milestones, plan items, dependencies, constraints, and predicted outcomes. Execution items translate planned work into shipped proof and measurable results. Measurements compare actual outcomes against expectations, then produce learnings, attributions, and strategy adjustments that can update mission strategy. Decisions that require tradeoff judgment become decision situations, options, evaluations, challenges, deliberations, commitments, and reviews.
+All significant market and growth artifacts can be represented as workspace-scoped knowledge objects. Relationships explain how those artifacts connect. Workflows and agents operate on the same knowledge layer rather than each module owning isolated logic. External sources enter through connectors, raw signals, normalized signals, and events before they reach intelligence or mission systems. Missions become the highest-level business objects. Plans translate objectives, patterns, and recommendations into milestones, plan items, dependencies, constraints, and predicted outcomes. Execution items translate planned work into shipped proof and measurable results. Measurements compare actual outcomes against expectations, then produce learnings, attributions, and strategy adjustments that can update mission strategy. Decisions that require tradeoff judgment become decision situations, options, evaluations, challenges, deliberations, commitments, and reviews. Evidence can also produce claims; claims can support or challenge beliefs; beliefs inform decision validations and the interpreted Reality Model.
 
 ## Consequences
 
@@ -131,6 +144,7 @@ All significant market and growth artifacts can be represented as workspace-scop
 - Intelligence Quality checks normalized signals, detects duplicates, calibrates recommendation confidence, and records audit events before enterprise workflows rely on new intelligence.
 - Executive Intelligence converts kernel state into advisor context, daily priorities, work queue action, results review, and learning loops without adding another backend engine.
 - Deliberation preserves the options VGOS considered, the dissenting view, the final judgment, the commitment, and the review outcome.
+- Belief validation makes recommendations explain what beliefs and claims support them, which beliefs are challenged, and whether more evidence is needed.
 
 ## Future Considerations
 

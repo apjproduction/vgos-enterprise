@@ -29,6 +29,19 @@ import type {
   TradeoffAnalysis
 } from "@/kernel/cognition/cognition-types";
 import type {
+  Belief,
+  BeliefClaim,
+  BeliefRevision,
+  BeliefStatus,
+  BeliefType,
+  Claim,
+  ClaimEvidence,
+  ClaimStatus,
+  ClaimType,
+  DecisionValidation,
+  DecisionValidationStatus
+} from "@/kernel/beliefs/belief-types";
+import type {
   DecisionCommitment,
   DecisionCommitmentStatus,
   DecisionCommitmentType,
@@ -188,7 +201,17 @@ export type EventType =
   | "DELIBERATION_COMPLETED"
   | "DECISION_COMMITTED"
   | "DECISION_DEFERRED"
-  | "DECISION_REVIEWED";
+  | "DECISION_REVIEWED"
+  | "CLAIM_CREATED"
+  | "CLAIM_VALIDATED"
+  | "CLAIM_CHALLENGED"
+  | "CLAIM_INVALIDATED"
+  | "BELIEF_CREATED"
+  | "BELIEF_UPDATED"
+  | "BELIEF_CHALLENGED"
+  | "BELIEF_REVISED"
+  | "DECISION_VALIDATED"
+  | "REALITY_MODEL_UPDATED";
 
 export type EventSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type EventStatus = "PENDING" | "PROCESSED" | "DISMISSED";
@@ -1458,6 +1481,12 @@ export type PlatformState = {
   tradeoffAnalyses: TradeoffAnalysis[];
   judgmentRecords: JudgmentRecord[];
   reflections: Reflection[];
+  claims: Claim[];
+  claimEvidence: ClaimEvidence[];
+  beliefs: Belief[];
+  beliefClaims: BeliefClaim[];
+  beliefRevisions: BeliefRevision[];
+  decisionValidations: DecisionValidation[];
   decisionSituations: DecisionSituation[];
   decisionOptions: DecisionOption[];
   optionEvaluations: OptionEvaluation[];
@@ -1505,6 +1534,11 @@ export type PageId =
   | "evidence"
   | "assumptions"
   | "judgments"
+  | "claims"
+  | "beliefs"
+  | "beliefRevisions"
+  | "decisionValidations"
+  | "realityModel"
   | "tradeoffs"
   | "reflections"
   | "results"
@@ -1581,6 +1615,12 @@ export type CollectionKey =
   | "tradeoffAnalyses"
   | "judgmentRecords"
   | "reflections"
+  | "claims"
+  | "claimEvidence"
+  | "beliefs"
+  | "beliefClaims"
+  | "beliefRevisions"
+  | "decisionValidations"
   | "decisionSituations"
   | "decisionOptions"
   | "optionEvaluations"
@@ -1845,6 +1885,40 @@ export const pageDefinitions: PageDefinition[] = [
     description: "Auditable executive judgments with reasoning, assumptions, evidence, tradeoffs, confidence, and change triggers.",
     icon: ShieldCheck,
     collection: "judgmentRecords"
+  },
+  {
+    id: "claims",
+    label: "Claims",
+    description: "Evidence-backed statements VGOS uses before raising confidence into beliefs.",
+    icon: CircleHelp,
+    collection: "claims"
+  },
+  {
+    id: "beliefs",
+    label: "Beliefs",
+    description: "Workspace beliefs that influence recommendations, decisions, missions, and operating judgment.",
+    icon: BrainCircuit,
+    collection: "beliefs"
+  },
+  {
+    id: "beliefRevisions",
+    label: "Belief Revisions",
+    description: "Confidence changes caused by evidence, outcomes, learning, and reflection.",
+    icon: Lightbulb,
+    collection: "beliefRevisions"
+  },
+  {
+    id: "decisionValidations",
+    label: "Decision Validations",
+    description: "Belief and claim support checks for decisions, recommendations, and missions.",
+    icon: ShieldCheck,
+    collection: "decisionValidations"
+  },
+  {
+    id: "realityModel",
+    label: "Reality Model",
+    description: "Workspace-level summary of strongest beliefs, challenged beliefs, high-confidence claims, weak evidence, and strategic assumptions.",
+    icon: Database
   },
   {
     id: "tradeoffs",
@@ -3903,6 +3977,123 @@ const reflections: Reflection[] = ([
   ...scoped(index)
 }));
 
+const claims: Claim[] = ([
+  ["claim-founder-content-trust", "Founder-led content produces more trust than company posts.", "Founder-led proof narratives create stronger qualitative trust than company-page publishing for VidMaker.", "CHANNEL", "VALIDATED", 0.83, 0.78, "Learning", "learning-05"],
+  ["claim-product-page-demos-trust", "Product-page demos increase conversion trust.", "Source-to-output product-page demos reduce skepticism before BOFU conversion messaging scales.", "PRODUCT", "SUPPORTED", 0.84, 0.82, "Observation", "observation-product-hunt-comments"],
+  ["claim-vpi-category", "Video Production Intelligence can become a category.", "VidMaker can define Video Production Intelligence as a differentiated category beyond generic AI video tools.", "STRATEGIC", "SUPPORTED", 0.76, 0.68, "ContentAsset", "content-blog-004"],
+  ["claim-purpose-specific-ai-differentiates", "Purpose-Specific AI differentiates VidMaker from generic video tools.", "Purpose-Specific AI clarifies why VidMaker's workflow differs from generic video generation.", "STRATEGIC", "SUPPORTED", 0.74, 0.66, "RecommendedAction", "action-29"],
+  ["claim-directory-submissions-slow", "Directory submissions are slower than expected.", "Directory approvals are lagging enough to weaken immediate authority forecasts.", "OPERATIONAL", "CHALLENGED", 0.58, 0.74, "Learning", "learning-03"],
+  ["claim-product-hunt-url-proof-demand", "Product Hunt comments show demand for URL-to-video proof.", "Launch comments are asking for URL-to-video and product-page proof before trusting the product claim.", "CUSTOMER", "VALIDATED", 0.86, 0.82, "Observation", "observation-product-hunt-comments"]
+] as const).map(([id, title, statement, claimType, status, confidenceScore, evidenceStrength, sourceType, sourceId], index) => ({
+  id,
+  title,
+  statement,
+  claimType: claimType as ClaimType,
+  status: status as ClaimStatus,
+  confidenceScore,
+  evidenceStrength,
+  sourceType,
+  sourceId,
+  ...scoped(index)
+}));
+
+const claimEvidence: ClaimEvidence[] = ([
+  ["claim-evidence-founder-post-engagement", "claim-founder-content-trust", "LEARNING", "Learning", "learning-05", "Founder post engagement produced stronger qualitative comments than company posts.", 0.78, true, false],
+  ["claim-evidence-product-hunt-proof-comments", "claim-product-page-demos-trust", "SIGNAL", "Observation", "observation-product-hunt-comments", "Product Hunt comments asked for URL-to-video and product-page proof before trusting the claim.", 0.82, true, false],
+  ["claim-evidence-vpi-blog-positioning", "claim-vpi-category", "CONTENT", "ContentAsset", "content-blog-004", "Video Production Intelligence content clarifies a category story for answer and generative engines.", 0.68, true, false],
+  ["claim-evidence-purpose-specific-faq", "claim-purpose-specific-ai-differentiates", "RECOMMENDATION", "RecommendedAction", "action-29", "Purpose-Specific AI FAQ is expected to answer objections without replacing product proof.", 0.66, true, false],
+  ["claim-evidence-directory-approval-delays", "claim-directory-submissions-slow", "COUNTER_EVIDENCE", "Learning", "learning-03", "Directory approvals lag submissions, weakening confidence in immediate authority outcomes.", 0.74, false, true],
+  ["claim-evidence-product-hunt-comments", "claim-product-hunt-url-proof-demand", "SIGNAL", "Observation", "observation-product-hunt-comments", "Product Hunt comments asked directly for URL-to-video and product-page proof.", 0.82, true, false]
+] as const).map(([id, claimId, evidenceType, sourceType, sourceId, summary, strengthScore, supportsClaim, weakensClaim], index) => ({
+  id,
+  claimId,
+  evidenceType,
+  sourceType,
+  sourceId,
+  summary,
+  strengthScore,
+  supportsClaim,
+  weakensClaim,
+  ...scoped(index)
+}));
+
+const beliefs: Belief[] = ([
+  ["belief-product-proof-trust", "Product proof increases buyer trust.", "Visible product proof should precede broad conversion and launch promotion.", "PRODUCT_BELIEF", "CORE", 0.86, 84, 92, ""],
+  ["belief-founder-authority-compounds", "Founder authority compounds faster than company-page publishing.", "Founder-led proof content should carry the strongest trust-building narratives.", "GROWTH_BELIEF", "CORE", 0.82, 78, 88, ""],
+  ["belief-category-content-aeo-geo", "Category-definition content supports AEO/GEO.", "Clear category language improves answer-engine and generative-engine visibility.", "STRATEGIC_BELIEF", "ACTIVE", 0.76, 72, 82, ""],
+  ["belief-proof-first-bofu", "Proof-first messaging improves BOFU conversion.", "BOFU content should wait for or include visible proof assets before stronger promotion.", "GROWTH_BELIEF", "ACTIVE", 0.84, 80, 90, ""],
+  ["belief-low-quality-directories-limited", "Low-quality directories have limited authority impact.", "Broad low-quality directory submissions should not outrank proof assets or high-authority opportunities.", "OPERATING_BELIEF", "CHALLENGED", 0.61, 58, 68, daysAgo(1)]
+] as const).map(([id, title, statement, beliefType, status, confidenceScore, stabilityScore, impactScore, lastChallengedAt], index) => ({
+  id,
+  title,
+  statement,
+  beliefType: beliefType as BeliefType,
+  status: status as BeliefStatus,
+  confidenceScore,
+  stabilityScore,
+  impactScore,
+  lastChallengedAt: lastChallengedAt || undefined,
+  ...scoped(index)
+}));
+
+const beliefClaims: BeliefClaim[] = ([
+  ["belief-claim-product-proof-01", "belief-product-proof-trust", "claim-product-page-demos-trust", 0.92],
+  ["belief-claim-product-proof-02", "belief-product-proof-trust", "claim-product-hunt-url-proof-demand", 0.9],
+  ["belief-claim-founder-01", "belief-founder-authority-compounds", "claim-founder-content-trust", 0.88],
+  ["belief-claim-category-01", "belief-category-content-aeo-geo", "claim-vpi-category", 0.78],
+  ["belief-claim-category-02", "belief-category-content-aeo-geo", "claim-purpose-specific-ai-differentiates", 0.74],
+  ["belief-claim-bofu-01", "belief-proof-first-bofu", "claim-product-page-demos-trust", 0.9],
+  ["belief-claim-directory-01", "belief-low-quality-directories-limited", "claim-directory-submissions-slow", 0.82]
+] as const).map(([id, beliefId, claimId, weight], index) => ({
+  id,
+  organizationId: orgId,
+  workspaceId,
+  beliefId,
+  claimId,
+  weight,
+  createdAt: daysAgo(index + 1)
+}));
+
+const beliefRevisions: BeliefRevision[] = ([
+  ["belief-revision-directory-authority-reduced", "belief-low-quality-directories-limited", 0.74, 0.61, "Directory authority confidence reduced after slow approvals.", "Learning", "learning-03"],
+  ["belief-revision-product-demo-increased", "belief-product-proof-trust", 0.78, 0.86, "Product demo confidence increased after Product Hunt comments.", "Observation", "observation-product-hunt-comments"],
+  ["belief-revision-founder-content-increased", "belief-founder-authority-compounds", 0.76, 0.82, "Founder content confidence increased after LinkedIn engagement.", "Learning", "learning-05"]
+] as const).map(([id, beliefId, previousConfidence, newConfidence, reason, triggeredByType, triggeredById], index) => ({
+  id,
+  organizationId: orgId,
+  workspaceId,
+  beliefId,
+  previousConfidence,
+  newConfidence,
+  reason,
+  triggeredByType,
+  triggeredById,
+  createdAt: daysAgo(index + 1)
+}));
+
+const decisionValidations: DecisionValidation[] = ([
+  ["decision-validation-blog-005", "decision-situation-blog-005-demo", null, "mission-product-page-to-video", "Validate publishing BLOG-005.", "MIXED", ["belief-category-content-aeo-geo"], ["belief-proof-first-bofu"], ["claim-vpi-category"], ["claim-product-page-demos-trust"], "Category content supports BLOG-005, but proof-first BOFU belief says demo evidence should come first.", "Publishing before proof can create traffic without conversion trust.", 0.66],
+  ["decision-validation-demo-first", "decision-situation-product-page-capacity", "action-17", "mission-product-page-to-video", "Validate finishing product-page-to-video demo first.", "STRONGLY_SUPPORTED", ["belief-product-proof-trust", "belief-proof-first-bofu"], [], ["claim-product-page-demos-trust", "claim-product-hunt-url-proof-demand"], [], "Product proof and Product Hunt comments strongly support demo-first execution.", "Main risk is delaying content momentum, not belief conflict.", 0.88],
+  ["decision-validation-pause-directories", "decision-situation-directory-pause", "action-21", "mission-product-hunt-momentum", "Validate pausing low-confidence directory submissions.", "SUPPORTED", ["belief-low-quality-directories-limited"], [], ["claim-directory-submissions-slow"], [], "Slow approval evidence supports pausing lower-confidence directory work.", "Risk is slower backlink coverage while proof work catches up.", 0.74],
+  ["decision-validation-founder-content", "decision-situation-founder-content", "action-24", "mission-founder-authority", "Validate increasing founder-led content.", "SUPPORTED", ["belief-founder-authority-compounds"], [], ["claim-founder-content-trust"], [], "Founder engagement and trust claims support increasing founder-led content.", "Founder review capacity remains the operating constraint.", 0.81],
+  ["decision-validation-purpose-specific-faq", null, "action-29", "mission-founder-authority", "Validate creating FAQ for Purpose-Specific AI.", "SUPPORTED", ["belief-category-content-aeo-geo"], [], ["claim-purpose-specific-ai-differentiates"], [], "Purpose-Specific AI FAQ supports category clarity and answer-engine coverage.", "FAQ should support proof, not substitute for the product demo.", 0.76]
+] as const).map(([id, decisionId, recommendationId, missionId, title, validationStatus, supportedBeliefs, challengedBeliefs, supportingClaims, challengedClaims, evidenceSummary, riskSummary, confidenceScore], index) => ({
+  id,
+  decisionId,
+  recommendationId,
+  missionId,
+  title,
+  validationStatus: validationStatus as DecisionValidationStatus,
+  supportedBeliefs: [...supportedBeliefs],
+  challengedBeliefs: [...challengedBeliefs],
+  supportingClaims: [...supportingClaims],
+  challengedClaims: [...challengedClaims],
+  evidenceSummary,
+  riskSummary,
+  confidenceScore,
+  ...scoped(index)
+}));
+
 const decisionSituations: DecisionSituation[] = ([
   ["decision-situation-blog-005-demo", "Should BLOG-005 be published before the product-page demo?", "VGOS needs to decide whether content momentum is worth the trust risk of publishing before proof assets are ready.", "CONTENT_DECISION", "DECIDED", "CRITICAL", "ExecutionItem", "execution-blog-005-outline", "mission-product-page-to-video", "objective-demo-assets"],
   ["decision-situation-founder-content", "Should VidMaker increase founder-led content this week?", "Founder posts are outperforming company posts, but founder review capacity is limited.", "CHANNEL_DECISION", "DECIDED", "HIGH", "Learning", "learning-05", "mission-founder-authority", "objective-own-vpi"],
@@ -4804,6 +4995,86 @@ const cognitionEvents: Event[] = [
     createdAt: daysAgo(index + 1),
     processedAt: daysAgo(index + 1)
   })),
+  ...claims.slice(0, 6).map((claim, index) => ({
+    id: `${claim.id}-event`,
+    organizationId: orgId,
+    workspaceId,
+    eventType:
+      claim.status === "VALIDATED"
+        ? "CLAIM_VALIDATED" as EventType
+        : claim.status === "CHALLENGED"
+          ? "CLAIM_CHALLENGED" as EventType
+          : "CLAIM_CREATED" as EventType,
+    sourceType: "Claim",
+    sourceId: claim.id,
+    title: claim.title,
+    description: claim.statement,
+    metadata: { generatedBy: "belief-claim-validation-seed", confidenceScore: claim.confidenceScore },
+    severity: claim.status === "CHALLENGED" ? "HIGH" as EventSeverity : "MEDIUM" as EventSeverity,
+    status: "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index + 1),
+    processedAt: daysAgo(index + 1)
+  })),
+  ...beliefs.slice(0, 5).map((belief, index) => ({
+    id: `${belief.id}-event`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: belief.status === "CHALLENGED" ? "BELIEF_CHALLENGED" as EventType : "BELIEF_CREATED" as EventType,
+    sourceType: "Belief",
+    sourceId: belief.id,
+    title: belief.title,
+    description: belief.statement,
+    metadata: { generatedBy: "belief-claim-validation-seed", confidenceScore: belief.confidenceScore },
+    severity: belief.status === "CHALLENGED" ? "HIGH" as EventSeverity : "MEDIUM" as EventSeverity,
+    status: belief.status === "CHALLENGED" ? "PENDING" as EventStatus : "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index + 1),
+    processedAt: belief.status === "CHALLENGED" ? undefined : daysAgo(index + 1)
+  })),
+  ...beliefRevisions.map((revision, index) => ({
+    id: `${revision.id}-event`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: "BELIEF_REVISED" as EventType,
+    sourceType: "BeliefRevision",
+    sourceId: revision.id,
+    title: revision.reason,
+    description: `Confidence changed from ${Math.round(revision.previousConfidence * 100)}% to ${Math.round(revision.newConfidence * 100)}%.`,
+    metadata: { generatedBy: "belief-claim-validation-seed", beliefId: revision.beliefId },
+    severity: "HIGH" as EventSeverity,
+    status: "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index + 1),
+    processedAt: daysAgo(index + 1)
+  })),
+  ...decisionValidations.slice(0, 5).map((validation, index) => ({
+    id: `${validation.id}-event`,
+    organizationId: orgId,
+    workspaceId,
+    eventType: "DECISION_VALIDATED" as EventType,
+    sourceType: "DecisionValidation",
+    sourceId: validation.id,
+    title: validation.title,
+    description: validation.evidenceSummary,
+    metadata: { generatedBy: "belief-claim-validation-seed", validationStatus: validation.validationStatus },
+    severity: validation.validationStatus === "MIXED" || validation.validationStatus === "WEAKLY_SUPPORTED" ? "HIGH" as EventSeverity : "MEDIUM" as EventSeverity,
+    status: "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index + 1),
+    processedAt: daysAgo(index + 1)
+  })),
+  {
+    id: "event-reality-model-updated-belief-loop",
+    organizationId: orgId,
+    workspaceId,
+    eventType: "REALITY_MODEL_UPDATED",
+    sourceType: "RealityModel",
+    sourceId: "reality-model-vidmaker",
+    title: "Reality model updated from claims, beliefs, and revisions",
+    description: "VGOS now summarizes strongest beliefs, challenged beliefs, high-confidence claims, and weak evidence areas.",
+    metadata: { generatedBy: "belief-claim-validation-seed" },
+    severity: "HIGH",
+    status: "PROCESSED",
+    createdAt: daysAgo(1),
+    processedAt: daysAgo(1)
+  },
   {
     id: "event-confidence-recalibrated-directory",
     organizationId: orgId,
@@ -5195,6 +5466,12 @@ export const initialPlatformState: PlatformState = {
   tradeoffAnalyses,
   judgmentRecords,
   reflections,
+  claims,
+  claimEvidence,
+  beliefs,
+  beliefClaims,
+  beliefRevisions,
+  decisionValidations,
   decisionSituations,
   decisionOptions,
   optionEvaluations,
@@ -5574,6 +5851,93 @@ export function createDefaultRecord(collection: CollectionKey, activeWorkspaceId
       whatChanged: "",
       lesson: "",
       recalibrationSuggestion: ""
+    };
+  }
+
+  if (collection === "claims") {
+    return {
+      ...base,
+      title: "New claim",
+      statement: "",
+      claimType: "CUSTOM",
+      status: "PROPOSED",
+      confidenceScore: 0.6,
+      evidenceStrength: 0.55,
+      sourceType: "Manual",
+      sourceId: ""
+    };
+  }
+
+  if (collection === "claimEvidence") {
+    return {
+      ...base,
+      claimId: "",
+      evidenceType: "MANUAL_NOTE",
+      sourceType: "Manual",
+      sourceId: "",
+      summary: "",
+      strengthScore: 0.6,
+      supportsClaim: true,
+      weakensClaim: false
+    };
+  }
+
+  if (collection === "beliefs") {
+    return {
+      ...base,
+      title: "New belief",
+      statement: "",
+      beliefType: "CUSTOM",
+      status: "WATCHING",
+      confidenceScore: 0.6,
+      stabilityScore: 60,
+      impactScore: 60,
+      lastChallengedAt: ""
+    };
+  }
+
+  if (collection === "beliefClaims") {
+    return {
+      id: createScopedId(collection),
+      organizationId: orgId,
+      workspaceId: activeWorkspaceId,
+      beliefId: "",
+      claimId: "",
+      weight: 0.7,
+      createdAt: date
+    };
+  }
+
+  if (collection === "beliefRevisions") {
+    return {
+      id: createScopedId(collection),
+      organizationId: orgId,
+      workspaceId: activeWorkspaceId,
+      beliefId: "",
+      previousConfidence: 0.6,
+      newConfidence: 0.65,
+      reason: "",
+      triggeredByType: "Manual",
+      triggeredById: "",
+      createdAt: date
+    };
+  }
+
+  if (collection === "decisionValidations") {
+    return {
+      ...base,
+      decisionId: "",
+      recommendationId: "",
+      missionId: "",
+      title: "New decision validation",
+      validationStatus: "INSUFFICIENT_EVIDENCE",
+      supportedBeliefs: [],
+      challengedBeliefs: [],
+      supportingClaims: [],
+      challengedClaims: [],
+      evidenceSummary: "",
+      riskSummary: "",
+      confidenceScore: 0.5
     };
   }
 

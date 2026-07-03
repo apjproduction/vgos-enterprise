@@ -167,6 +167,16 @@ enum EventType {
   DECISION_COMMITTED
   DECISION_DEFERRED
   DECISION_REVIEWED
+  CLAIM_CREATED
+  CLAIM_VALIDATED
+  CLAIM_CHALLENGED
+  CLAIM_INVALIDATED
+  BELIEF_CREATED
+  BELIEF_UPDATED
+  BELIEF_CHALLENGED
+  BELIEF_REVISED
+  DECISION_VALIDATED
+  REALITY_MODEL_UPDATED
 }
 
 enum EventSeverity {
@@ -180,6 +190,59 @@ enum EventStatus {
   PENDING
   PROCESSED
   DISMISSED
+}
+
+enum ClaimType {
+  MARKET
+  CUSTOMER
+  PRODUCT
+  GROWTH
+  SEO
+  AEO
+  GEO
+  CHANNEL
+  COMPETITOR
+  OPERATIONAL
+  STRATEGIC
+  PHILOSOPHICAL
+  CUSTOM
+}
+
+enum ClaimStatus {
+  PROPOSED
+  SUPPORTED
+  CHALLENGED
+  VALIDATED
+  INVALIDATED
+  ARCHIVED
+}
+
+enum BeliefType {
+  MARKET_BELIEF
+  CUSTOMER_BELIEF
+  PRODUCT_BELIEF
+  GROWTH_BELIEF
+  STRATEGIC_BELIEF
+  OPERATING_BELIEF
+  PHILOSOPHICAL_BELIEF
+  CUSTOM
+}
+
+enum BeliefStatus {
+  ACTIVE
+  WATCHING
+  CORE
+  CHALLENGED
+  RETIRED
+}
+
+enum DecisionValidationStatus {
+  STRONGLY_SUPPORTED
+  SUPPORTED
+  MIXED
+  WEAKLY_SUPPORTED
+  CONTRADICTED
+  INSUFFICIENT_EVIDENCE
 }
 
 enum AssumptionStatus {
@@ -819,6 +882,12 @@ model Organization {
   tradeoffAnalyses     TradeoffAnalysis[]
   judgmentRecords      JudgmentRecord[]
   reflections          Reflection[]
+  claims               Claim[]
+  claimEvidence        ClaimEvidence[]
+  beliefs              Belief[]
+  beliefClaims         BeliefClaim[]
+  beliefRevisions      BeliefRevision[]
+  decisionValidations  DecisionValidation[]
   decisionSituations   DecisionSituation[]
   decisionOptions      DecisionOption[]
   optionEvaluations    OptionEvaluation[]
@@ -919,6 +988,12 @@ model Workspace {
   tradeoffAnalyses     TradeoffAnalysis[]
   judgmentRecords      JudgmentRecord[]
   reflections          Reflection[]
+  claims               Claim[]
+  claimEvidence        ClaimEvidence[]
+  beliefs              Belief[]
+  beliefClaims         BeliefClaim[]
+  beliefRevisions      BeliefRevision[]
+  decisionValidations  DecisionValidation[]
   decisionSituations   DecisionSituation[]
   decisionOptions      DecisionOption[]
   optionEvaluations    OptionEvaluation[]
@@ -2645,6 +2720,166 @@ model Reflection {
   @@index([confidenceScore])
 }
 
+model Claim {
+  id               String          @id @default(cuid())
+  organizationId   String
+  workspaceId      String
+  title            String
+  statement        String          @db.Text
+  claimType        ClaimType
+  status           ClaimStatus     @default(PROPOSED)
+  confidenceScore  Float           @default(0)
+  evidenceStrength Float           @default(0)
+  sourceType       String?
+  sourceId         String?
+  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace        Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  evidence         ClaimEvidence[]
+  beliefClaims     BeliefClaim[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([claimType])
+  @@index([status])
+  @@index([sourceType, sourceId])
+  @@index([confidenceScore])
+  @@index([evidenceStrength])
+}
+
+model ClaimEvidence {
+  id             String       @id @default(cuid())
+  organizationId String
+  workspaceId    String
+  claimId        String
+  evidenceType   String
+  sourceType     String
+  sourceId       String
+  summary        String       @db.Text
+  strengthScore  Float        @default(0)
+  supportsClaim  Boolean      @default(true)
+  weakensClaim   Boolean      @default(false)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  claim          Claim        @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([claimId])
+  @@index([evidenceType])
+  @@index([sourceType, sourceId])
+  @@index([strengthScore])
+}
+
+model Belief {
+  id               String           @id @default(cuid())
+  organizationId   String
+  workspaceId      String
+  title            String
+  statement        String           @db.Text
+  beliefType       BeliefType
+  status           BeliefStatus      @default(ACTIVE)
+  confidenceScore  Float            @default(0)
+  stabilityScore   Float            @default(0)
+  impactScore      Float            @default(0)
+  lastChallengedAt DateTime?
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  beliefClaims     BeliefClaim[]
+  revisions        BeliefRevision[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([beliefType])
+  @@index([status])
+  @@index([confidenceScore])
+  @@index([stabilityScore])
+  @@index([impactScore])
+  @@index([lastChallengedAt])
+}
+
+model BeliefClaim {
+  id             String       @id @default(cuid())
+  organizationId String
+  workspaceId    String
+  beliefId       String
+  claimId        String
+  weight         Float        @default(1)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  belief         Belief       @relation(fields: [beliefId], references: [id], onDelete: Cascade)
+  claim          Claim        @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@unique([beliefId, claimId])
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([beliefId])
+  @@index([claimId])
+  @@index([weight])
+}
+
+model BeliefRevision {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  workspaceId        String
+  beliefId           String
+  previousConfidence Float
+  newConfidence      Float
+  reason             String       @db.Text
+  triggeredByType    String
+  triggeredById      String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace          Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  belief             Belief       @relation(fields: [beliefId], references: [id], onDelete: Cascade)
+  createdAt          DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([beliefId])
+  @@index([triggeredByType, triggeredById])
+  @@index([newConfidence])
+  @@index([createdAt])
+}
+
+model DecisionValidation {
+  id                String                   @id @default(cuid())
+  organizationId    String
+  workspaceId       String
+  decisionId        String?
+  recommendationId  String?
+  missionId         String?
+  title             String
+  validationStatus  DecisionValidationStatus
+  supportedBeliefs  Json
+  challengedBeliefs Json
+  supportingClaims  Json
+  challengedClaims  Json
+  evidenceSummary   String                   @db.Text
+  riskSummary       String                   @db.Text
+  confidenceScore   Float                    @default(0)
+  organization      Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  decision          DecisionSituation?       @relation(fields: [decisionId], references: [id], onDelete: SetNull)
+  recommendation    RecommendedAction?       @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
+  mission           Mission?                 @relation(fields: [missionId], references: [id], onDelete: SetNull)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([decisionId])
+  @@index([recommendationId])
+  @@index([missionId])
+  @@index([validationStatus])
+  @@index([confidenceScore])
+}
+
 model DecisionSituation {
   id               String                  @id @default(cuid())
   organizationId   String
@@ -2667,6 +2902,7 @@ model DecisionSituation {
   deliberations    Deliberation[]
   commitments      DecisionCommitment[]
   reviews          DecisionReview[]
+  decisionValidations DecisionValidation[]
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
 
@@ -2863,6 +3099,7 @@ model Mission {
   metrics         MissionMetric[]
   summaries       MissionSummary[]
   decisionSituations DecisionSituation[]
+  decisionValidations DecisionValidation[]
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
@@ -3171,6 +3408,7 @@ model RecommendedAction {
   objective             Objective?           @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
   pattern               Pattern?             @relation(fields: [patternId], references: [id], onDelete: SetNull)
   executionItems        ExecutionItem[]
+  decisionValidations   DecisionValidation[]
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
 

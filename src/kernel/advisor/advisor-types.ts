@@ -136,6 +136,7 @@ export type DailyBrief = {
   priorities: ExecutivePriority[];
   missionHealth: MissionHealthSummary[];
   recentWins: ExecutiveWin[];
+  beliefsUpdated: string[];
   executiveRecommendation: string;
   executiveJudgment: ExecutiveJudgment;
   recommendedFocus: string;
