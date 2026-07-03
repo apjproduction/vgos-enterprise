@@ -4037,11 +4037,12 @@ async function seedIntelligenceQualityHardening() {
 
 async function seedReflectiveCognition() {
   const assumptionSeeds = [
-    ["assumption-product-page-demand", "Product-page-to-video demand will continue after launch week.", "VGOS assumes Product Hunt and search demand around product-page-to-video will stay useful beyond launch week.", "RecommendedAction", "action-17", AssumptionStatus.VALIDATED, 0.86, CognitionRiskLevel.HIGH, "Supported by Product Hunt comments, search demand, and qualified signup measurement.", dateFromNow(-1), null],
+    ["assumption-product-page-demand", "Search demand for Video Production Intelligence will continue rising.", "VGOS assumes Product Hunt and search demand around product-page-to-video will stay useful beyond launch week and continue lifting Video Production Intelligence intent.", "RecommendedAction", "action-17", AssumptionStatus.ACTIVE, 0.86, CognitionRiskLevel.HIGH, "Supported by Product Hunt comments, search demand, and qualified signup measurement.", dateFromNow(-1), null],
     ["assumption-founder-led-outperformance", "Founder-led posts will outperform company posts.", "VGOS assumes founder narrative creates stronger qualitative engagement than company-only distribution for proof and trust topics.", "RecommendedAction", "action-24", AssumptionStatus.VALIDATED, 0.8, CognitionRiskLevel.MEDIUM, "Supported by LinkedIn and learning records.", dateFromNow(-2), null],
-    ["assumption-demo-proof-trust", "Product demo proof will increase BOFU trust.", "VGOS assumes source-to-output demo proof reduces skepticism before conversion-oriented content is scaled.", "Mission", "mission-product-page-to-video", AssumptionStatus.NEEDS_EVIDENCE, 0.74, CognitionRiskLevel.CRITICAL, "Needs proof asset and conversion follow-up.", null, null],
-    ["assumption-directory-authority", "Directory submissions will generate authority signals.", "VGOS assumes directory submissions convert into approvals, backlinks, and authority signals in a useful timeframe.", "RecommendedAction", "action-05", AssumptionStatus.NEEDS_EVIDENCE, 0.58, CognitionRiskLevel.HIGH, "Needs approval and backlink evidence.", null, null],
-    ["assumption-blog-005-positioning", "BLOG-005 can strengthen Video Production Intelligence positioning.", "VGOS assumes a cleanup-focused BLOG-005 comparison article can reinforce Video Production Intelligence category ownership.", "ExecutionItem", "execution-blog-005-outline", AssumptionStatus.UNTESTED, 0.69, CognitionRiskLevel.MEDIUM, "Validate with search impression and internal-link performance.", null, null]
+    ["assumption-demo-proof-trust", "Product demo proof will increase BOFU trust.", "VGOS assumes source-to-output demo proof reduces skepticism before conversion-oriented content is scaled.", "Mission", "mission-product-page-to-video", AssumptionStatus.WATCHING, 0.74, CognitionRiskLevel.CRITICAL, "Needs proof asset and conversion follow-up.", null, null],
+    ["assumption-directory-authority", "Directory approvals will be slow.", "VGOS assumes directory submissions may take longer than 30 days to convert into approvals, backlinks, and authority signals.", "RecommendedAction", "action-05", AssumptionStatus.WATCHING, 0.58, CognitionRiskLevel.HIGH, "Needs approval and backlink evidence.", null, null],
+    ["assumption-blog-005-positioning", "BLOG-005 can strengthen Video Production Intelligence positioning.", "VGOS assumes a cleanup-focused BLOG-005 comparison article can reinforce Video Production Intelligence category ownership.", "ExecutionItem", "execution-blog-005-outline", AssumptionStatus.ACTIVE, 0.69, CognitionRiskLevel.MEDIUM, "Validate with search impression and internal-link performance.", null, null],
+    ["assumption-product-hunt-follow-up-window", "Product Hunt follow-up remains valuable for 14 days after launch.", "VGOS assumes post-launch comments and founder replies can still convert attention into trust during the two-week follow-up window.", "Mission", "mission-product-hunt-momentum", AssumptionStatus.ACTIVE, 0.77, CognitionRiskLevel.HIGH, "Supported by launch comments and follow-up engagement patterns.", null, null]
   ] as const;
 
   await Promise.all(
@@ -4079,7 +4080,7 @@ async function seedReflectiveCognition() {
     evidenceSeeds.map(([id, sourceType, sourceId, evidenceType, summary, strengthScore, reliabilityScore, recencyScore, relevanceScore, overallScore, limitations]) =>
       prisma.evidenceAssessment.upsert({
         where: { id },
-        update: { sourceType, sourceId, evidenceType, summary, strengthScore, reliabilityScore, recencyScore, relevanceScore, overallScore, limitations },
+        update: { sourceType, sourceId, evidenceType, summary, strengthScore, reliabilityScore, recencyScore, freshnessScore: recencyScore, relevanceScore, overallScore, supportsRecommendation: evidenceType !== CognitionEvidenceType.COUNTER_EVIDENCE, weakensRecommendation: evidenceType === CognitionEvidenceType.COUNTER_EVIDENCE, limitations },
         create: {
           ...tenant,
           id,
@@ -4090,8 +4091,11 @@ async function seedReflectiveCognition() {
           strengthScore,
           reliabilityScore,
           recencyScore,
+          freshnessScore: recencyScore,
           relevanceScore,
           overallScore,
+          supportsRecommendation: evidenceType !== CognitionEvidenceType.COUNTER_EVIDENCE,
+          weakensRecommendation: evidenceType === CognitionEvidenceType.COUNTER_EVIDENCE,
           limitations
         }
       })
@@ -4110,7 +4114,7 @@ async function seedReflectiveCognition() {
     tradeoffSeeds.map(([id, title, sourceType, sourceId, optionA, optionB, optionC, recommendedOption, rationale, opportunityCost, riskSummary, confidenceScore]) =>
       prisma.tradeoffAnalysis.upsert({
         where: { id },
-        update: { title, sourceType, sourceId, optionA, optionB, optionC, recommendedOption, rationale, opportunityCost, riskSummary, confidenceScore },
+        update: { title, sourceType, sourceId, optionA, optionB, optionC, optionAScore: Math.max(0.1, confidenceScore - 0.09), optionBScore: confidenceScore, recommendedOption, rationale, opportunityCost, riskSummary, confidenceScore, relatedRecommendationId: sourceType === "RecommendedAction" ? sourceId : null, relatedMissionId: sourceType === "Mission" ? sourceId : null },
         create: {
           ...tenant,
           id,
@@ -4120,11 +4124,47 @@ async function seedReflectiveCognition() {
           optionA,
           optionB,
           optionC,
+          optionAScore: Math.max(0.1, confidenceScore - 0.09),
+          optionBScore: confidenceScore,
           recommendedOption,
           rationale,
           opportunityCost,
           riskSummary,
-          confidenceScore
+          confidenceScore,
+          relatedRecommendationId: sourceType === "RecommendedAction" ? sourceId : null,
+          relatedMissionId: sourceType === "Mission" ? sourceId : null
+        }
+      })
+    )
+  );
+
+  const judgmentSeeds = [
+    ["judgment-demo-before-bofu", "Finish product-page-to-video demo before more BOFU content.", "action-17", "mission-product-page-to-video", "Finish product-page-to-video demo before publishing more BOFU content.", 0.86, "Four missions depend on proof assets, and counter-evidence shows claim-first BOFU content can create trust gaps.", ["Product demo proof will increase BOFU trust."], ["Product Hunt comments asked for proof.", "Search demand supports product-page-to-video intent."], ["Delaying BLOG-005 may slow authority growth."], ["BLOG-005 vs product demo: finish proof first."], ["Demo quality fails to improve conversion trust.", "BLOG-005 receives fresh high-intent search demand without proof dependency."]],
+    ["judgment-founder-authority", "Increase founder-led authority content.", "action-24", "mission-founder-authority", "Increase founder-led authority content.", 0.82, "Founder-led posts are producing stronger qualitative comments than company-only updates.", ["Founder-led content will continue outperforming company content."], ["Founder post engagement produced stronger qualitative comments than company posts."], ["Founder review capacity is scarce."], ["Founder content vs company content: use founder proof narrative with company repost."], ["Company posts match founder engagement.", "Founder review capacity becomes blocked this week."]],
+    ["judgment-pause-directory-submissions", "Pause low-confidence directory submissions.", "action-05", "mission-product-hunt-momentum", "Pause low-confidence directory submissions until approval evidence improves.", 0.72, "Directory approvals are slower than expected, so additional submissions have weak near-term evidence.", ["Directory approvals will be slow."], ["Directory approval delay counter-evidence is active."], ["Pausing submissions may slow backlink coverage."], ["Directory submissions vs founder content: prefer founder content while approvals lag."], ["Directory approvals arrive within the next weekly review.", "A high-authority directory guarantees fast approval."]],
+    ["judgment-blog-005-after-demo", "Publish BLOG-005 after demo proof is ready.", "execution-blog-005-outline", "mission-product-page-to-video", "Publish BLOG-005 after demo proof is ready.", 0.78, "BLOG-005 can strengthen category ownership, but the proof asset should be ready before conversion-oriented traffic scales.", ["BLOG-005 can strengthen Video Production Intelligence positioning."], ["Search demand and qualified signup measurements support product-page-to-video as commercial intent."], ["Publishing before proof may create traffic without trust."], ["BLOG-005 vs product demo: publish only if demo work is scheduled immediately after."], ["Demo proof is delayed beyond the content window.", "Fresh search data shows BLOG-005 demand materially stronger than proof risk."]],
+    ["judgment-purpose-specific-ai-faq", "Add FAQ for Purpose-Specific AI.", "action-29", "mission-founder-authority", "Add FAQ for Purpose-Specific AI.", 0.8, "Purpose-Specific AI language clarifies category positioning and can answer objections without heavy execution cost.", ["Search demand for Video Production Intelligence will continue rising."], ["Founder comments and product-page questions ask for clearer category language."], ["FAQ copy may not move conversion without demo proof."], ["Content volume vs proof quality: ship FAQ as lightweight support, not replacement for proof."], ["FAQ produces no engagement or internal-link lift.", "Product demo proof becomes the sole active bottleneck."]]
+  ] as const;
+
+  await Promise.all(
+    judgmentSeeds.map(([id, title, recommendationId, missionId, judgment, confidenceScore, reasoning, assumptions, supportingEvidence, counterEvidence, tradeoffs, changeTriggers]) =>
+      prisma.judgmentRecord.upsert({
+        where: { id },
+        update: { title, recommendationId, missionId, judgment, confidenceScore, reasoning, assumptions: [...assumptions], supportingEvidence: [...supportingEvidence], counterEvidence: [...counterEvidence], tradeoffs: [...tradeoffs], changeTriggers: [...changeTriggers] },
+        create: {
+          ...tenant,
+          id,
+          title,
+          recommendationId,
+          missionId,
+          judgment,
+          confidenceScore,
+          reasoning,
+          assumptions: [...assumptions],
+          supportingEvidence: [...supportingEvidence],
+          counterEvidence: [...counterEvidence],
+          tradeoffs: [...tradeoffs],
+          changeTriggers: [...changeTriggers]
         }
       })
     )
@@ -4142,7 +4182,7 @@ async function seedReflectiveCognition() {
     reflectionSeeds.map(([id, title, sourceType, sourceId, summary, whatWorked, whatFailed, wrongAssumptions, newLearning, futureAdjustment, confidenceScore]) =>
       prisma.reflection.upsert({
         where: { id },
-        update: { title, sourceType, sourceId, summary, whatWorked, whatFailed, wrongAssumptions, newLearning, futureAdjustment, confidenceScore },
+        update: { title, sourceType, sourceId, summary, whatWorked, whatFailed, wrongAssumptions, newLearning, futureAdjustment, confidenceScore, originalJudgment: title, outcomeSummary: summary, wasCorrect: !/slower|underestimated|overestimated|not ready|incomplete/i.test(summary), whatWasMissed: wrongAssumptions, whatChanged: newLearning, lesson: newLearning, recalibrationSuggestion: futureAdjustment },
         create: {
           ...tenant,
           id,
@@ -4155,7 +4195,14 @@ async function seedReflectiveCognition() {
           wrongAssumptions,
           newLearning,
           futureAdjustment,
-          confidenceScore
+          confidenceScore,
+          originalJudgment: title,
+          outcomeSummary: summary,
+          wasCorrect: !/slower|underestimated|overestimated|not ready|incomplete/i.test(summary),
+          whatWasMissed: wrongAssumptions,
+          whatChanged: newLearning,
+          lesson: newLearning,
+          recalibrationSuggestion: futureAdjustment
         }
       })
     )
@@ -4167,9 +4214,9 @@ async function seedReflectiveCognition() {
     [EventType.EVIDENCE_ASSESSED, "EvidenceAssessment", "evidence-product-hunt-proof-comments", "Product Hunt proof-demand evidence assessed.", EventSeverity.HIGH],
     [EventType.COUNTER_EVIDENCE_FOUND, "EvidenceAssessment", "evidence-directory-approval-delays", "Directory approval delay counter-evidence found.", EventSeverity.HIGH],
     [EventType.TRADEOFF_ANALYZED, "TradeoffAnalysis", "tradeoff-blog-005-demo-first", "BLOG-005 versus demo-first tradeoff analyzed.", EventSeverity.HIGH],
-    [EventType.JUDGMENT_GENERATED, "ExecutiveJudgment", "judgment-today", "Reflective executive judgment generated.", EventSeverity.HIGH],
+    [EventType.JUDGMENT_CREATED, "JudgmentRecord", "judgment-demo-before-bofu", "Reflective executive judgment created.", EventSeverity.HIGH],
     [EventType.REFLECTION_CREATED, "Reflection", "reflection-directory-submissions-slower", "Directory submission reflection created.", EventSeverity.MEDIUM],
-    [EventType.CONFIDENCE_RECALIBRATED, "Reflection", "reflection-directory-submissions-slower", "Directory recommendation confidence recalibrated.", EventSeverity.HIGH]
+    [EventType.RECOMMENDATION_RECALIBRATED, "Reflection", "reflection-directory-submissions-slower", "Directory recommendation confidence recalibrated.", EventSeverity.HIGH]
   ] as const;
 
   await Promise.all(

@@ -1,53 +1,52 @@
 id: reflective-cognition
 name: Reflective Cognition & Executive Wisdom
 version: 1.0.0
-status: ACTIVE
-description: >-
-  Adds a deterministic judgment layer that makes VGOS recommendations more
-  trustworthy by exposing assumptions, evidence quality, counter-evidence,
-  tradeoffs, reflections, and recalibrated confidence.
-dependencies:
-  - Advisor
-  - Executive Brief
-  - Recommendation Engine
-  - Measurement & Learning Engine
-  - Mission Engine
-  - Intelligence Quality Layer
-inputs:
-  - Recommendations
-  - Learnings
-  - Measurements
-  - ExecutionResults
-  - StrategyAdjustments
-  - Missions
-  - Advisor Context
-outputs:
-  - Assumptions
-  - Evidence Assessments
-  - Tradeoff Analyses
-  - Reflections
-  - Better Judgment Explanations
-  - Recalibrated Confidence
-runtime:
-  logic_path: src/kernel/cognition
-  pages:
-    - /assumptions
-    - /evidence
-    - /tradeoffs
-    - /reflections
-events:
+owner: intelligence-kernel
+status: alpha
+
+depends_on:
+  - advisor
+  - recommendation-engine
+  - mission-engine
+  - execution-engine
+  - measurement-learning-engine
+  - intelligence-quality
+
+produces:
+  - assumptions
+  - evidence-assessments
+  - tradeoff-analyses
+  - judgment-records
+  - reflection-records
+  - recalibration-suggestions
+
+consumes:
+  - recommendations
+  - missions
+  - executions
+  - measurements
+  - learnings
+  - strategy-adjustments
+  - signals
+
+eventsProduced:
   - ASSUMPTION_CREATED
-  - ASSUMPTION_VALIDATED
-  - ASSUMPTION_INVALIDATED
-  - EVIDENCE_ASSESSED
-  - COUNTER_EVIDENCE_FOUND
-  - TRADEOFF_ANALYZED
-  - JUDGMENT_GENERATED
+  - JUDGMENT_CREATED
   - REFLECTION_CREATED
-  - CONFIDENCE_RECALIBRATED
-quality_gates:
-  - assumption_risk
-  - evidence_strength
-  - counter_evidence_risk
-  - tradeoff_confidence
-  - reflection_recalibration
+  - TRADEOFF_ANALYZED
+  - RECOMMENDATION_RECALIBRATED
+
+eventsConsumed:
+  - RECOMMENDATION_CREATED
+  - EXECUTION_COMPLETED
+  - MEASUREMENT_CREATED
+  - LEARNING_CREATED
+  - STRATEGY_ADJUSTMENT_PROPOSED
+
+publicApi:
+  - generateExecutiveJudgment
+  - assessEvidenceQuality
+  - findCounterEvidence
+  - compareOptions
+  - reflectOnRecommendationOutcome
+  - recalibrateConfidence

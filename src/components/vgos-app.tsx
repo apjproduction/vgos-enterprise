@@ -152,6 +152,7 @@ import {
 } from "@/kernel/measurement/strategy-feedback-engine";
 import {
   explainWorkItemCognition,
+  generateExecutiveJudgment,
   summarizeMissionCognition
 } from "@/kernel/cognition/judgment-engine";
 import {
@@ -247,6 +248,7 @@ const statusOptions = [
   "PROCESSED",
   "COMPLETED",
   "DISMISSED",
+  "ACTIVE",
   "HEALTHY",
   "WATCH",
   "IMPROVING",
@@ -259,6 +261,7 @@ const statusOptions = [
   "UNTESTED",
   "VALIDATED",
   "INVALIDATED",
+  "WATCHING",
   "NEEDS_EVIDENCE",
   "OPEN",
   "DELIBERATING",
@@ -610,7 +613,7 @@ const strategyAdjustmentTypeOptions = [
 ];
 
 const strategyAdjustmentStatusOptions = ["PROPOSED", "ACCEPTED", "REJECTED", "IMPLEMENTED", "ARCHIVED"];
-const assumptionStatusOptions = ["UNTESTED", "VALIDATED", "INVALIDATED", "NEEDS_EVIDENCE", "ARCHIVED"];
+const assumptionStatusOptions = ["ACTIVE", "VALIDATED", "INVALIDATED", "WATCHING", "ARCHIVED", "UNTESTED", "NEEDS_EVIDENCE"];
 const cognitionRiskOptions = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 const cognitionEvidenceTypeOptions = [
   "SIGNAL",
@@ -725,6 +728,7 @@ function sourceTypeToCollection(sourceType: string): EditableCollection {
     Assumption: "assumptions",
     EvidenceAssessment: "evidenceAssessments",
     TradeoffAnalysis: "tradeoffAnalyses",
+    JudgmentRecord: "judgmentRecords",
     Reflection: "reflections",
     DecisionSituation: "decisionSituations",
     DecisionOption: "decisionOptions",
@@ -797,6 +801,7 @@ function collectionToSourceType(collection: EditableCollection) {
     assumptions: "Assumption",
     evidenceAssessments: "EvidenceAssessment",
     tradeoffAnalyses: "TradeoffAnalysis",
+    judgmentRecords: "JudgmentRecord",
     reflections: "Reflection",
     decisionSituations: "DecisionSituation",
     decisionOptions: "DecisionOption",
@@ -852,6 +857,7 @@ function eventTypeForCollection(collection: EditableCollection) {
     assumptions: "ASSUMPTION_CREATED",
     evidenceAssessments: "EVIDENCE_ASSESSED",
     tradeoffAnalyses: "TRADEOFF_ANALYZED",
+    judgmentRecords: "JUDGMENT_CREATED",
     reflections: "REFLECTION_CREATED",
     decisionSituations: "DECISION_SITUATION_CREATED",
     decisionOptions: "DECISION_OPTION_CREATED",
@@ -3734,6 +3740,14 @@ function WorkQueueSection({
               <div className="flex flex-wrap gap-2">
                 <Badge tone={statusTone(item.status)}>{formatEnum(item.status)}</Badge>
                 <Badge tone={priorityTone(item.priority)}>{formatEnum(item.priority)}</Badge>
+                {cognition.flags.map((flag) => (
+                  <Badge
+                    key={`${item.id}-${flag}`}
+                    tone={flag === "High-confidence work" ? "green" : flag === "Low-confidence work" || flag === "Blocked-by-evidence" ? "amber" : "slate"}
+                  >
+                    {flag}
+                  </Badge>
+                ))}
               </div>
               <p className="mt-2 text-sm font-semibold">{item.title}</p>
               <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{item.expectedImpact}</p>
@@ -4231,31 +4245,49 @@ function MissionControl({
             </Button>
           </CardHeader>
           <CardContent className="space-y-3">
-            {recommendations.map((action) => (
-              <div key={action.id} className="rounded-md border border-border bg-background p-3">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap gap-2">
-                      <PriorityBadge priority={action.priority} />
-                      <StatusBadge status={action.status} />
-                      <Badge tone="blue">{Math.round(action.confidenceScore * 100)}%</Badge>
+            {recommendations.map((action) => {
+              const judgment = generateExecutiveJudgment(state, activeWorkspaceId, action.id);
+              return (
+                <div key={action.id} className="rounded-md border border-border bg-background p-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap gap-2">
+                        <PriorityBadge priority={action.priority} />
+                        <StatusBadge status={action.status} />
+                        <Badge tone="blue">{Math.round(judgment.confidenceScore * 100)}%</Badge>
+                        {judgment.shouldDefer ? <Badge tone="amber">Evidence-gated</Badge> : <Badge tone="green">Explainable</Badge>}
+                      </div>
+                      <p className="mt-2 text-sm font-semibold">{action.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">{action.reasoningSummary}</p>
                     </div>
-                    <p className="mt-2 text-sm font-semibold">{action.title}</p>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{action.reasoningSummary}</p>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <Button variant="outline" size="sm" onClick={() => markActionCompleted(action.id)}>
+                        <CheckCircle2 className="h-4 w-4" />
+                        Mark Complete
+                      </Button>
+                      <Button size="sm" onClick={() => convertActionToTask(action)}>
+                        <ArrowRight className="h-4 w-4" />
+                        Convert to Task
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    <Button variant="outline" size="sm" onClick={() => markActionCompleted(action.id)}>
-                      <CheckCircle2 className="h-4 w-4" />
-                      Mark Complete
-                    </Button>
-                    <Button size="sm" onClick={() => convertActionToTask(action)}>
-                      <ArrowRight className="h-4 w-4" />
-                      Convert to Task
-                    </Button>
-                  </div>
+                  <details className="mt-3 rounded-md border border-border bg-muted/30 p-3">
+                    <summary className="cursor-pointer text-xs font-semibold text-foreground">Why?</summary>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <InlineList title="Observation" items={[judgment.observation]} />
+                      <InlineList title="Interpretation" items={[judgment.interpretation]} />
+                      <InlineList title="Assumptions" items={judgment.assumptions.length ? judgment.assumptions.map((item) => item.title) : ["No explicit assumptions attached."]} />
+                      <InlineList title="Evidence" items={judgment.evidence.length ? judgment.evidence.map((item) => item.summary) : ["No assessed evidence attached."]} />
+                      <InlineList title="Counter-evidence" items={judgment.counterEvidence.length ? judgment.counterEvidence : ["No material counter-evidence visible."]} />
+                      <InlineList title="Trade-off" items={[judgment.tradeoff?.rationale ?? "No explicit tradeoff attached."]} />
+                      <InlineList title="Final judgment" items={[judgment.finalRecommendation]} />
+                      <FocusRow label="Confidence" value={`${Math.round(judgment.confidenceScore * 100)}%`} />
+                      <InlineList title="What would change this" items={judgment.whatWouldChangeRecommendation} />
+                    </div>
+                  </details>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
 
@@ -8544,8 +8576,11 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
       { key: "strengthScore", label: "Strength Score", kind: "number" },
       { key: "reliabilityScore", label: "Reliability Score", kind: "number" },
       { key: "recencyScore", label: "Recency Score", kind: "number" },
+      { key: "freshnessScore", label: "Freshness Score", kind: "number" },
       { key: "relevanceScore", label: "Relevance Score", kind: "number" },
       { key: "overallScore", label: "Overall Score", kind: "number" },
+      { key: "supportsRecommendation", label: "Supports Recommendation" },
+      { key: "weakensRecommendation", label: "Weakens Recommendation" },
       { key: "limitations", label: "Limitations", kind: "textarea" }
     ];
   }
@@ -8558,11 +8593,31 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
       { key: "optionA", label: "Option A", kind: "textarea" },
       { key: "optionB", label: "Option B", kind: "textarea" },
       { key: "optionC", label: "Option C", kind: "textarea" },
+      { key: "optionAScore", label: "Option A Score", kind: "number" },
+      { key: "optionBScore", label: "Option B Score", kind: "number" },
       { key: "recommendedOption", label: "Recommended Option", kind: "textarea" },
       { key: "rationale", label: "Rationale", kind: "textarea" },
       { key: "opportunityCost", label: "Opportunity Cost", kind: "textarea" },
       { key: "riskSummary", label: "Risk Summary", kind: "textarea" },
-      { key: "confidenceScore", label: "Confidence Score", kind: "number" }
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" },
+      { key: "relatedRecommendationId", label: "Related Recommendation ID" },
+      { key: "relatedMissionId", label: "Related Mission ID" }
+    ];
+  }
+
+  if (collection === "judgmentRecords") {
+    return [
+      { key: "title", label: "Title" },
+      { key: "recommendationId", label: "Recommendation ID" },
+      { key: "missionId", label: "Mission ID" },
+      { key: "judgment", label: "Judgment", kind: "textarea" },
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" },
+      { key: "reasoning", label: "Reasoning", kind: "textarea" },
+      { key: "assumptions", label: "Assumptions", kind: "tags" },
+      { key: "supportingEvidence", label: "Supporting Evidence", kind: "tags" },
+      { key: "counterEvidence", label: "Counter Evidence", kind: "tags" },
+      { key: "tradeoffs", label: "Tradeoffs", kind: "tags" },
+      { key: "changeTriggers", label: "Change Triggers", kind: "tags" }
     ];
   }
 
@@ -8577,7 +8632,13 @@ function getEditorFields(collection: EditableCollection, state: PlatformState): 
       { key: "wrongAssumptions", label: "Wrong Assumptions", kind: "textarea" },
       { key: "newLearning", label: "New Learning", kind: "textarea" },
       { key: "futureAdjustment", label: "Future Adjustment", kind: "textarea" },
-      { key: "confidenceScore", label: "Confidence Score", kind: "number" }
+      { key: "confidenceScore", label: "Confidence Score", kind: "number" },
+      { key: "originalJudgment", label: "Original Judgment", kind: "textarea" },
+      { key: "outcomeSummary", label: "Outcome Summary", kind: "textarea" },
+      { key: "whatWasMissed", label: "What Was Missed", kind: "textarea" },
+      { key: "whatChanged", label: "What Changed", kind: "textarea" },
+      { key: "lesson", label: "Lesson", kind: "textarea" },
+      { key: "recalibrationSuggestion", label: "Recalibration Suggestion", kind: "textarea" }
     ];
   }
 

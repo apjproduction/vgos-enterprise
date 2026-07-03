@@ -27,6 +27,7 @@ Four supporting record families are added:
 - Assumption
 - EvidenceAssessment
 - TradeoffAnalysis
+- JudgmentRecord
 - Reflection
 
 These records are workspace scoped and link back to existing source records by `sourceType` and `sourceId`. They complement Recommendation, Learning, Measurement, ExecutionResult, StrategyAdjustment, Mission, and Advisor structures rather than replacing them.
@@ -35,17 +36,17 @@ These records are workspace scoped and link back to existing source records by `
 
 ```mermaid
 flowchart LR
-  A["Observation"] --> B["Interpretation"]
+  A["Signal"] --> B["Recommendation"]
   B --> C["Assumption"]
-  C --> D["Evidence"]
+  C --> D["Evidence Assessment"]
   D --> E["Counter-Evidence"]
-  E --> F["Trade-off"]
+  E --> F["Trade-Off"]
   F --> G["Judgment"]
-  G --> H["Recommendation"]
-  H --> I["Execution"]
+  G --> H["Execution"]
+  H --> I["Measurement"]
   I --> J["Reflection"]
   J --> K["Recalibration"]
-  K --> L["Future Judgment"]
+  K --> L["Better Future Judgment"]
 ```
 
 ## Integration
@@ -58,7 +59,7 @@ Work Queue items include an expandable "Why this work matters" section with miss
 
 Mission detail includes high-risk assumptions, weak evidence areas, major tradeoffs, reflections, and judgment confidence.
 
-Supporting pages exist at `/assumptions`, `/evidence`, `/tradeoffs`, and `/reflections`.
+Supporting pages exist at `/assumptions`, `/judgments`, `/tradeoffs`, and `/reflections`, with `/evidence` available as a source-quality review surface.
 
 ## Consequences
 

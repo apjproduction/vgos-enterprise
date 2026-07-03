@@ -76,6 +76,13 @@ export function createReflectionFromDecision(review: DecisionReview, learning?: 
     newLearning: learning?.summary ?? review.futureRule,
     futureAdjustment: review.futureRule,
     confidenceScore: Math.max(0.42, Math.min(0.9, review.outcomeScore / 100)),
+    originalJudgment: review.judgmentPattern,
+    outcomeSummary: review.summary,
+    wasCorrect: review.decisionQuality === "STRONG" || review.decisionQuality === "SOUND",
+    whatWasMissed: review.decisionQuality === "WEAK" ? review.judgmentPattern : "No major missed signal confirmed.",
+    whatChanged: learning?.summary ?? review.futureRule,
+    lesson: learning?.summary ?? review.futureRule,
+    recalibrationSuggestion: review.futureRule,
     createdAt: date,
     updatedAt: date
   };

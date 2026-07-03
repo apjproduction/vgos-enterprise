@@ -61,6 +61,8 @@ export function calculateRecency(occurredAt?: string) {
   return 0.38;
 }
 
+export const calculateFreshnessScore = calculateRecency;
+
 export function calculateRelevance(input: { summary: string; sourceType: string; sourceId: string; targetText?: string }) {
   const targetTerms = (input.targetText ?? input.sourceId)
     .toLowerCase()
@@ -80,18 +82,24 @@ export function calculateEvidenceStrength(input: EvidenceAssessmentInput) {
     calculateReliability(input) * 0.42 +
       calculateRecency(input.occurredAt) * 0.23 +
       calculateRelevance(input) * 0.25 +
-      (input.hasMeasurement ? 0.1 : 0)
+      (input.hasMeasurement ? 0.1 : 0) +
+      ((input.consistencyScore ?? 0.66) - 0.66) * 0.08 +
+      ((input.businessImpactScore ?? 0.66) - 0.66) * 0.08
   );
 }
 
 export function assessEvidence(input: EvidenceAssessmentInput): EvidenceAssessment {
   const reliabilityScore = round2(input.reliabilityScore ?? calculateReliability(input));
-  const recencyScore = round2(input.recencyScore ?? calculateRecency(input.occurredAt));
+  const recencyScore = round2(input.recencyScore ?? input.freshnessScore ?? calculateRecency(input.occurredAt));
+  const freshnessScore = round2(input.freshnessScore ?? recencyScore);
   const relevanceScore = round2(input.relevanceScore ?? calculateRelevance(input));
   const strengthScore = round2(input.strengthScore ?? calculateEvidenceStrength(input));
   const limitationPenalty = input.limitations ? 0.04 : 0;
-  const overallScore = round2(strengthScore * 0.35 + reliabilityScore * 0.3 + recencyScore * 0.15 + relevanceScore * 0.2 - limitationPenalty);
+  const impactLift = (input.businessImpactScore ?? 0.66) * 0.04;
+  const consistencyLift = (input.consistencyScore ?? 0.66) * 0.04;
+  const overallScore = round2(strengthScore * 0.33 + reliabilityScore * 0.27 + freshnessScore * 0.14 + relevanceScore * 0.18 + impactLift + consistencyLift - limitationPenalty);
   const date = new Date().toISOString();
+  const weakensRecommendation = input.weakensRecommendation ?? (input.evidenceType === "COUNTER_EVIDENCE");
 
   return {
     id: createScopedId("evidence-assessment"),
@@ -104,13 +112,20 @@ export function assessEvidence(input: EvidenceAssessmentInput): EvidenceAssessme
     strengthScore,
     reliabilityScore,
     recencyScore,
+    freshnessScore,
     relevanceScore,
     overallScore,
+    supportsRecommendation: input.supportsRecommendation ?? !weakensRecommendation,
+    weakensRecommendation,
     limitations: input.limitations ?? "",
     createdAt: date,
     updatedAt: date
   };
 }
+
+export const assessEvidenceQuality = assessEvidence;
+export const calculateReliabilityScore = calculateReliability;
+export const calculateRelevanceScore = calculateRelevance;
 
 export function summarizeEvidenceQuality(evidence: EvidenceAssessment[]): string {
   if (!evidence.length) return "No supporting evidence has been assessed yet.";
@@ -142,4 +157,8 @@ export function identifyWeakEvidence(evidence: EvidenceAssessment[], threshold =
   return evidence
     .filter((item) => item.overallScore < threshold || Boolean(item.limitations))
     .sort((a, b) => a.overallScore - b.overallScore);
+}
+
+export function summarizeEvidence(evidence: EvidenceAssessment[]): string {
+  return summarizeEvidenceQuality(evidence);
 }

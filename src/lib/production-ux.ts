@@ -39,7 +39,7 @@ export const operatorNavigationGroups: NavigationGroup[] = [
 export const intelligenceStudioNavigationGroups: NavigationGroup[] = [
   {
     label: "Intelligence Studio",
-    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning", "assumptions", "evidence", "tradeoffs", "reflections", "decisions", "deliberations", "options"]
+    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning", "assumptions", "evidence", "judgments", "tradeoffs", "reflections", "decisions", "deliberations", "options"]
   },
   {
     label: "Connections",
@@ -70,7 +70,7 @@ export const developerNavigationGroups: NavigationGroup[] = [
   },
   {
     label: "Intelligence",
-    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning", "assumptions", "evidence", "tradeoffs", "reflections", "decisions", "deliberations", "options", "learnings"]
+    pages: ["signals", "intelligencePipeline", "knowledge", "memory", "patterns", "reasoning", "assumptions", "evidence", "judgments", "tradeoffs", "reflections", "decisions", "deliberations", "options", "learnings"]
   },
   {
     label: "Connections",
@@ -546,6 +546,12 @@ export function getEmptyStateCopy(collection: CollectionKey, label?: string) {
       description: "Assess evidence when a recommendation needs source quality, recency, or relevance reviewed.",
       actionLabel: "Assess Evidence",
       secondaryText: "Evidence quality should explain why VGOS trusts a recommendation."
+    },
+    judgmentRecords: {
+      title: "No judgment records yet.",
+      description: "Create judgment records when a recommendation should preserve assumptions, evidence, tradeoffs, and change triggers.",
+      actionLabel: "Create Judgment",
+      secondaryText: "Judgments make executive recommendations auditable."
     },
     tradeoffAnalyses: {
       title: "No tradeoffs yet.",

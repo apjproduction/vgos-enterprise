@@ -31,6 +31,29 @@ export function summarizeCounterEvidence(items: string[]): string {
   return items.slice(0, 3).join(" ");
 }
 
+export function identifyContradictions(state: PlatformState, workspaceId: string, sourceId?: string): string[] {
+  return findCounterEvidence(state, workspaceId, sourceId)
+    .filter((item) => /without|weaken|contradict|unfinished|poorly|blocked|failed|lag|delay|slower|skeptic/i.test(item))
+    .slice(0, 5);
+}
+
+export function detectWeakSignals(state: PlatformState, workspaceId: string, sourceId?: string): string[] {
+  return identifyWeakEvidence(
+    state.evidenceAssessments.filter((item) => item.workspaceId === workspaceId && (!sourceId || item.sourceId === sourceId))
+  )
+    .map((item) => `${item.summary} (${Math.round(item.overallScore * 100)}% evidence quality)`)
+    .slice(0, 5);
+}
+
+export function explainWhatCouldBeWrong(state: PlatformState, workspaceId: string, sourceId?: string): string {
+  const contradictions = identifyContradictions(state, workspaceId, sourceId);
+  const weakSignals = detectWeakSignals(state, workspaceId, sourceId);
+  if (!contradictions.length && !weakSignals.length) {
+    return "The main risk is hidden: VGOS does not yet have enough counter-evidence or weak-signal coverage to challenge the recommendation deeply.";
+  }
+  return [...contradictions, ...weakSignals].slice(0, 3).join(" ");
+}
+
 export function calculateCounterEvidenceRisk(items: string[] | EvidenceAssessment[]): number {
   if (!items.length) return 0.12;
   const textRisk = items.reduce((sum, item) => {
@@ -57,4 +80,8 @@ export function identifyWhatWouldChangeTheDecision(items: string[]): string[] {
     changes.push("Founder capacity becoming available for review and distribution in the current week.");
   }
   return changes.slice(0, 4);
+}
+
+export function listChangeTriggers(state: PlatformState, workspaceId: string, sourceId?: string): string[] {
+  return identifyWhatWouldChangeTheDecision(findCounterEvidence(state, workspaceId, sourceId));
 }

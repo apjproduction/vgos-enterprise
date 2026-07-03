@@ -1,5 +1,11 @@
 export const advisorSuggestedQuestions = [
   "What should I do today?",
+  "Why this recommendation?",
+  "What could go wrong?",
+  "What are we assuming?",
+  "Should we delay this?",
+  "What would change your mind?",
+  "What did we learn from this?",
   "Why is this mission at risk?",
   "What should I publish next?",
   "Which recommendations have the highest confidence?",

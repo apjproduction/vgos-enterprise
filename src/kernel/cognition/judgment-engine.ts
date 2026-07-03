@@ -2,8 +2,8 @@ import { rankRecommendedActions } from "@/kernel/decisions/decision-engine";
 import { getAssumptionsForRecommendation } from "@/kernel/cognition/assumption-engine";
 import { findCounterEvidence, calculateCounterEvidenceRisk, identifyWhatWouldChangeTheDecision } from "@/kernel/cognition/counter-evidence-engine";
 import { getEvidenceForRecommendation, identifyWeakEvidence, summarizeEvidenceQuality } from "@/kernel/cognition/evidence-evaluator";
-import type { CognitionRiskLevel, ExecutiveJudgment, MissionCognition, WorkItemCognition } from "@/kernel/cognition/cognition-types";
-import type { PlatformState, RecommendedAction } from "@/lib/vgos-data";
+import type { CognitionRiskLevel, ExecutiveJudgment, JudgmentRecord, MissionCognition, WorkItemCognition } from "@/kernel/cognition/cognition-types";
+import { createScopedId, orgId, type PlatformState, type RecommendedAction } from "@/lib/vgos-data";
 
 function riskFromScore(score: number): CognitionRiskLevel {
   if (score >= 0.74) return "CRITICAL";
@@ -103,6 +103,64 @@ export function produceRecommendationWithCognition(state: PlatformState, workspa
   };
 }
 
+export function generateChangeTriggers(judgment: Pick<ExecutiveJudgment, "counterEvidence" | "whatWouldChangeRecommendation">): string[] {
+  return judgment.whatWouldChangeRecommendation.length
+    ? judgment.whatWouldChangeRecommendation
+    : identifyWhatWouldChangeTheDecision(judgment.counterEvidence);
+}
+
+export function createJudgmentRecord(
+  judgment: ExecutiveJudgment,
+  input: { workspaceId: string; organizationId?: string; recommendationId?: string | null; missionId?: string | null } 
+): JudgmentRecord {
+  const date = new Date().toISOString();
+  return {
+    id: createScopedId("judgment"),
+    organizationId: input.organizationId ?? orgId,
+    workspaceId: input.workspaceId,
+    title: judgment.title,
+    recommendationId: input.recommendationId ?? (judgment.sourceType === "RecommendedAction" ? judgment.sourceId : null),
+    missionId: input.missionId ?? (judgment.sourceType === "Mission" ? judgment.sourceId : null),
+    judgment: judgment.finalRecommendation,
+    confidenceScore: judgment.confidenceScore,
+    reasoning: explainJudgment(judgment),
+    assumptions: judgment.assumptions.map((item) => ({
+      id: item.id,
+      title: item.title,
+      status: item.status,
+      confidenceScore: item.confidenceScore,
+      riskLevel: item.riskLevel
+    })),
+    supportingEvidence: judgment.evidence
+      .filter((item) => !item.weakensRecommendation)
+      .map((item) => ({
+        id: item.id,
+        summary: item.summary,
+        overallScore: item.overallScore,
+        freshnessScore: item.freshnessScore ?? item.recencyScore
+      })),
+    counterEvidence: judgment.counterEvidence,
+    tradeoffs: judgment.tradeoff
+      ? [{
+          id: judgment.tradeoff.id,
+          title: judgment.tradeoff.title,
+          recommendedOption: judgment.tradeoff.recommendedOption,
+          confidenceScore: judgment.tradeoff.confidenceScore
+        }]
+      : [],
+    changeTriggers: generateChangeTriggers(judgment),
+    createdAt: date,
+    updatedAt: date
+  };
+}
+
+export function recommendActionWithCaveats(judgment: ExecutiveJudgment) {
+  const caveat = judgment.shouldDefer
+    ? "Wait for evidence before committing full capacity."
+    : judgment.counterEvidence[0] ?? "Proceed, but keep watching evidence quality.";
+  return `${judgment.finalRecommendation}. Caveat: ${caveat}`;
+}
+
 export function explainJudgment(judgment: ExecutiveJudgment) {
   const assumptionText = judgment.assumptions[0]?.title ?? "current workspace assumptions";
   const evidenceText = judgment.evidence[0]?.summary ?? "limited assessed evidence";
@@ -121,15 +179,40 @@ export function explainWorkItemCognition(state: PlatformState, executionItemId: 
   const evidence = state.evidenceAssessments.filter((assessment) => sourceIds.includes(assessment.sourceId)).slice(0, 4);
   const tradeoff = state.tradeoffAnalyses.find((analysis) => sourceIds.includes(analysis.sourceId ?? ""));
   const counterEvidence = findCounterEvidence(state, item?.workspaceId ?? relatedMission?.workspaceId ?? "", executionItemId);
+  const evidenceStrength = average(evidence.map((assessment) => assessment.overallScore), item?.expectedImpact ? 0.68 : 0.5);
+  const flags = getWorkQueueCognitionFlags({
+    evidenceStrength,
+    assumptions,
+    counterEvidence,
+    tradeoff,
+    confidenceScore: evidenceStrength
+  });
 
   return {
     relatedMission,
     expectedImpact: item?.expectedImpact ?? "Expected impact is not attached yet.",
-    evidenceStrength: average(evidence.map((assessment) => assessment.overallScore), item?.expectedImpact ? 0.68 : 0.5),
+    evidenceStrength,
     assumptions,
     counterRisk: counterEvidence[0] ?? "No material counter-risk is visible yet.",
-    tradeoff: tradeoff ? `${tradeoff.recommendedOption}: ${tradeoff.rationale}` : "No explicit tradeoff is attached yet."
+    tradeoff: tradeoff ? `${tradeoff.recommendedOption}: ${tradeoff.rationale}` : "No explicit tradeoff is attached yet.",
+    flags
   };
+}
+
+export function getWorkQueueCognitionFlags(input: {
+  evidenceStrength: number;
+  assumptions: { riskLevel: CognitionRiskLevel; status: string }[];
+  counterEvidence: string[];
+  tradeoff?: { confidenceScore: number } | null;
+  confidenceScore: number;
+}): string[] {
+  const flags: string[] = [];
+  if (input.confidenceScore >= 0.78 && input.evidenceStrength >= 0.7 && !input.counterEvidence.length) flags.push("High-confidence work");
+  if (input.confidenceScore < 0.62 || input.evidenceStrength < 0.6) flags.push("Low-confidence work");
+  if (input.assumptions.some((item) => item.status !== "VALIDATED")) flags.push("Assumption-dependent");
+  if (input.counterEvidence.length || input.evidenceStrength < 0.55) flags.push("Blocked-by-evidence");
+  if (input.tradeoff && input.tradeoff.confidenceScore < 0.8) flags.push("High trade-off work");
+  return flags.length ? flags : ["Evidence-aware"];
 }
 
 export function summarizeMissionCognition(state: PlatformState, missionId: string): MissionCognition {

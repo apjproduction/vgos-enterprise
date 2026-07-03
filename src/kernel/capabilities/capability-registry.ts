@@ -370,6 +370,7 @@ export const capabilityRegistry: CapabilityDefinition[] = [
       "Assumptions",
       "Evidence Assessments",
       "Tradeoff Analyses",
+      "Judgment Records",
       "Reflections",
       "Better Judgment Explanations",
       "Recalibrated Confidence"
@@ -396,11 +397,11 @@ export const capabilityRegistry: CapabilityDefinition[] = [
       "EVIDENCE_ASSESSED",
       "COUNTER_EVIDENCE_FOUND",
       "TRADEOFF_ANALYZED",
-      "JUDGMENT_GENERATED",
+      "JUDGMENT_CREATED",
       "REFLECTION_CREATED",
-      "CONFIDENCE_RECALIBRATED"
+      "RECOMMENDATION_RECALIBRATED"
     ],
-    status: "ACTIVE"
+    status: "BETA"
   },
   {
     id: "deliberation-layer",

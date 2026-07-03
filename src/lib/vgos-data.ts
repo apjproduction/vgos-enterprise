@@ -24,6 +24,7 @@ import type {
   CognitionEvidenceType,
   CognitionRiskLevel,
   EvidenceAssessment,
+  JudgmentRecord,
   Reflection,
   TradeoffAnalysis
 } from "@/kernel/cognition/cognition-types";
@@ -174,8 +175,10 @@ export type EventType =
   | "EVIDENCE_ASSESSED"
   | "COUNTER_EVIDENCE_FOUND"
   | "TRADEOFF_ANALYZED"
+  | "JUDGMENT_CREATED"
   | "JUDGMENT_GENERATED"
   | "REFLECTION_CREATED"
+  | "RECOMMENDATION_RECALIBRATED"
   | "CONFIDENCE_RECALIBRATED"
   | "DECISION_SITUATION_CREATED"
   | "DECISION_OPTION_CREATED"
@@ -1453,6 +1456,7 @@ export type PlatformState = {
   assumptions: Assumption[];
   evidenceAssessments: EvidenceAssessment[];
   tradeoffAnalyses: TradeoffAnalysis[];
+  judgmentRecords: JudgmentRecord[];
   reflections: Reflection[];
   decisionSituations: DecisionSituation[];
   decisionOptions: DecisionOption[];
@@ -1500,6 +1504,7 @@ export type PageId =
   | "blockers"
   | "evidence"
   | "assumptions"
+  | "judgments"
   | "tradeoffs"
   | "reflections"
   | "results"
@@ -1574,6 +1579,7 @@ export type CollectionKey =
   | "assumptions"
   | "evidenceAssessments"
   | "tradeoffAnalyses"
+  | "judgmentRecords"
   | "reflections"
   | "decisionSituations"
   | "decisionOptions"
@@ -1832,6 +1838,13 @@ export const pageDefinitions: PageDefinition[] = [
     description: "Explicit assumptions behind recommendations, missions, and operating decisions.",
     icon: CircleHelp,
     collection: "assumptions"
+  },
+  {
+    id: "judgments",
+    label: "Judgments",
+    description: "Auditable executive judgments with reasoning, assumptions, evidence, tradeoffs, confidence, and change triggers.",
+    icon: ShieldCheck,
+    collection: "judgmentRecords"
   },
   {
     id: "tradeoffs",
@@ -3449,11 +3462,11 @@ const recommendedActions: RecommendedAction[] = [
 const assumptions: Assumption[] = ([
   [
     "assumption-product-page-demand",
-    "Product-page-to-video demand will continue after launch week.",
-    "VGOS assumes Product Hunt and search demand around product-page-to-video will stay useful beyond launch week.",
+    "Search demand for Video Production Intelligence will continue rising.",
+    "VGOS assumes Product Hunt and search demand around product-page-to-video will stay useful beyond launch week and continue lifting Video Production Intelligence intent.",
     "RecommendedAction",
     "action-17",
-    "VALIDATED",
+    "ACTIVE",
     0.86,
     "HIGH",
     "Supported by Product Hunt comments, search demand, and qualified signup measurement.",
@@ -3479,7 +3492,7 @@ const assumptions: Assumption[] = ([
     "VGOS assumes source-to-output demo proof reduces skepticism before conversion-oriented content is scaled.",
     "Mission",
     "mission-product-page-to-video-proof",
-    "NEEDS_EVIDENCE",
+    "WATCHING",
     0.74,
     "CRITICAL",
     "Needs proof asset and conversion follow-up.",
@@ -3488,11 +3501,11 @@ const assumptions: Assumption[] = ([
   ],
   [
     "assumption-directory-authority",
-    "Directory submissions will generate authority signals.",
-    "VGOS assumes directory submissions convert into approvals, backlinks, and authority signals in a useful timeframe.",
+    "Directory approvals will be slow.",
+    "VGOS assumes directory submissions may take longer than 30 days to convert into approvals, backlinks, and authority signals.",
     "RecommendedAction",
     "action-21",
-    "NEEDS_EVIDENCE",
+    "WATCHING",
     0.58,
     "HIGH",
     "Needs approval and backlink evidence.",
@@ -3509,6 +3522,19 @@ const assumptions: Assumption[] = ([
     0.69,
     "MEDIUM",
     "Validate with search impression and internal-link performance.",
+    "",
+    ""
+  ],
+  [
+    "assumption-product-hunt-follow-up-window",
+    "Product Hunt follow-up remains valuable for 14 days after launch.",
+    "VGOS assumes post-launch comments and founder replies can still convert attention into trust during the two-week follow-up window.",
+    "Mission",
+    "mission-product-hunt-momentum",
+    "ACTIVE",
+    0.77,
+    "HIGH",
+    "Supported by launch comments and follow-up engagement patterns.",
     "",
     ""
   ]
@@ -3604,6 +3630,9 @@ const evidenceAssessments: EvidenceAssessment[] = ([
   recencyScore,
   relevanceScore,
   overallScore,
+  freshnessScore: recencyScore,
+  supportsRecommendation: evidenceType !== "COUNTER_EVIDENCE",
+  weakensRecommendation: evidenceType === "COUNTER_EVIDENCE",
   limitations,
   ...scoped(index)
 }));
@@ -3687,11 +3716,102 @@ const tradeoffAnalyses: TradeoffAnalysis[] = ([
   optionA,
   optionB,
   optionC,
+  optionAScore: Number(Math.max(0.1, confidenceScore - 0.09).toFixed(2)),
+  optionBScore: confidenceScore,
   recommendedOption,
   rationale,
   opportunityCost,
   riskSummary,
   confidenceScore,
+  relatedRecommendationId: sourceType === "RecommendedAction" ? sourceId : undefined,
+  relatedMissionId: sourceType === "Mission" ? sourceId : undefined,
+  ...scoped(index)
+}));
+
+const judgmentRecords: JudgmentRecord[] = ([
+  [
+    "judgment-demo-before-bofu",
+    "Finish product-page-to-video demo before more BOFU content.",
+    "action-17",
+    "mission-product-page-to-video-proof",
+    "Finish product-page-to-video demo before publishing more BOFU content.",
+    0.86,
+    "Four missions depend on proof assets, and counter-evidence shows claim-first BOFU content can create trust gaps.",
+    ["Product demo proof will increase BOFU trust."],
+    ["Product Hunt comments asked for proof.", "Search demand supports product-page-to-video intent."],
+    ["Delaying BLOG-005 may slow authority growth."],
+    ["BLOG-005 vs product demo: finish proof first."],
+    ["Demo quality fails to improve conversion trust.", "BLOG-005 receives fresh high-intent search demand without proof dependency."]
+  ],
+  [
+    "judgment-founder-authority",
+    "Increase founder-led authority content.",
+    "action-24",
+    "mission-founder-authority",
+    "Increase founder-led authority content.",
+    0.82,
+    "Founder-led posts are producing stronger qualitative comments than company-only updates.",
+    ["Founder-led content will continue outperforming company content."],
+    ["Founder post engagement produced stronger qualitative comments than company posts."],
+    ["Founder review capacity is scarce."],
+    ["Founder content vs company content: use founder proof narrative with company repost."],
+    ["Company posts match founder engagement.", "Founder review capacity becomes blocked this week."]
+  ],
+  [
+    "judgment-pause-directory-submissions",
+    "Pause low-confidence directory submissions.",
+    "action-21",
+    "mission-product-hunt-momentum",
+    "Pause low-confidence directory submissions until approval evidence improves.",
+    0.72,
+    "Directory approvals are slower than expected, so additional submissions have weak near-term evidence.",
+    ["Directory approvals will be slow."],
+    ["Directory approval delay counter-evidence is active."],
+    ["Pausing submissions may slow backlink coverage."],
+    ["Directory submissions vs founder content: prefer founder content while approvals lag."],
+    ["Directory approvals arrive within the next weekly review.", "A high-authority directory guarantees fast approval."]
+  ],
+  [
+    "judgment-blog-005-after-demo",
+    "Publish BLOG-005 after demo proof is ready.",
+    "execution-blog-005-outline",
+    "mission-product-page-to-video-proof",
+    "Publish BLOG-005 after demo proof is ready.",
+    0.78,
+    "BLOG-005 can strengthen category ownership, but the proof asset should be ready before conversion-oriented traffic scales.",
+    ["BLOG-005 can strengthen Video Production Intelligence positioning."],
+    ["Search demand and qualified signup measurements support product-page-to-video as commercial intent."],
+    ["Publishing before proof may create traffic without trust."],
+    ["BLOG-005 vs product demo: publish only if demo work is scheduled immediately after."],
+    ["Demo proof is delayed beyond the content window.", "Fresh search data shows BLOG-005 demand materially stronger than proof risk."]
+  ],
+  [
+    "judgment-purpose-specific-ai-faq",
+    "Add FAQ for Purpose-Specific AI.",
+    "action-29",
+    "mission-founder-authority",
+    "Add FAQ for Purpose-Specific AI.",
+    0.8,
+    "Purpose-Specific AI language clarifies category positioning and can answer objections without heavy execution cost.",
+    ["Search demand for Video Production Intelligence will continue rising."],
+    ["Founder comments and product-page questions ask for clearer category language."],
+    ["FAQ copy may not move conversion without demo proof."],
+    ["Content volume vs proof quality: ship FAQ as lightweight support, not replacement for proof."],
+    ["FAQ produces no engagement or internal-link lift.", "Product demo proof becomes the sole active bottleneck."]
+  ]
+] as const).map(([id, title, recommendationId, missionId, judgment, confidenceScore, reasoning, assumptions, supportingEvidence, counterEvidence, tradeoffs, changeTriggers], index) => ({
+  id,
+  title,
+  recommendationId,
+  missionId,
+  judgment,
+  confidenceScore,
+  reasoning,
+  assumptions: [...assumptions],
+  supportingEvidence: [...supportingEvidence],
+  counterEvidence: [...counterEvidence],
+  tradeoffs: [...tradeoffs],
+  changeTriggers: [...changeTriggers],
   ...scoped(index)
 }));
 
@@ -3773,6 +3893,13 @@ const reflections: Reflection[] = ([
   newLearning,
   futureAdjustment,
   confidenceScore,
+  originalJudgment: title,
+  outcomeSummary: summary,
+  wasCorrect: !/slower|underestimated|overestimated|not ready|incomplete/i.test(summary),
+  whatWasMissed: wrongAssumptions,
+  whatChanged: newLearning,
+  lesson: newLearning,
+  recalibrationSuggestion: futureAdjustment,
   ...scoped(index)
 }));
 
@@ -4613,9 +4740,9 @@ const cognitionEvents: Event[] = [
     description: assumption.description,
     metadata: { generatedBy: "reflective-cognition-seed", riskLevel: assumption.riskLevel },
     severity: assumption.riskLevel as EventSeverity,
-    status: assumption.status === "NEEDS_EVIDENCE" ? "PENDING" as EventStatus : "PROCESSED" as EventStatus,
+    status: assumption.status === "WATCHING" || assumption.status === "NEEDS_EVIDENCE" ? "PENDING" as EventStatus : "PROCESSED" as EventStatus,
     createdAt: daysAgo(index),
-    processedAt: assumption.status === "NEEDS_EVIDENCE" ? undefined : daysAgo(index)
+    processedAt: assumption.status === "WATCHING" || assumption.status === "NEEDS_EVIDENCE" ? undefined : daysAgo(index)
   })),
   ...evidenceAssessments.slice(0, 5).map((assessment, index) => ({
     id: `${assessment.id}-event`,
@@ -4647,21 +4774,21 @@ const cognitionEvents: Event[] = [
     createdAt: daysAgo(index + 2),
     processedAt: daysAgo(index + 2)
   })),
-  {
-    id: "event-executive-judgment-generated",
+  ...judgmentRecords.slice(0, 5).map((judgment, index) => ({
+    id: `${judgment.id}-event`,
     organizationId: orgId,
     workspaceId,
-    eventType: "JUDGMENT_GENERATED",
-    sourceType: "ExecutiveJudgment",
-    sourceId: "judgment-today",
-    title: "Executive judgment generated",
-    description: "VGOS generated a reflective judgment with assumptions, evidence, counter-evidence, tradeoff, and confidence explanation.",
-    metadata: { generatedBy: "reflective-cognition-seed" },
-    severity: "HIGH",
-    status: "PROCESSED",
-    createdAt: daysAgo(0),
-    processedAt: daysAgo(0)
-  },
+    eventType: "JUDGMENT_CREATED" as EventType,
+    sourceType: "JudgmentRecord",
+    sourceId: judgment.id,
+    title: judgment.title,
+    description: judgment.reasoning,
+    metadata: { generatedBy: "reflective-cognition-seed", confidenceScore: judgment.confidenceScore },
+    severity: judgment.confidenceScore >= 0.82 ? "HIGH" as EventSeverity : "MEDIUM" as EventSeverity,
+    status: "PROCESSED" as EventStatus,
+    createdAt: daysAgo(index),
+    processedAt: daysAgo(index)
+  })),
   ...reflections.slice(0, 3).map((reflection, index) => ({
     id: `${reflection.id}-event`,
     organizationId: orgId,
@@ -4681,7 +4808,7 @@ const cognitionEvents: Event[] = [
     id: "event-confidence-recalibrated-directory",
     organizationId: orgId,
     workspaceId,
-    eventType: "CONFIDENCE_RECALIBRATED",
+    eventType: "RECOMMENDATION_RECALIBRATED",
     sourceType: "Reflection",
     sourceId: "reflection-directory-submissions-slower",
     title: "Directory recommendation confidence recalibrated",
@@ -5066,6 +5193,7 @@ export const initialPlatformState: PlatformState = {
   assumptions,
   evidenceAssessments,
   tradeoffAnalyses,
+  judgmentRecords,
   reflections,
   decisionSituations,
   decisionOptions,
@@ -5360,7 +5488,7 @@ export function createDefaultRecord(collection: CollectionKey, activeWorkspaceId
       description: "",
       sourceType: "Manual",
       sourceId: "",
-      status: "UNTESTED",
+      status: "ACTIVE",
       confidenceScore: 0.6,
       riskLevel: "MEDIUM",
       validationMethod: "",
@@ -5379,8 +5507,11 @@ export function createDefaultRecord(collection: CollectionKey, activeWorkspaceId
       strengthScore: 0.6,
       reliabilityScore: 0.6,
       recencyScore: 0.7,
+      freshnessScore: 0.7,
       relevanceScore: 0.6,
       overallScore: 0.62,
+      supportsRecommendation: true,
+      weakensRecommendation: false,
       limitations: ""
     };
   }
@@ -5394,11 +5525,32 @@ export function createDefaultRecord(collection: CollectionKey, activeWorkspaceId
       optionA: "",
       optionB: "",
       optionC: "",
+      optionAScore: 0.6,
+      optionBScore: 0.6,
       recommendedOption: "",
       rationale: "",
       opportunityCost: "",
       riskSummary: "",
-      confidenceScore: 0.65
+      confidenceScore: 0.65,
+      relatedRecommendationId: "",
+      relatedMissionId: ""
+    };
+  }
+
+  if (collection === "judgmentRecords") {
+    return {
+      ...base,
+      title: "New judgment",
+      recommendationId: "",
+      missionId: "",
+      judgment: "",
+      confidenceScore: 0.65,
+      reasoning: "",
+      assumptions: [],
+      supportingEvidence: [],
+      counterEvidence: [],
+      tradeoffs: [],
+      changeTriggers: []
     };
   }
 
@@ -5414,7 +5566,14 @@ export function createDefaultRecord(collection: CollectionKey, activeWorkspaceId
       wrongAssumptions: "",
       newLearning: "",
       futureAdjustment: "",
-      confidenceScore: 0.65
+      confidenceScore: 0.65,
+      originalJudgment: "",
+      outcomeSummary: "",
+      wasCorrect: null,
+      whatWasMissed: "",
+      whatChanged: "",
+      lesson: "",
+      recalibrationSuggestion: ""
     };
   }
 

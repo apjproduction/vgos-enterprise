@@ -35,7 +35,7 @@ export function createAssumption(input: AssumptionInput): Assumption {
     description: input.description,
     sourceType: input.sourceType ?? null,
     sourceId: input.sourceId ?? null,
-    status: input.status ?? (confidenceScore < 0.65 ? "NEEDS_EVIDENCE" : "UNTESTED"),
+    status: input.status ?? (confidenceScore < 0.65 ? "WATCHING" : "ACTIVE"),
     confidenceScore,
     riskLevel: input.riskLevel ?? inferRiskLevel(text, confidenceScore),
     validationMethod: input.validationMethod ?? null,
@@ -108,7 +108,7 @@ export function extractAssumptions(input: {
       sourceId: input.sourceId,
       confidenceScore: 0.58,
       riskLevel: "HIGH",
-      status: "NEEDS_EVIDENCE"
+      status: "WATCHING"
     });
   }
 
@@ -126,6 +126,19 @@ export function extractAssumptions(input: {
   }
 
   return assumptions.map(createAssumption);
+}
+
+export function extractAssumptionsFromRecommendation(recommendation: RecommendedAction): Assumption[] {
+  return extractAssumptions({
+    workspaceId: recommendation.workspaceId,
+    organizationId: recommendation.organizationId,
+    sourceType: "RecommendedAction",
+    sourceId: recommendation.id,
+    title: recommendation.title,
+    description: recommendation.description,
+    expectedImpact: recommendation.expectedImpact,
+    confidenceScore: recommendation.confidenceScore
+  });
 }
 
 export function validateAssumption(assumption: Assumption, validationMethod = "Measured or observed support"): Assumption {
@@ -187,6 +200,15 @@ export function getHighRiskAssumptions(state: PlatformState, workspaceId: string
       const riskRank: Record<CognitionRiskLevel, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
       return riskRank[a.riskLevel] - riskRank[b.riskLevel] || a.confidenceScore - b.confidenceScore;
     });
+}
+
+export function getActiveAssumptions(state: PlatformState, workspaceId: string): Assumption[] {
+  return state.assumptions
+    .filter((item) =>
+      item.workspaceId === workspaceId &&
+      !["ARCHIVED", "INVALIDATED"].includes(item.status)
+    )
+    .sort((a, b) => b.confidenceScore - a.confidenceScore);
 }
 
 export function explainAssumptions(assumptions: Assumption[]): string {

@@ -2,17 +2,17 @@
 
 ```mermaid
 flowchart LR
-  A["Observation"] --> B["Interpretation"]
+  A["Signal"] --> B["Recommendation"]
   B --> C["Assumption"]
-  C --> D["Evidence"]
+  C --> D["Evidence Assessment"]
   D --> E["Counter-Evidence"]
-  E --> F["Trade-off"]
+  E --> F["Trade-Off"]
   F --> G["Judgment"]
-  G --> H["Recommendation"]
-  H --> I["Execution"]
+  G --> H["Execution"]
+  H --> I["Measurement"]
   I --> J["Reflection"]
   J --> K["Recalibration"]
-  K --> L["Future Judgment"]
+  K --> L["Better Future Judgment"]
 ```
 
 ```mermaid

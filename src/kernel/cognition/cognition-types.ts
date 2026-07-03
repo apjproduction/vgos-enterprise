@@ -7,7 +7,14 @@ import type {
   RecommendedAction
 } from "@/lib/vgos-data";
 
-export type AssumptionStatus = "UNTESTED" | "VALIDATED" | "INVALIDATED" | "NEEDS_EVIDENCE" | "ARCHIVED";
+export type AssumptionStatus =
+  | "ACTIVE"
+  | "VALIDATED"
+  | "INVALIDATED"
+  | "WATCHING"
+  | "ARCHIVED"
+  | "UNTESTED"
+  | "NEEDS_EVIDENCE";
 
 export type CognitionRiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
@@ -50,8 +57,11 @@ export type EvidenceAssessment = CognitionRecord & {
   strengthScore: number;
   reliabilityScore: number;
   recencyScore: number;
+  freshnessScore: number;
   relevanceScore: number;
   overallScore: number;
+  supportsRecommendation: boolean;
+  weakensRecommendation: boolean;
   limitations: string;
 };
 
@@ -62,11 +72,15 @@ export type TradeoffAnalysis = CognitionRecord & {
   optionA: string;
   optionB: string;
   optionC?: string | null;
+  optionAScore: number;
+  optionBScore: number;
   recommendedOption: string;
   rationale: string;
   opportunityCost: string;
   riskSummary: string;
   confidenceScore: number;
+  relatedRecommendationId?: string | null;
+  relatedMissionId?: string | null;
 };
 
 export type Reflection = CognitionRecord & {
@@ -80,6 +94,27 @@ export type Reflection = CognitionRecord & {
   newLearning: string;
   futureAdjustment: string;
   confidenceScore: number;
+  originalJudgment?: string | null;
+  outcomeSummary?: string | null;
+  wasCorrect?: boolean | null;
+  whatWasMissed?: string | null;
+  whatChanged?: string | null;
+  lesson?: string | null;
+  recalibrationSuggestion?: string | null;
+};
+
+export type JudgmentRecord = CognitionRecord & {
+  title: string;
+  recommendationId?: string | null;
+  missionId?: string | null;
+  judgment: string;
+  confidenceScore: number;
+  reasoning: string;
+  assumptions: unknown[];
+  supportingEvidence: unknown[];
+  counterEvidence: unknown[];
+  tradeoffs: unknown[];
+  changeTriggers: unknown[];
 };
 
 export type AssumptionInput = {
@@ -107,11 +142,16 @@ export type EvidenceAssessmentInput = {
   strengthScore?: number;
   reliabilityScore?: number;
   recencyScore?: number;
+  freshnessScore?: number;
   relevanceScore?: number;
   limitations?: string;
+  supportsRecommendation?: boolean;
+  weakensRecommendation?: boolean;
   occurredAt?: string;
   firstParty?: boolean;
   hasMeasurement?: boolean;
+  consistencyScore?: number;
+  businessImpactScore?: number;
 };
 
 export type TradeoffOption = {
@@ -136,6 +176,7 @@ export type JudgmentInput = {
     assumptions: Assumption[];
     evidenceAssessments: EvidenceAssessment[];
     tradeoffAnalyses: TradeoffAnalysis[];
+    judgmentRecords: JudgmentRecord[];
     reflections: Reflection[];
     recommendedActions: RecommendedAction[];
     executionItems: ExecutionItem[];
@@ -175,6 +216,7 @@ export type WorkItemCognition = {
   assumptions: Assumption[];
   counterRisk: string;
   tradeoff: string;
+  flags: string[];
 };
 
 export type MissionCognition = {

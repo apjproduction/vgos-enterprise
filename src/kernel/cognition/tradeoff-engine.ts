@@ -5,12 +5,12 @@ function clamp01(value: number) {
   return Math.max(0, Math.min(1, value));
 }
 
-function optionScore(option: TradeoffOption) {
+export function calculateTradeoffScore(option: TradeoffOption) {
   return clamp01(option.expectedImpact * 0.38 + option.confidence * 0.32 - option.risk * 0.2 - option.effort * 0.1);
 }
 
 export function recommendBestOption(options: TradeoffOption[]) {
-  return [...options].sort((a, b) => optionScore(b) - optionScore(a))[0];
+  return [...options].sort((a, b) => calculateTradeoffScore(b) - calculateTradeoffScore(a))[0];
 }
 
 export function analyzeOpportunityCost(options: TradeoffOption[], recommended: TradeoffOption) {
@@ -20,8 +20,10 @@ export function analyzeOpportunityCost(options: TradeoffOption[], recommended: T
   return `Choosing ${recommended.label} delays ${bestAlternative.label}, which may defer ${Math.round(bestAlternative.expectedImpact * 100)}% expected impact.`;
 }
 
+export const evaluateOpportunityCost = analyzeOpportunityCost;
+
 export function explainTradeoff(options: TradeoffOption[], recommended: TradeoffOption) {
-  const scores = options.map((item) => `${item.label}: ${Math.round(optionScore(item) * 100)}`).join(", ");
+  const scores = options.map((item) => `${item.label}: ${Math.round(calculateTradeoffScore(item) * 100)}`).join(", ");
   return `${recommended.label} has the best risk-adjusted score. Scores: ${scores}.`;
 }
 
@@ -41,11 +43,15 @@ export function compareOptions(input: TradeoffInput): TradeoffAnalysis {
     optionA: input.options[0].label,
     optionB: input.options[1].label,
     optionC: input.options[2]?.label ?? null,
+    optionAScore: Number(calculateTradeoffScore(input.options[0]).toFixed(2)),
+    optionBScore: Number(calculateTradeoffScore(input.options[1]).toFixed(2)),
     recommendedOption: recommended.label,
     rationale: explainTradeoff(options, recommended),
     opportunityCost: analyzeOpportunityCost(options, recommended),
     riskSummary: `Average decision risk is ${Math.round(averageRisk * 100)}%; ${recommended.label} keeps the best balance of impact and confidence.`,
-    confidenceScore: Number(optionScore(recommended).toFixed(2)),
+    confidenceScore: Number(calculateTradeoffScore(recommended).toFixed(2)),
+    relatedRecommendationId: input.sourceType === "RecommendedAction" ? input.sourceId ?? null : null,
+    relatedMissionId: input.sourceType === "Mission" ? input.sourceId ?? null : null,
     createdAt: date,
     updatedAt: date
   };

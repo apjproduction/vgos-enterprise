@@ -17,6 +17,8 @@ export function recalibrateRecommendationConfidence(action: RecommendedAction, r
   return Number(clamp01(action.confidenceScore - penalty).toFixed(2));
 }
 
+export const recalibrateConfidence = recalibrateRecommendationConfidence;
+
 export function updateAssumptionConfidence(assumption: Assumption, reflections: Reflection[]) {
   const related = reflections.filter((item) =>
     `${item.summary} ${item.wrongAssumptions} ${item.newLearning}`.toLowerCase().includes(assumption.title.toLowerCase().split(/\W+/)[0] ?? "")
@@ -24,6 +26,17 @@ export function updateAssumptionConfidence(assumption: Assumption, reflections: 
   const penalty = related.filter((item) => item.wrongAssumptions !== "No specific wrong assumption is confirmed yet.").length * 0.08;
   const boost = related.filter((item) => item.whatWorked.length > item.whatFailed.length).length * 0.04;
   return Number(clamp01(assumption.confidenceScore + boost - penalty).toFixed(2));
+}
+
+export const updateAssumptionReliability = updateAssumptionConfidence;
+
+export function updateRecommendationQuality(action: RecommendedAction, reflections: Reflection[]) {
+  const recalibratedConfidence = recalibrateRecommendationConfidence(action, reflections);
+  return {
+    ...action,
+    confidenceScore: recalibratedConfidence,
+    confidenceExplanation: `${action.confidenceExplanation ?? action.reasoning} Recalibrated from ${reflections.length} reflection${reflections.length === 1 ? "" : "s"}.`
+  };
 }
 
 export function adjustFuturePriorityRules(reflections: Reflection[]) {
@@ -40,6 +53,8 @@ export function adjustFuturePriorityRules(reflections: Reflection[]) {
   return rules.length ? rules : ["No repeated wrong-assumption pattern is strong enough to change future priority rules yet."];
 }
 
+export const adjustFuturePriority = adjustFuturePriorityRules;
+
 export function improveFutureJudgment(reflections: Reflection[]) {
   return {
     repeatedWrongAssumptions: reflections
@@ -49,3 +64,5 @@ export function improveFutureJudgment(reflections: Reflection[]) {
     confidenceNote: "Future judgment should lower confidence when a recommendation depends on assumptions that recent reflections contradicted."
   };
 }
+
+export const updateJudgmentModel = improveFutureJudgment;

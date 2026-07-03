@@ -467,7 +467,9 @@ export function answerExecutiveQuestion(
   const context = buildAdvisorContext(state, workspaceId);
   const lower = question.toLowerCase();
 
-  if (/option|chosen|choose|reject|rejected|tradeoff|trade-off|defer|do nothing|risk-adjusted|decision.*review|needs review/.test(lower)) return addReflectiveCognition(explainDecisionDeliberation(context, question), state, workspaceId);
+  if (/what.*assuming|assumption|assumptions|why.*recommendation|what could go wrong|wrong|change.*mind|what would change/.test(lower)) return addReflectiveCognition(explainRecommendation(state, workspaceId), state, workspaceId);
+  if (/learn|learned|reflection|outcome/.test(lower)) return addReflectiveCognition(summarizeRecentChanges(state, workspaceId), state, workspaceId);
+  if (/option|chosen|choose|reject|rejected|tradeoff|trade-off|defer|delay|do nothing|risk-adjusted|decision.*review|needs review/.test(lower)) return addReflectiveCognition(explainDecisionDeliberation(context, question), state, workspaceId);
   if (/blocked|stuck|waiting/.test(lower)) return addReflectiveCognition(summarizeBlockedWork(state, workspaceId), state, workspaceId);
   if (/changed|yesterday|recent/.test(lower)) return addReflectiveCognition(summarizeRecentChanges(state, workspaceId), state, workspaceId);
   if (/risk|at risk|why.*mission/.test(lower)) return addReflectiveCognition(explainMissionRisk(state, workspaceId), state, workspaceId);

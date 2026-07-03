@@ -153,8 +153,10 @@ enum EventType {
   EVIDENCE_ASSESSED
   COUNTER_EVIDENCE_FOUND
   TRADEOFF_ANALYZED
+  JUDGMENT_CREATED
   JUDGMENT_GENERATED
   REFLECTION_CREATED
+  RECOMMENDATION_RECALIBRATED
   CONFIDENCE_RECALIBRATED
   DECISION_SITUATION_CREATED
   DECISION_OPTION_CREATED
@@ -181,9 +183,11 @@ enum EventStatus {
 }
 
 enum AssumptionStatus {
+  ACTIVE
   UNTESTED
   VALIDATED
   INVALIDATED
+  WATCHING
   NEEDS_EVIDENCE
   ARCHIVED
 }
@@ -813,6 +817,7 @@ model Organization {
   assumptions          Assumption[]
   evidenceAssessments  EvidenceAssessment[]
   tradeoffAnalyses     TradeoffAnalysis[]
+  judgmentRecords      JudgmentRecord[]
   reflections          Reflection[]
   decisionSituations   DecisionSituation[]
   decisionOptions      DecisionOption[]
@@ -912,6 +917,7 @@ model Workspace {
   assumptions          Assumption[]
   evidenceAssessments  EvidenceAssessment[]
   tradeoffAnalyses     TradeoffAnalysis[]
+  judgmentRecords      JudgmentRecord[]
   reflections          Reflection[]
   decisionSituations   DecisionSituation[]
   decisionOptions      DecisionOption[]
@@ -2500,7 +2506,7 @@ model Assumption {
   description      String               @db.Text
   sourceType       String?
   sourceId         String?
-  status           AssumptionStatus     @default(UNTESTED)
+  status           AssumptionStatus     @default(ACTIVE)
   confidenceScore  Float                @default(0)
   riskLevel        CognitionRiskLevel   @default(MEDIUM)
   validationMethod String?              @db.Text
@@ -2530,8 +2536,11 @@ model EvidenceAssessment {
   strengthScore    Float                  @default(0)
   reliabilityScore Float                  @default(0)
   recencyScore     Float                  @default(0)
+  freshnessScore   Float                  @default(0)
   relevanceScore   Float                  @default(0)
   overallScore     Float                  @default(0)
+  supportsRecommendation Boolean          @default(true)
+  weakensRecommendation  Boolean          @default(false)
   limitations      String                 @db.Text
   organization     Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   workspace        Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -2555,11 +2564,15 @@ model TradeoffAnalysis {
   optionA           String       @db.Text
   optionB           String       @db.Text
   optionC           String?      @db.Text
+  optionAScore      Float        @default(0)
+  optionBScore      Float        @default(0)
   recommendedOption String       @db.Text
   rationale         String       @db.Text
   opportunityCost   String       @db.Text
   riskSummary       String       @db.Text
   confidenceScore   Float        @default(0)
+  relatedRecommendationId String?
+  relatedMissionId String?
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   workspace         Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt         DateTime     @default(now())
@@ -2568,6 +2581,35 @@ model TradeoffAnalysis {
   @@index([organizationId])
   @@index([workspaceId])
   @@index([sourceType, sourceId])
+  @@index([relatedRecommendationId])
+  @@index([relatedMissionId])
+  @@index([confidenceScore])
+}
+
+model JudgmentRecord {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  workspaceId        String
+  title              String
+  recommendationId   String?
+  missionId          String?
+  judgment           String       @db.Text
+  confidenceScore    Float        @default(0)
+  reasoning          String       @db.Text
+  assumptions        Json
+  supportingEvidence Json
+  counterEvidence    Json
+  tradeoffs          Json
+  changeTriggers     Json
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace          Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  @@index([organizationId])
+  @@index([workspaceId])
+  @@index([recommendationId])
+  @@index([missionId])
   @@index([confidenceScore])
 }
 
@@ -2585,6 +2627,13 @@ model Reflection {
   newLearning      String       @db.Text
   futureAdjustment String       @db.Text
   confidenceScore  Float        @default(0)
+  originalJudgment String?      @db.Text
+  outcomeSummary   String?      @db.Text
+  wasCorrect       Boolean?
+  whatWasMissed    String?      @db.Text
+  whatChanged      String?      @db.Text
+  lesson           String?      @db.Text
+  recalibrationSuggestion String? @db.Text
   organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   workspace        Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt        DateTime     @default(now())
