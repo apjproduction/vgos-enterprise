@@ -12,6 +12,8 @@ import { validateRecommendation, validateDecision, validateMissionAgainstBeliefs
 import { buildRealityModel, summarizeRealityModel } from "@/kernel/beliefs/reality-model";
 import { getOpenSituations } from "@/kernel/deliberation/decision-situation-engine";
 import { deliberate } from "@/kernel/deliberation/deliberation-engine";
+import { buildDecisionQualityBrief } from "@/kernel/deliberation/deliberation-summary";
+import { qualityLabel } from "@/kernel/deliberation/decision-quality";
 import type { PlatformState } from "@/lib/vgos-data";
 
 export { buildAdvisorContext } from "@/kernel/advisor/advisor-context";
@@ -580,6 +582,84 @@ function answerDecisionValidationQuestion(context: AdvisorContext, question: str
   };
 }
 
+function answerDecisionQualityQuestion(context: AdvisorContext, question: string): AdvisorAnswer {
+  const lower = question.toLowerCase();
+  const brief = buildDecisionQualityBrief(context.state, context.workspaceId);
+  const allSummaries = [
+    ...brief.weakEvidence,
+    ...brief.underDeliberation,
+    ...brief.readyForCommitment,
+    ...(brief.highestQualityRecentDecision ? [brief.highestQualityRecentDecision] : [])
+  ].filter((item, index, items) => items.findIndex((candidate) => candidate.deliberationId === item.deliberationId) === index);
+  const weakest = [...allSummaries].sort((a, b) => a.qualityScore.overallScore - b.qualityScore.overallScore)[0];
+  const ready = brief.readyForCommitment[0];
+  const weakEvidence = brief.weakEvidence[0] ?? weakest;
+  const target =
+    /ready|commitment/.test(lower)
+      ? ready
+      : /weak.*assumption|assumption.*weak/.test(lower)
+        ? allSummaries.find((summary) => summary.assumptions.some((assumption) =>
+            brief.highRiskAssumptions.some((risk) => risk.statement === assumption)
+          )) ?? weakEvidence
+        : /objection/.test(lower)
+          ? allSummaries.find((summary) => summary.unresolvedObjections.length > 0) ?? weakEvidence
+          : /tradeoff|trade-off|ignoring/.test(lower)
+            ? allSummaries.find((summary) => summary.tradeoffs.length === 0) ?? weakEvidence
+            : weakEvidence;
+
+  const answer =
+    /ready|commitment/.test(lower)
+      ? ready
+        ? `${ready.title} is ready to become a commitment. It has ${qualityLabel(ready.qualityScore)} decision quality, ${Math.round(ready.qualityScore.evidenceQuality * 100)}% evidence quality, and the next action is to ${ready.recommendedNextAction.toLowerCase()}`
+        : "No decision is ready for commitment yet. VGOS should improve evidence, assumptions, tradeoffs, and objections before committing capacity."
+      : /weak.*assumption|assumption.*weak/.test(lower)
+        ? `The weakest assumptions are ${brief.highRiskAssumptions.slice(0, 3).map((item) => item.statement).join(", ") || "not visible yet"}. These limit confidence until evidence or resolution is linked.`
+        : /objection/.test(lower)
+          ? `The unresolved objections are ${brief.unresolvedObjections.slice(0, 3).map((item) => item.statement).join(", ") || "none right now"}.`
+          : /tradeoff|trade-off|ignoring/.test(lower)
+            ? target
+              ? `${target.title} should make this tradeoff explicit: ${target.tradeoffs[0] ?? "the opportunity cost between the leading option and the best rejected alternative."}`
+              : "No active decision has an ignored tradeoff visible right now."
+            : target
+              ? `${target.title} needs better decision quality. Its score is ${Math.round(target.qualityScore.overallScore * 100)}%, with ${target.qualityScore.warnings.join(" ") || "no blocking warning"}`
+              : "VGOS does not have enough decision-quality data to identify a weak decision yet.";
+
+  return {
+    question,
+    answer,
+    reasoning: [
+      brief.summary,
+      target ? `Evidence quality: ${Math.round(target.qualityScore.evidenceQuality * 100)}%. Assumption clarity: ${Math.round(target.qualityScore.assumptionClarity * 100)}%. Tradeoff clarity: ${Math.round(target.qualityScore.tradeoffClarity * 100)}%.` : "No target decision-quality score was available.",
+      target?.qualityScore.warnings.length ? `Warnings: ${target.qualityScore.warnings.join(" ")}` : "No blocking decision-quality warning is attached to the selected decision."
+    ],
+    assumptions: target?.assumptions.length
+      ? target.assumptions
+      : brief.highRiskAssumptions.slice(0, 4).map((item) => `${item.statement} (${item.status.toLowerCase()})`),
+    evidence: target?.evidence.length
+      ? target.evidence
+      : ["No strong linked evidence is visible for the selected decision."],
+    counterEvidence: target?.unresolvedObjections.length
+      ? target.unresolvedObjections
+      : brief.unresolvedObjections.length
+        ? brief.unresolvedObjections.slice(0, 4).map((item) => item.statement)
+        : ["No unresolved objection is visible."],
+    tradeoff: target?.tradeoffs[0] ?? "No explicit tradeoff is attached yet.",
+    confidence: target ? Math.max(0.45, target.qualityScore.overallScore) : 0.58,
+    confidenceExplanation: target
+      ? `Decision quality combines evidence, assumption clarity, option coverage, tradeoffs, risk visibility, reversibility, and confidence justification.`
+      : "Decision quality confidence is low because no target deliberation was found.",
+    suggestedNextAction: target?.recommendedNextAction ?? "Add evidence or compare alternatives before commitment.",
+    shouldWaitForEvidence: Boolean(target && target.qualityScore.evidenceQuality < 0.58),
+    relatedObjects: target
+      ? [{ type: "Deliberation", id: target.deliberationId, title: target.title, detail: `${Math.round(target.qualityScore.overallScore * 100)}% quality` }]
+      : [],
+    suggestedActions: [
+      { label: "Open Decisions", description: "Review options, assumptions, objections, and quality warnings.", pageId: "decisions" },
+      { label: "Open Work Queue", description: "Work through generated decision-quality tasks.", pageId: "workQueue" }
+    ]
+  };
+}
+
 export function answerExecutiveQuestion(
   question: string,
   state: PlatformState,
@@ -588,6 +668,7 @@ export function answerExecutiveQuestion(
   const context = buildAdvisorContext(state, workspaceId);
   const lower = question.toLowerCase();
 
+  if (/decision.*quality|decisions?.*better evidence|weakest assumptions?|assumptions?.*weakest|ready.*commitment|commitment.*ready|unresolved objections?|objections?.*unresolved|trade-?off.*ignoring|ignoring.*trade-?off|low-confidence|low confidence|quality score|improve.*decision.*quality/.test(lower)) return answerDecisionQualityQuestion(context, question);
   if (/align.*belief|belief.*support|evidence.*before deciding|before deciding|decision.*safe|more evidence|validate.*recommendation|validate.*decision/.test(lower)) return addReflectiveCognition(answerDecisionValidationQuestion(context, question), state, workspaceId);
   if (/what changed.*belief|changed our belief|belief.*changed|challenged recently|recently challenged/.test(lower)) return addReflectiveCognition(answerBeliefChangeQuestion(context, question), state, workspaceId);
   if (/belief|believe|claims?|reality model|product page to video|product-page-to-video/.test(lower)) return addReflectiveCognition(answerRealityModelQuestion(context, question), state, workspaceId);

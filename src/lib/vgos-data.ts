@@ -54,6 +54,10 @@ import type {
   DecisionSituationType,
   Deliberation,
   DeliberationStatus,
+  Assumption as DeliberationAssumption,
+  Tradeoff as DeliberationTradeoff,
+  Objection as DeliberationObjection,
+  DecisionQualityScore,
   OptionEvaluation
 } from "@/kernel/deliberation/deliberation-types";
 export type Status =
@@ -1493,6 +1497,10 @@ export type PlatformState = {
   deliberations: Deliberation[];
   decisionCommitments: DecisionCommitment[];
   decisionReviews: DecisionReview[];
+  deliberationAssumptions: DeliberationAssumption[];
+  deliberationTradeoffs: DeliberationTradeoff[];
+  deliberationObjections: DeliberationObjection[];
+  decisionQualityScores: DecisionQualityScore[];
   connectors: Connector[];
   rawSignals: RawSignal[];
   normalizedSignals: NormalizedSignal[];
@@ -4099,7 +4107,9 @@ const decisionSituations: DecisionSituation[] = ([
   ["decision-situation-founder-content", "Should VidMaker increase founder-led content this week?", "Founder posts are outperforming company posts, but founder review capacity is limited.", "CHANNEL_DECISION", "DECIDED", "HIGH", "Learning", "learning-05", "mission-founder-authority", "objective-own-vpi"],
   ["decision-situation-directory-pause", "Should directory submissions be paused until proof assets are ready?", "Directory approvals are lagging and proof assets may improve listing quality and trust.", "RISK_DECISION", "DELIBERATING", "HIGH", "Learning", "learning-03", "mission-product-hunt-momentum", "objective-authority"],
   ["decision-situation-channel-priority", "Which channel deserves priority: LinkedIn, Product Hunt, or Reddit?", "VGOS should choose a focus channel for this week instead of splitting capacity across every launch surface.", "CHANNEL_DECISION", "DECIDED", "HIGH", "Metric", "metric-linkedin-impressions", "mission-product-hunt-momentum", "objective-product-hunt"],
-  ["decision-situation-product-page-capacity", "Should the Product Page to Video mission receive more capacity?", "The Product Page to Video mission is strategically critical but at risk until demo assets and proof replies move.", "RESOURCE_DECISION", "OPEN", "CRITICAL", "Mission", "mission-product-page-to-video", "mission-product-page-to-video", "objective-demo-assets"]
+  ["decision-situation-product-page-capacity", "Should the Product Page to Video mission receive more capacity?", "The Product Page to Video mission is strategically critical but at risk until demo assets and proof replies move.", "RESOURCE_DECISION", "OPEN", "CRITICAL", "Mission", "mission-product-page-to-video", "mission-product-page-to-video", "objective-demo-assets"],
+  ["decision-situation-demo-priority", "Product-page-to-video demo priority", "VGOS needs to decide whether the full product-page-to-video demo should ship before the next BOFU campaign or whether a lighter proof path is enough.", "PRODUCT_DECISION", "DELIBERATING", "CRITICAL", "Mission", "mission-product-page-to-video", "mission-product-page-to-video", "objective-demo-assets"],
+  ["decision-situation-directory-strategy", "Directory submissions strategy", "VGOS needs to decide whether to keep broad directory submissions moving or narrow the channel to higher-confidence AI, video, and productivity directories.", "CHANNEL_DECISION", "DELIBERATING", "HIGH", "Learning", "learning-03", "mission-product-hunt-momentum", "objective-authority"]
 ] as const).map(([id, title, description, situationType, status, urgency, sourceType, sourceId, missionId, objectiveId], index) => ({
   id,
   title,
@@ -4130,7 +4140,13 @@ const decisionOptionSeedRows = [
   ["decision-option-reddit-priority", "decision-situation-channel-priority", "Prioritize Reddit objections.", "Use Reddit cleanup objections to sharpen product proof and BLOG-005 angles.", "REPLY_COMMUNITY", 62, 44, "HIGH", 0.6, ["Sharpens objections", "Supports BLOG-005"], ["Lower owned-channel control", "Risk of low conversion"], ["Reddit objections map to content"], ["Manual cleanup objections captured"]],
   ["decision-option-add-demo-capacity", "decision-situation-product-page-capacity", "Move more capacity to product-page demo.", "Prioritize demo execution over lower-confidence distribution this week.", "START_EXECUTION", 88, 74, "MEDIUM", 0.84, ["Unlocks replies and BOFU content", "Reduces mission risk"], ["Crowds out smaller work"], ["Demo is the mission bottleneck"], ["Product Page to Video is commercial intent"]],
   ["decision-option-keep-balanced-capacity", "decision-situation-product-page-capacity", "Keep capacity balanced across channels.", "Keep demo, content, founder, and directory work moving in parallel.", "CUSTOM", 66, 58, "HIGH", 0.62, ["Avoids single-lane dependency", "Keeps all surfaces warm"], ["May not unblock the mission fast enough"], ["Parallel progress is enough"], ["Current work queue has multiple high priorities"]],
-  ["decision-option-defer-capacity-change", "decision-situation-product-page-capacity", "Defer capacity change until next measurement.", "Wait for a clearer metric movement before changing mission allocation.", "DEFER_DECISION", 44, 10, "LOW", 0.58, ["Avoids overreacting", "Protects current plan"], ["Mission risk can worsen"], ["Measurement will arrive soon"], ["Executive Brief needs live data"]]
+  ["decision-option-defer-capacity-change", "decision-situation-product-page-capacity", "Defer capacity change until next measurement.", "Wait for a clearer metric movement before changing mission allocation.", "DEFER_DECISION", 44, 10, "LOW", 0.58, ["Avoids overreacting", "Protects current plan"], ["Mission risk can worsen"], ["Measurement will arrive soon"], ["Executive Brief needs live data"]],
+  ["decision-option-finish-demo-immediately", "decision-situation-demo-priority", "Finish demo immediately", "Complete the full product-page-to-video demo before the next BOFU campaign.", "CREATE_DEMO", 92, 76, "MEDIUM", 0.86, ["Improves conversion trust", "Creates reusable Product Hunt and founder proof"], ["May delay content calendar"], ["Demo will improve conversion trust", "Product Hunt users represent early buyer interest"], ["claim-product-page-demos-trust", "claim-product-hunt-url-proof-demand", "Product Hunt feedback"]],
+  ["decision-option-delay-demo-bofu", "decision-situation-demo-priority", "Delay demo and publish more BOFU content first", "Keep publishing BOFU content while the full demo waits for more production capacity.", "CREATE_CONTENT", 68, 48, "HIGH", 0.58, ["Keeps content cadence moving"], ["Trust gap remains unresolved", "Product Hunt follow-up is weaker"], ["BOFU content can convert before proof is complete"], ["BLOG-005 outline supports the authority cluster"]],
+  ["decision-option-founder-walkthrough", "decision-situation-demo-priority", "Release partial demo as founder walkthrough", "Use founder voice to publish a partial product walkthrough while the complete demo is finished.", "CREATE_DEMO", 82, 44, "MEDIUM", 0.74, ["Fast proof artifact", "Founder-led format can create trust"], ["May reduce perceived product maturity"], ["Founder-led walkthrough can substitute for full product demo temporarily"], ["Founder post engagement learning", "Product Hunt comments ask for proof"]],
+  ["decision-option-continue-all-directories", "decision-situation-directory-strategy", "Continue all submissions", "Keep submitting to every planned directory while waiting for approvals.", "SUBMIT_DIRECTORY", 62, 64, "HIGH", 0.48, ["Maximizes coverage"], ["Consumes capacity on low-quality directories", "Approval lag may hide weak ROI"], ["Directories improve SEO authority"], []],
+  ["decision-option-pause-low-quality-directories", "decision-situation-directory-strategy", "Pause low-quality directories", "Stop generic directory submissions until authority and referral evidence improves.", "PAUSE_WORK", 74, 20, "LOW", 0.72, ["Protects capacity", "Reduces weak submissions"], ["May slow backlink volume"], ["Approval lag is temporary"], ["Directory approvals lag submissions"]],
+  ["decision-option-focus-ai-productivity-directories", "decision-situation-directory-strategy", "Focus only on AI/productivity directories", "Limit submissions to AI, video, and productivity directories with clearer audience fit.", "SUBMIT_DIRECTORY", 78, 42, "MEDIUM", 0.74, ["Better audience fit", "Higher-quality traffic potential"], ["Smaller submission pool"], ["Niche directories produce better qualified traffic"], ["claim-directory-submissions-slow", "Copy bank improved readiness"]]
 ] as const;
 
 const decisionOptions: DecisionOption[] = decisionOptionSeedRows.map(([id, situationId, title, description, optionType, expectedImpact, estimatedEffort, riskLevel, confidenceScore, pros, cons, assumptionsList, evidenceList], index) => ({
@@ -4180,7 +4196,9 @@ const deliberations: Deliberation[] = ([
   ["deliberation-founder-content", "decision-situation-founder-content", "VGOS compared increasing founder-led content, keeping company cadence, and running an experiment.", "decision-option-founder-increase", ["decision-option-company-cadence"], "VGOS recommends increasing founder-led proof narratives while protecting founder review capacity.", 0.81, "The dissenting view is that founder capacity may become the bottleneck.", "If founder review is unavailable this week, run the founder vs company experiment instead.", "COMPLETED"],
   ["deliberation-directory-pause", "decision-situation-directory-pause", "VGOS compared pausing broad submissions, narrowing to high-authority directories, and proof-first work.", "decision-option-proof-assets-first", ["decision-option-pause-directories"], "VGOS recommends improving proof assets before scaling more directory submissions.", 0.78, "The dissenting view is that pausing submissions may slow backlink coverage.", "If approvals improve or proof assets are already accepted by directories, resume submissions.", "COMPLETED"],
   ["deliberation-channel-priority", "decision-situation-channel-priority", "VGOS compared LinkedIn, Product Hunt, and Reddit priority.", "decision-option-product-hunt-priority", ["decision-option-linkedin-priority", "decision-option-reddit-priority"], "VGOS recommends Product Hunt follow-up first, then LinkedIn reuse once proof is visible.", 0.82, "The dissenting view is that LinkedIn has stronger measured engagement.", "If the demo link is not ready, prioritize LinkedIn founder content instead.", "COMPLETED"],
-  ["deliberation-product-page-capacity", "decision-situation-product-page-capacity", "VGOS compared extra demo capacity, balanced capacity, and deferral.", "decision-option-add-demo-capacity", ["decision-option-keep-balanced-capacity", "decision-option-defer-capacity-change"], "VGOS recommends moving more capacity to the product-page demo because it unlocks several downstream decisions.", 0.8, "The dissenting view is that balanced capacity protects channel momentum.", "If demo execution remains blocked after one focused work block, switch to a narrower experiment.", "DRAFT"]
+  ["deliberation-product-page-capacity", "decision-situation-product-page-capacity", "VGOS compared extra demo capacity, balanced capacity, and deferral.", "decision-option-add-demo-capacity", ["decision-option-keep-balanced-capacity", "decision-option-defer-capacity-change"], "VGOS recommends moving more capacity to the product-page demo because it unlocks several downstream decisions.", 0.8, "The dissenting view is that balanced capacity protects channel momentum.", "If demo execution remains blocked after one focused work block, switch to a narrower experiment.", "DRAFT"],
+  ["deliberation-demo-priority", "decision-situation-demo-priority", "VGOS compared finishing the demo immediately, delaying for more BOFU content, and releasing a partial founder walkthrough.", "decision-option-finish-demo-immediately", ["decision-option-delay-demo-bofu", "decision-option-founder-walkthrough"], "Finish product-page-to-video demo before next BOFU campaign.", 0.86, "The dissenting view is that a founder walkthrough could protect speed, but the full demo has stronger trust and reusable evidence.", "If the full demo blocks the content calendar beyond the next campaign window, publish the founder walkthrough as a fallback.", "READY_FOR_DECISION"],
+  ["deliberation-directory-strategy", "decision-situation-directory-strategy", "VGOS compared continuing all submissions, pausing low-quality directories, and focusing only on AI/productivity directories.", "decision-option-focus-ai-productivity-directories", ["decision-option-continue-all-directories"], "Pause low-confidence generic directories and focus on niche AI/video/productivity directories.", 0.68, "The dissenting view is that pausing generic directories may slow backlink volume, but the current ROI assumptions remain weak.", "If generic directories produce qualified referral traffic or faster approvals, reopen the broad submission path.", "UNDER_REVIEW"]
 ] as const).map(([id, situationId, summary, recommendedOptionId, rejectedOptionIds, finalJudgment, confidenceScore, dissentingView, whatWouldChangeDecision, status], index) => ({
   id,
   situationId,
@@ -4232,6 +4250,86 @@ const decisionReviews: DecisionReview[] = ([
   futureRule,
   ...scoped(index)
 }));
+
+const deliberationAssumptions: DeliberationAssumption[] = ([
+  ["deliberation-assumption-demo-trust", "deliberation-demo-priority", "Demo will improve conversion trust", "GROWTH", 0.84, ["claim-product-page-demos-trust", "claim-product-hunt-url-proof-demand"], "SUPPORTED"],
+  ["deliberation-assumption-product-hunt-buyers", "deliberation-demo-priority", "Product Hunt users represent early buyer interest", "CUSTOMER", 0.76, ["observation-product-hunt-comments", "metric-product-hunt-referrals"], "VALIDATED"],
+  ["deliberation-assumption-founder-walkthrough", "deliberation-demo-priority", "Founder-led walkthrough can substitute for full product demo temporarily", "PRODUCT", 0.62, ["learning-05"], "SUPPORTED"],
+  ["deliberation-assumption-directory-authority", "deliberation-directory-strategy", "Directories improve SEO authority", "GROWTH", 0.58, [], "UNTESTED"],
+  ["deliberation-assumption-approval-lag", "deliberation-directory-strategy", "Approval lag is temporary", "OPERATIONAL", 0.48, [], "CHALLENGED"],
+  ["deliberation-assumption-niche-qualified", "deliberation-directory-strategy", "Niche directories produce better qualified traffic", "MARKET", 0.66, ["claim-directory-submissions-slow"], "SUPPORTED"]
+] as const).map(([id, deliberationId, statement, assumptionType, confidenceScore, evidenceIds, status], index) => ({
+  id,
+  deliberationId,
+  statement,
+  assumptionType,
+  confidenceScore,
+  evidenceIds: [...evidenceIds],
+  status,
+  ...scoped(index)
+}));
+
+const deliberationTradeoffs: DeliberationTradeoff[] = ([
+  ["deliberation-tradeoff-demo-speed", "deliberation-demo-priority", "decision-option-finish-demo-immediately", "decision-option-founder-walkthrough", "Full demo maximizes trust while the founder walkthrough protects speed.", "Full demo creates reusable proof for Product Hunt replies, founder content, and BOFU pages.", "It consumes the next focused work block and may slow content cadence.", "Delay risk is bounded because mitigated founder-walkthrough fallback exists.", 0.62, 0.78],
+  ["deliberation-tradeoff-demo-content", "deliberation-demo-priority", "decision-option-finish-demo-immediately", "decision-option-delay-demo-bofu", "Demo-first trades content cadence for proof quality.", "The demo directly addresses trust objections before the next campaign.", "BOFU content may wait longer for publication.", "Content delay is reversible; weak proof in market is harder to repair.", 0.68, 0.8],
+  ["deliberation-tradeoff-directory-focus", "deliberation-directory-strategy", "decision-option-focus-ai-productivity-directories", "decision-option-continue-all-directories", "Niche focus trades submission volume for audience fit.", "AI/video/productivity directories should produce better qualified visits.", "Generic backlinks may arrive more slowly.", "The path is reversible if generic directories show ROI.", 0.74, 0.66]
+] as const).map(([id, deliberationId, optionA, optionB, comparisonSummary, benefit, cost, risk, reversibilityScore, confidenceScore], index) => ({
+  id,
+  deliberationId,
+  optionA,
+  optionB,
+  comparisonSummary,
+  benefit,
+  cost,
+  risk,
+  reversibilityScore,
+  confidenceScore,
+  ...scoped(index)
+}));
+
+const deliberationObjections: DeliberationObjection[] = ([
+  ["deliberation-objection-demo-calendar", "deliberation-demo-priority", "Growth", "RESOURCE", "Full demo may delay content calendar", "MEDIUM", ["plan-product-page-demo-sprint"], "MITIGATED", "Use the next focused work block for demo completion and keep a founder walkthrough fallback."],
+  ["deliberation-objection-partial-maturity", "deliberation-demo-priority", "Founder", "RISK", "Partial demo may reduce perceived product maturity", "HIGH", ["claim-product-page-demos-trust"], "MITIGATED", "Do not lead with the partial walkthrough unless the full demo misses the campaign window."],
+  ["deliberation-objection-directory-roi", "deliberation-directory-strategy", "VGOS", "EVIDENCE_GAP", "Generic directory ROI is not validated yet", "HIGH", [], "OPEN", null]
+] as const).map(([id, deliberationId, raisedBy, objectionType, statement, severity, evidenceIds, status, resolutionSummary], index) => ({
+  id,
+  deliberationId,
+  raisedBy,
+  objectionType,
+  statement,
+  severity,
+  evidenceIds: [...evidenceIds],
+  status,
+  resolutionSummary,
+  ...scoped(index)
+}));
+
+const decisionQualityScores: DecisionQualityScore[] = [
+  {
+    decisionId: "decision-situation-demo-priority",
+    evidenceQuality: 0.92,
+    assumptionClarity: 0.84,
+    optionCoverage: 1,
+    tradeoffClarity: 0.86,
+    riskVisibility: 0.82,
+    reversibilityScore: 0.65,
+    confidenceJustification: 0.88,
+    overallScore: 0.86,
+    warnings: []
+  },
+  {
+    decisionId: "decision-situation-directory-strategy",
+    evidenceQuality: 0.46,
+    assumptionClarity: 0.58,
+    optionCoverage: 1,
+    tradeoffClarity: 0.72,
+    riskVisibility: 0.76,
+    reversibilityScore: 0.74,
+    confidenceJustification: 0.52,
+    overallScore: 0.62,
+    warnings: ["One or more assumptions are untested.", "Objections remain unresolved."]
+  }
+];
 
 const auditLogs: AuditLog[] = [
   ["MISSION_CREATED", "Mission", "mission-product-page-to-video-proof", "Growth Lead"],
@@ -5478,6 +5576,10 @@ export const initialPlatformState: PlatformState = {
   deliberations,
   decisionCommitments,
   decisionReviews,
+  deliberationAssumptions,
+  deliberationTradeoffs,
+  deliberationObjections,
+  decisionQualityScores,
   connectors,
   rawSignals,
   normalizedSignals,

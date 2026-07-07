@@ -3,14 +3,40 @@ import type { ExecutionItem, PlatformState } from "@/lib/vgos-data";
 import { generateOptionsForSituation } from "@/kernel/deliberation/option-generator";
 import { evaluateOption } from "@/kernel/deliberation/option-evaluator";
 import { challengeOption, generateDissentingView as generateOptionDissentingView } from "@/kernel/deliberation/option-challenger";
+import {
+  addAssumption as addAssumptionRecord,
+  challengeAssumption as challengeAssumptionRecord,
+  validateAssumption as validateAssumptionRecord
+} from "@/kernel/deliberation/assumption-engine";
+import { addTradeoff as addTradeoffRecord } from "@/kernel/deliberation/tradeoff-engine";
+import { raiseObjection as raiseObjectionRecord, resolveObjection as resolveObjectionRecord } from "@/kernel/deliberation/objection-engine";
+import {
+  computeDecisionQuality as computeDecisionQualityRecord,
+  recommendReadinessFromScore,
+  scoreDecisionQuality
+} from "@/kernel/deliberation/decision-quality";
+import { summarizeDeliberation as summarizeDeliberationRecord } from "@/kernel/deliberation/deliberation-summary";
 import type {
+  Assumption,
+  AssumptionType,
+  ConvertedDecision,
   DecisionCommitment,
   DecisionOption,
+  DecisionOptionType,
+  DecisionQualityInput,
+  DecisionQualityScore,
+  DecisionReadinessRecommendation,
   DecisionSituation,
   Deliberation,
   DeliberationResult,
+  DeliberationStatus,
+  InstructionResult,
+  Objection,
+  ObjectionStatus,
+  ObjectionType,
   OptionEvaluation
 } from "@/kernel/deliberation/deliberation-types";
+import type { Priority } from "@/lib/vgos-data";
 
 function nowIso() {
   return new Date().toISOString();
@@ -138,5 +164,195 @@ export function convertCommitmentToExecutionItem(commitment: DecisionCommitment,
     sourceId: commitment.id,
     expectedImpact: option.description,
     notes: `Created from deliberation commitment ${commitment.id}.`
+  };
+}
+
+export function createDeliberation(input: {
+  workspaceId: string;
+  title: string;
+  description: string;
+  sourceType?: string | null;
+  sourceId?: string | null;
+  participants?: string[];
+  decisionId?: string | null;
+  situationId?: string;
+  organizationId?: string;
+  status?: DeliberationStatus;
+  now?: string;
+}): InstructionResult<Deliberation> {
+  if (!input.workspaceId) return { success: false, error: "workspaceId is required." };
+  if (!input.title.trim()) return { success: false, error: "Deliberation title is required." };
+
+  const date = input.now ?? nowIso();
+  const deliberation: Deliberation = {
+    id: createScopedId("deliberation"),
+    organizationId: input.organizationId ?? orgId,
+    workspaceId: input.workspaceId,
+    situationId: input.situationId ?? input.decisionId ?? input.sourceId ?? createScopedId("decision-situation"),
+    title: input.title,
+    description: input.description,
+    sourceType: input.sourceType ?? null,
+    sourceId: input.sourceId ?? null,
+    participants: input.participants ?? ["VGOS"],
+    decisionId: input.decisionId ?? null,
+    summary: input.description,
+    recommendedOptionId: null,
+    rejectedOptionIds: [],
+    finalJudgment: "",
+    confidenceScore: 0.5,
+    dissentingView: "No dissenting view has been recorded yet.",
+    whatWouldChangeDecision: "Evidence that changes the main assumptions.",
+    status: input.status ?? "OPEN",
+    createdAt: date,
+    updatedAt: date
+  };
+
+  return { success: true, data: deliberation };
+}
+
+export function addDecisionOption(input: {
+  deliberation: Deliberation;
+  title: string;
+  description: string;
+  expectedUpside?: string;
+  expectedDownside?: string;
+  requiredResources?: string[];
+  constraints?: string[];
+  confidenceScore?: number;
+  evidenceIds?: string[];
+  optionType?: DecisionOptionType;
+  expectedImpact?: number;
+  estimatedEffort?: number;
+  riskLevel?: Priority;
+  pros?: string[];
+  cons?: string[];
+  assumptions?: string[];
+  now?: string;
+}): InstructionResult<DecisionOption> {
+  if (!input.title.trim()) return { success: false, error: "Decision option title is required." };
+  const date = input.now ?? nowIso();
+  const option: DecisionOption = {
+    id: createScopedId("decision-option"),
+    organizationId: input.deliberation.organizationId,
+    workspaceId: input.deliberation.workspaceId,
+    situationId: input.deliberation.situationId,
+    deliberationId: input.deliberation.id,
+    title: input.title,
+    description: input.description,
+    optionType: input.optionType ?? "CUSTOM",
+    expectedImpact: input.expectedImpact ?? 70,
+    estimatedEffort: input.estimatedEffort ?? Math.min(90, 24 + (input.requiredResources?.length ?? 1) * 12),
+    riskLevel: input.riskLevel ?? "MEDIUM",
+    confidenceScore: Math.max(0, Math.min(1, input.confidenceScore ?? 0.62)),
+    pros: input.pros ?? [input.expectedUpside ?? "Expected upside has not been detailed."],
+    cons: input.cons ?? [input.expectedDownside ?? "Expected downside has not been detailed."],
+    assumptions: input.assumptions ?? [],
+    evidence: input.evidenceIds ?? [],
+    expectedUpside: input.expectedUpside,
+    expectedDownside: input.expectedDownside,
+    requiredResources: input.requiredResources ?? [],
+    constraints: input.constraints ?? [],
+    evidenceIds: input.evidenceIds ?? [],
+    createdAt: date,
+    updatedAt: date
+  };
+
+  return {
+    success: true,
+    data: option,
+    warnings: option.evidenceIds?.length ? undefined : ["Decision option has no linked evidence."]
+  };
+}
+
+export function addAssumption(input: {
+  workspaceId: string;
+  deliberationId: string;
+  statement: string;
+  assumptionType?: AssumptionType;
+  confidenceScore?: number;
+  evidenceIds?: string[];
+  organizationId?: string;
+}): InstructionResult<Assumption> {
+  return addAssumptionRecord(input);
+}
+
+export function challengeAssumption(assumption: Assumption, evidenceIds: string[] = assumption.evidenceIds): InstructionResult<Assumption> {
+  return challengeAssumptionRecord(assumption, evidenceIds);
+}
+
+export function validateAssumption(assumption: Assumption, evidenceIds: string[] = assumption.evidenceIds): InstructionResult<Assumption> {
+  return validateAssumptionRecord(assumption, evidenceIds);
+}
+
+export function addTradeoff(input: Parameters<typeof addTradeoffRecord>[0]) {
+  return addTradeoffRecord(input);
+}
+
+export function raiseObjection(input: {
+  workspaceId: string;
+  deliberationId: string;
+  raisedBy: string;
+  statement: string;
+  objectionType?: ObjectionType;
+  severity?: Priority;
+  evidenceIds?: string[];
+  organizationId?: string;
+}): InstructionResult<Objection> {
+  return raiseObjectionRecord(input);
+}
+
+export function resolveObjection(
+  objection: Objection,
+  status: Exclude<ObjectionStatus, "OPEN">,
+  resolutionSummary: string
+): InstructionResult<Objection> {
+  return resolveObjectionRecord(objection, status, resolutionSummary);
+}
+
+export function computeDecisionQuality(input: DecisionQualityInput): InstructionResult<DecisionQualityScore> {
+  return computeDecisionQualityRecord(input);
+}
+
+export function summarizeDeliberation(input: Parameters<typeof summarizeDeliberationRecord>[0]) {
+  return summarizeDeliberationRecord(input);
+}
+
+export function recommendDecisionReadiness(input: DecisionQualityInput | DecisionQualityScore): InstructionResult<DecisionReadinessRecommendation> {
+  const score = "overallScore" in input ? input : scoreDecisionQuality(input);
+  return {
+    success: true,
+    data: recommendReadinessFromScore(score),
+    warnings: score.warnings
+  };
+}
+
+export function convertDeliberationToDecision(input: {
+  deliberation: Deliberation;
+  qualityScore?: DecisionQualityScore;
+  title?: string;
+  rationale?: string;
+  now?: string;
+}): InstructionResult<ConvertedDecision> {
+  const rationale = input.rationale ?? input.deliberation.finalJudgment ?? input.deliberation.summary;
+  if (!rationale.trim()) return { success: false, error: "Decision rationale is required." };
+  const date = input.now ?? nowIso();
+  const decision: ConvertedDecision = {
+    id: input.deliberation.decisionId ?? createScopedId("decision"),
+    organizationId: input.deliberation.organizationId,
+    workspaceId: input.deliberation.workspaceId,
+    deliberationId: input.deliberation.id,
+    title: input.title ?? input.deliberation.title ?? input.deliberation.summary,
+    rationale,
+    recommendedOptionId: input.deliberation.recommendedOptionId,
+    confidenceScore: input.deliberation.confidenceScore,
+    qualityScore: input.qualityScore,
+    createdAt: date,
+    updatedAt: date
+  };
+
+  return {
+    success: true,
+    data: decision,
+    warnings: input.qualityScore?.warnings
   };
 }

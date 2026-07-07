@@ -1,0 +1,41 @@
+id: deliberation-decision-quality
+name: Deliberation & Decision Quality
+version: 1.1.0
+owner: organizational-vm-kernel
+status: alpha
+
+depends_on:
+  - organizational-vm-kernel
+  - executive-intelligence-experience
+  - measurement-learning-engine
+
+produces:
+  - deliberations
+  - decision-options
+  - assumptions
+  - tradeoffs
+  - objections
+  - decision-quality-scores
+  - decision-readiness-recommendations
+
+consumes:
+  - observations
+  - claims
+  - evidence
+  - decisions
+  - commitments
+  - outcomes
+  - reflections
+  - organizational-state
+
+publicApi:
+  - createDeliberation
+  - addDecisionOption
+  - addAssumption
+  - challengeAssumption
+  - addTradeoff
+  - raiseObjection
+  - computeDecisionQuality
+  - summarizeDeliberation
+  - recommendDecisionReadiness
+  - convertDeliberationToDecision

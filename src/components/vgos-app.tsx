@@ -175,6 +175,7 @@ import {
   getOpenSituations
 } from "@/kernel/deliberation/decision-situation-engine";
 import { deliberate } from "@/kernel/deliberation/deliberation-engine";
+import { buildDecisionQualityBrief } from "@/kernel/deliberation/deliberation-summary";
 import { challengeOption } from "@/kernel/deliberation/option-challenger";
 import type {
   DecisionOption,
@@ -680,7 +681,7 @@ const decisionOptionTypeOptions = [
   "DO_NOTHING",
   "CUSTOM"
 ];
-const deliberationStatusOptions = ["DRAFT", "COMPLETED", "DEFERRED", "NEEDS_EVIDENCE"];
+const deliberationStatusOptions = ["OPEN", "UNDER_REVIEW", "READY_FOR_DECISION", "DECIDED", "REOPENED", "ARCHIVED", "DRAFT", "COMPLETED", "DEFERRED", "NEEDS_EVIDENCE"];
 const decisionCommitmentTypeOptions = ["EXECUTE_NOW", "SCHEDULE", "EXPERIMENT", "MONITOR", "DEFER", "REJECT"];
 const decisionCommitmentStatusOptions = ["COMMITTED", "IN_PROGRESS", "COMPLETED", "CANCELLED"];
 const decisionQualityOptions = ["STRONG", "SOUND", "MIXED", "WEAK"];
@@ -3233,6 +3234,7 @@ function ExecutiveBriefPage({
     [state, activeWorkspaceId, userName]
   );
   const context = useMemo(() => buildAdvisorContext(state, activeWorkspaceId), [state, activeWorkspaceId]);
+  const decisionQuality = useMemo(() => buildDecisionQualityBrief(state, activeWorkspaceId), [state, activeWorkspaceId]);
   const judgment = brief.executiveJudgment;
   const decisionNeeded = useMemo(() => {
     const situation = getOpenSituations(state, activeWorkspaceId)[0];
@@ -3402,6 +3404,41 @@ function ExecutiveBriefPage({
               </CardContent>
             </Card>
           ) : null}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Decision Quality</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">{decisionQuality.summary}</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <FocusRow label="Under deliberation" value={String(decisionQuality.underDeliberation.length)} />
+                <FocusRow label="Ready" value={String(decisionQuality.readyForCommitment.length)} />
+                <FocusRow label="Weak evidence" value={String(decisionQuality.weakEvidence.length)} />
+                <FocusRow label="Open objections" value={String(decisionQuality.unresolvedObjections.length)} />
+              </div>
+              <InlineList
+                title="Ready for commitment"
+                items={decisionQuality.readyForCommitment.length ? decisionQuality.readyForCommitment.slice(0, 3).map((item) => `${item.title} (${Math.round(item.qualityScore.overallScore * 100)}%)`) : ["No decision is ready for commitment yet."]}
+              />
+              <InlineList
+                title="Weak evidence"
+                items={decisionQuality.weakEvidence.length ? decisionQuality.weakEvidence.slice(0, 3).map((item) => `${item.title}: ${item.qualityScore.warnings[0] ?? "evidence quality is weak"}`) : ["No weak evidence decision flagged."]}
+              />
+              <InlineList
+                title="Unresolved objections"
+                items={decisionQuality.unresolvedObjections.length ? decisionQuality.unresolvedObjections.slice(0, 3).map((item) => item.statement) : ["No unresolved objections."]}
+              />
+              <InlineList
+                title="High-risk assumptions"
+                items={decisionQuality.highRiskAssumptions.length ? decisionQuality.highRiskAssumptions.slice(0, 3).map((item) => item.statement) : ["No high-risk assumptions need attention."]}
+              />
+              <FocusRow
+                label="Highest-quality recent decision"
+                value={decisionQuality.highestQualityRecentDecision ? `${decisionQuality.highestQualityRecentDecision.title} (${Math.round(decisionQuality.highestQualityRecentDecision.qualityScore.overallScore * 100)}%)` : "No scored decision yet"}
+              />
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
@@ -3771,6 +3808,7 @@ function WorkQueuePage({
   const generatedCapacitySituation = createSituationFromWorkQueueConflict(conflictingWork);
   const capacitySituation = storedCapacitySituation ?? generatedCapacitySituation;
   const capacityDecision = capacitySituation ? deliberate(capacitySituation, state) : null;
+  const decisionQuality = useMemo(() => buildDecisionQualityBrief(state, activeWorkspaceId), [state, activeWorkspaceId]);
 
   return (
     <div className="space-y-4">
@@ -3825,6 +3863,40 @@ function WorkQueuePage({
           </CardContent>
         </Card>
       ) : null}
+
+      <Card>
+        <CardHeader className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <CardTitle>Decision Quality Tasks</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">Work that improves judgment before VGOS turns decisions into commitments.</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => onNavigate("decisions")}>
+            <ArrowRight className="h-4 w-4" />
+            Decisions
+          </Button>
+        </CardHeader>
+        <CardContent className="grid gap-3 lg:grid-cols-3">
+          {decisionQuality.tasks.slice(0, 6).map((task) => (
+            <div key={task.id} className="rounded-md border border-border bg-background p-3">
+              <div className="flex flex-wrap gap-2">
+                <Badge tone={priorityTone(task.severity)}>{formatEnum(task.severity)}</Badge>
+                <Badge tone="blue">{formatEnum(task.taskType)}</Badge>
+              </div>
+              <p className="mt-2 text-sm font-semibold">{task.title}</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{task.reason}</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => onNavigate("decisions")}>
+                <ArrowRight className="h-4 w-4" />
+                Review
+              </Button>
+            </div>
+          ))}
+          {decisionQuality.tasks.length === 0 ? (
+            <div className="flex min-h-32 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground lg:col-span-3">
+              No decision-quality tasks are open.
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <section className="grid gap-4 xl:grid-cols-2">
         <WorkQueueSection
