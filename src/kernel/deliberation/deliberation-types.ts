@@ -1,3 +1,4 @@
+import type { CommitmentMonitoringPlan } from "@/kernel/commitments/commitment-types";
 import type { Priority } from "@/lib/vgos-data";
 
 export type DecisionSituationType =
@@ -248,6 +249,11 @@ export type ConvertedDecision = DeliberationRecord & {
   recommendedOptionId?: string | null;
   confidenceScore: number;
   qualityScore?: DecisionQualityScore;
+  assumptions?: string[];
+  unresolvedObjections?: string[];
+  tradeoffs?: string[];
+  evidenceIds?: string[];
+  recommendedMonitoringPlan?: CommitmentMonitoringPlan;
 };
 
 export type DecisionCommitment = DeliberationRecord & {
@@ -256,6 +262,17 @@ export type DecisionCommitment = DeliberationRecord & {
   optionId: string;
   title: string;
   description: string;
+  rationale?: string;
+  evidenceIds?: string[];
+  successCriteria?: string[];
+  requiredResources?: string[];
+  dependencies?: string[];
+  expectedOutcome?: string;
+  decisionQualityScore?: DecisionQualityScore;
+  assumptions?: string[];
+  unresolvedObjections?: string[];
+  tradeoffs?: string[];
+  monitoringPlan?: CommitmentMonitoringPlan;
   commitmentType: DecisionCommitmentType;
   status: DecisionCommitmentStatus;
   owner: string;

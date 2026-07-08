@@ -1,0 +1,47 @@
+id: commitment-risk-execution-integrity
+name: Commitment Risk & Execution Integrity
+version: 1.2.0
+owner: organizational-vm-kernel
+status: alpha
+
+depends_on:
+  - organizational-vm-kernel
+  - deliberation-decision-quality
+  - planning-engine
+  - execution-engine
+  - measurement-learning-engine
+  - executive-intelligence-experience
+
+produces:
+  - commitment-risk-profiles
+  - execution-readiness-scores
+  - commitment-integrity-scores
+  - commitment-drift-signals
+  - commitment-escalations
+  - commitment-monitoring-plans
+  - commitment-risk-summaries
+
+consumes:
+  - commitments
+  - decisions
+  - deliberations
+  - evidence
+  - assumptions
+  - objections
+  - missions
+  - plans
+  - executions
+  - outcomes
+  - reflections
+  - organizational-state
+
+publicApi:
+  - evaluateCommitmentRisk
+  - computeExecutionReadiness
+  - computeCommitmentIntegrity
+  - detectCommitmentDrift
+  - createCommitmentMonitoringPlan
+  - recommendCommitmentAction
+  - createCommitmentEscalation
+  - summarizeCommitmentIntegrity
+  - explainCommitmentRisk

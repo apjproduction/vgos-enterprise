@@ -14,6 +14,7 @@ import { getOpenSituations } from "@/kernel/deliberation/decision-situation-engi
 import { deliberate } from "@/kernel/deliberation/deliberation-engine";
 import { buildDecisionQualityBrief } from "@/kernel/deliberation/deliberation-summary";
 import { qualityLabel } from "@/kernel/deliberation/decision-quality";
+import { buildCommitmentIntegrityBrief, explainCommitmentRisk } from "@/kernel/commitments/commitment-summary";
 import type { PlatformState } from "@/lib/vgos-data";
 
 export { buildAdvisorContext } from "@/kernel/advisor/advisor-context";
@@ -660,6 +661,74 @@ function answerDecisionQualityQuestion(context: AdvisorContext, question: string
   };
 }
 
+function answerCommitmentRiskQuestion(context: AdvisorContext, question: string): AdvisorAnswer {
+  const lower = question.toLowerCase();
+  const brief = buildCommitmentIntegrityBrief(context.state, context.workspaceId);
+  const target =
+    /lack.*owner|no owner|owners?/.test(lower)
+      ? brief.needsOwnerClarification[0] ?? brief.highestRiskCommitment
+      : /drift|drifting/.test(lower)
+        ? brief.atRiskOfDrift[0] ?? brief.highestRiskCommitment
+        : /escalat/.test(lower)
+          ? brief.needsEscalation[0] ?? brief.highestRiskCommitment
+          : /review today|should i review/.test(lower)
+            ? brief.highestRiskCommitment
+            : /continue|pause|abandon|replan/.test(lower)
+              ? brief.highestRiskCommitment
+              : brief.highestRiskCommitment;
+
+  if (!target) {
+    return {
+      question,
+      answer: "No active commitment risk is visible yet.",
+      reasoning: ["VGOS did not find active decision commitments in this workspace."],
+      evidence: ["No commitment evidence is available."],
+      assumptions: ["No commitment assumptions are attached."],
+      counterEvidence: ["No drift signal is visible."],
+      tradeoff: "No commitment tradeoff is attached.",
+      confidence: 0.55,
+      suggestedNextAction: "Create or link a commitment before execution.",
+      relatedObjects: [],
+      suggestedActions: [{ label: "Open Decisions", description: "Review decision commitments.", pageId: "decisions" }]
+    };
+  }
+
+  const sourceDecision = context.state.deliberations.find((item) => item.id === context.state.decisionCommitments.find((commitment) => commitment.id === target.commitmentId)?.deliberationId);
+  const actionAnswer = /continue|pause|abandon|replan/.test(lower)
+    ? `VGOS recommends ${target.recommendedAction.toLowerCase()} for ${target.title}. ${target.nextStep}`
+    : /which decision created/.test(lower)
+      ? `${target.title} came from ${sourceDecision?.finalJudgment ?? sourceDecision?.summary ?? "a linked decision commitment record without a stored final judgment."}`
+      : /evidence/.test(lower)
+        ? `${target.title} is supported by ${target.evidence.length ? target.evidence.join(", ") : "no linked evidence yet"}.`
+        : `${explainCommitmentRisk(target)} Owner: ${target.owner}.`;
+
+  return {
+    question,
+    answer: actionAnswer,
+    reasoning: [
+      `Risk level: ${target.riskProfile.riskLevel}. Risk score: ${Math.round(target.riskProfile.riskScore * 100)}%.`,
+      target.riskProfile.warnings[0] ?? "No major risk warning is visible.",
+      `Integrity score: ${Math.round(target.integrity.overallScore * 100)}%. Readiness score: ${Math.round(target.readiness.readinessScore * 100)}%.`
+    ],
+    assumptions: context.state.decisionCommitments.find((commitment) => commitment.id === target.commitmentId)?.assumptions ?? ["No explicit commitment assumptions are attached."],
+    evidence: target.evidence.length ? target.evidence : [target.rationale || "No evidence or rationale is attached."],
+    counterEvidence: target.driftSignals.length ? target.driftSignals.map((signal) => signal.description) : ["No drift signal is visible."],
+    tradeoff: context.state.decisionCommitments.find((commitment) => commitment.id === target.commitmentId)?.tradeoffs?.[0] ?? "No explicit commitment tradeoff is attached.",
+    confidence: Math.max(0.5, 1 - target.riskProfile.riskScore * 0.45),
+    confidenceExplanation: `Commitment risk combines ownership, resources, dependencies, evidence, deadline, drift, and execution readiness.`,
+    suggestedNextAction: target.nextStep,
+    shouldWaitForEvidence: target.riskProfile.recommendedAction === "ADD_EVIDENCE" || target.riskProfile.evidenceRisk >= 0.7,
+    relatedObjects: [
+      { type: "DecisionCommitment", id: target.commitmentId, title: target.title, detail: target.riskProfile.riskLevel },
+      ...(sourceDecision ? [{ type: "Deliberation", id: sourceDecision.id, title: sourceDecision.summary, detail: sourceDecision.status }] : [])
+    ],
+    suggestedActions: [
+      { label: "Open Work Queue", description: "Handle the generated commitment-integrity task.", pageId: "workQueue" },
+      { label: "Open Decisions", description: "Review the originating decision and commitment.", pageId: "decisions" }
+    ]
+  };
+}
+
 export function answerExecutiveQuestion(
   question: string,
   state: PlatformState,
@@ -668,6 +737,7 @@ export function answerExecutiveQuestion(
   const context = buildAdvisorContext(state, workspaceId);
   const lower = question.toLowerCase();
 
+  if (/commitments?.*(risk|review|owner|drift|drifting|escalat|decision|evidence|continue|pause|abandon|replan)|which commitments?|why.*commitment.*risky|commitment.*risky|which decision created this commitment|what evidence supports this commitment/.test(lower)) return answerCommitmentRiskQuestion(context, question);
   if (/decision.*quality|decisions?.*better evidence|weakest assumptions?|assumptions?.*weakest|ready.*commitment|commitment.*ready|unresolved objections?|objections?.*unresolved|trade-?off.*ignoring|ignoring.*trade-?off|low-confidence|low confidence|quality score|improve.*decision.*quality/.test(lower)) return answerDecisionQualityQuestion(context, question);
   if (/align.*belief|belief.*support|evidence.*before deciding|before deciding|decision.*safe|more evidence|validate.*recommendation|validate.*decision/.test(lower)) return addReflectiveCognition(answerDecisionValidationQuestion(context, question), state, workspaceId);
   if (/what changed.*belief|changed our belief|belief.*changed|challenged recently|recently challenged/.test(lower)) return addReflectiveCognition(answerBeliefChangeQuestion(context, question), state, workspaceId);

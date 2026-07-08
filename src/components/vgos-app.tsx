@@ -177,6 +177,7 @@ import {
 import { deliberate } from "@/kernel/deliberation/deliberation-engine";
 import { buildDecisionQualityBrief } from "@/kernel/deliberation/deliberation-summary";
 import { challengeOption } from "@/kernel/deliberation/option-challenger";
+import { buildCommitmentIntegrityBrief } from "@/kernel/commitments/commitment-summary";
 import type {
   DecisionOption,
   DeliberationResult
@@ -3235,6 +3236,7 @@ function ExecutiveBriefPage({
   );
   const context = useMemo(() => buildAdvisorContext(state, activeWorkspaceId), [state, activeWorkspaceId]);
   const decisionQuality = useMemo(() => buildDecisionQualityBrief(state, activeWorkspaceId), [state, activeWorkspaceId]);
+  const commitmentIntegrity = useMemo(() => buildCommitmentIntegrityBrief(state, activeWorkspaceId), [state, activeWorkspaceId]);
   const judgment = brief.executiveJudgment;
   const decisionNeeded = useMemo(() => {
     const situation = getOpenSituations(state, activeWorkspaceId)[0];
@@ -3436,6 +3438,36 @@ function ExecutiveBriefPage({
               <FocusRow
                 label="Highest-quality recent decision"
                 value={decisionQuality.highestQualityRecentDecision ? `${decisionQuality.highestQualityRecentDecision.title} (${Math.round(decisionQuality.highestQualityRecentDecision.qualityScore.overallScore * 100)}%)` : "No scored decision yet"}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Commitment Integrity</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">{commitmentIntegrity.summary}</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <FocusRow
+                  label="Highest risk"
+                  value={commitmentIntegrity.highestRiskCommitment ? `${commitmentIntegrity.highestRiskCommitment.title} (${formatEnum(commitmentIntegrity.highestRiskCommitment.riskProfile.riskLevel)})` : "No active risk"}
+                />
+                <FocusRow label="Needs owner" value={String(commitmentIntegrity.needsOwnerClarification.length)} />
+                <FocusRow label="Drift risk" value={String(commitmentIntegrity.atRiskOfDrift.length)} />
+                <FocusRow label="Ready" value={String(commitmentIntegrity.readyForExecution.length)} />
+              </div>
+              <InlineList
+                title="Needs escalation"
+                items={commitmentIntegrity.needsEscalation.length ? commitmentIntegrity.needsEscalation.slice(0, 3).map((item) => `${item.title}: ${item.nextStep}`) : ["No commitment needs escalation."]}
+              />
+              <InlineList
+                title="At risk of drift"
+                items={commitmentIntegrity.atRiskOfDrift.length ? commitmentIntegrity.atRiskOfDrift.slice(0, 3).map((item) => `${item.title}: ${item.driftSignals[0]?.description ?? "Drift signal detected."}`) : ["No drift signal is active."]}
+              />
+              <InlineList
+                title="Ready for execution"
+                items={commitmentIntegrity.readyForExecution.length ? commitmentIntegrity.readyForExecution.slice(0, 3).map((item) => `${item.title} (${Math.round(item.integrity.overallScore * 100)}% integrity)`) : ["No low-risk ready commitment is visible."]}
               />
             </CardContent>
           </Card>
@@ -3809,6 +3841,7 @@ function WorkQueuePage({
   const capacitySituation = storedCapacitySituation ?? generatedCapacitySituation;
   const capacityDecision = capacitySituation ? deliberate(capacitySituation, state) : null;
   const decisionQuality = useMemo(() => buildDecisionQualityBrief(state, activeWorkspaceId), [state, activeWorkspaceId]);
+  const commitmentIntegrity = useMemo(() => buildCommitmentIntegrityBrief(state, activeWorkspaceId), [state, activeWorkspaceId]);
 
   return (
     <div className="space-y-4">
@@ -3893,6 +3926,40 @@ function WorkQueuePage({
           {decisionQuality.tasks.length === 0 ? (
             <div className="flex min-h-32 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground lg:col-span-3">
               No decision-quality tasks are open.
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <CardTitle>Commitment Integrity Tasks</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">Work that protects commitments from weak ownership, drift, blockers, and unmeasured outcomes.</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => onNavigate("decisions")}>
+            <ArrowRight className="h-4 w-4" />
+            Commitments
+          </Button>
+        </CardHeader>
+        <CardContent className="grid gap-3 lg:grid-cols-3">
+          {commitmentIntegrity.tasks.slice(0, 6).map((task) => (
+            <div key={task.id} className="rounded-md border border-border bg-background p-3">
+              <div className="flex flex-wrap gap-2">
+                <Badge tone={priorityTone(task.severity)}>{formatEnum(task.severity)}</Badge>
+                <Badge tone="blue">{formatEnum(task.taskType)}</Badge>
+              </div>
+              <p className="mt-2 text-sm font-semibold">{task.title}</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{task.reason}</p>
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => onNavigate("decisions")}>
+                <ArrowRight className="h-4 w-4" />
+                Review
+              </Button>
+            </div>
+          ))}
+          {commitmentIntegrity.tasks.length === 0 ? (
+            <div className="flex min-h-32 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground lg:col-span-3">
+              No commitment-integrity tasks are open.
             </div>
           ) : null}
         </CardContent>

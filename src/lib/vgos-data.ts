@@ -60,6 +60,14 @@ import type {
   DecisionQualityScore,
   OptionEvaluation
 } from "@/kernel/deliberation/deliberation-types";
+import type {
+  CommitmentDriftSignal,
+  CommitmentEscalation,
+  CommitmentIntegrityScore,
+  CommitmentMonitoringPlan,
+  CommitmentRiskProfile,
+  ExecutionReadiness
+} from "@/kernel/commitments/commitment-types";
 export type Status =
   | "NOT_STARTED"
   | "RESEARCHING"
@@ -1501,6 +1509,12 @@ export type PlatformState = {
   deliberationTradeoffs: DeliberationTradeoff[];
   deliberationObjections: DeliberationObjection[];
   decisionQualityScores: DecisionQualityScore[];
+  commitmentRiskProfiles: CommitmentRiskProfile[];
+  executionReadinessScores: ExecutionReadiness[];
+  commitmentIntegrityScores: CommitmentIntegrityScore[];
+  commitmentDriftSignals: CommitmentDriftSignal[];
+  commitmentEscalations: CommitmentEscalation[];
+  commitmentMonitoringPlans: CommitmentMonitoringPlan[];
   connectors: Connector[];
   rawSignals: RawSignal[];
   normalizedSignals: NormalizedSignal[];
@@ -4213,12 +4227,101 @@ const deliberations: Deliberation[] = ([
   ...scoped(index)
 }));
 
+function commitmentMetadata(id: string): Partial<DecisionCommitment> {
+  if (id === "decision-commitment-product-demo-integrity") {
+    return {
+      rationale: "Strong Product Hunt feedback and proof-first BOFU strategy support finishing the product-page-to-video demo before the next campaign.",
+      evidenceIds: ["claim-product-page-demos-trust", "claim-product-hunt-url-proof-demand", "observation-product-hunt-comments"],
+      successCriteria: ["Demo shows source product page, generated scenes, and final video output", "Demo can be reused in Product Hunt replies and BOFU content"],
+      requiredResources: ["Founder/Product review", "Demo production block"],
+      dependencies: ["Product page source example", "Final review"],
+      expectedOutcome: "Reusable proof asset that improves conversion trust and reply quality.",
+      decisionQualityScore: {
+        decisionId: "decision-situation-demo-priority",
+        evidenceQuality: 0.92,
+        assumptionClarity: 0.84,
+        optionCoverage: 1,
+        tradeoffClarity: 0.86,
+        riskVisibility: 0.82,
+        reversibilityScore: 0.65,
+        confidenceJustification: 0.88,
+        overallScore: 0.86,
+        warnings: []
+      },
+      assumptions: [
+        "Demo will improve conversion trust",
+        "Product Hunt users represent early buyer interest",
+        "Founder-led walkthrough can substitute for full product demo temporarily"
+      ],
+      unresolvedObjections: [],
+      tradeoffs: [
+        "Full demo maximizes trust while the founder walkthrough protects speed.",
+        "Demo-first trades content cadence for proof quality."
+      ]
+    };
+  }
+  if (id === "decision-commitment-generic-directory-continue") {
+    return {
+      rationale: "This is intentionally weak legacy commitment data: generic directory work is still moving despite the newer niche directory strategy.",
+      evidenceIds: [],
+      successCriteria: [],
+      requiredResources: ["Directory submission capacity"],
+      dependencies: ["Directory approvals"],
+      expectedOutcome: "Unclear ROI from generic directory submissions.",
+      decisionQualityScore: {
+        decisionId: "decision-situation-directory-strategy",
+        evidenceQuality: 0.46,
+        assumptionClarity: 0.58,
+        optionCoverage: 1,
+        tradeoffClarity: 0.72,
+        riskVisibility: 0.76,
+        reversibilityScore: 0.74,
+        confidenceJustification: 0.52,
+        overallScore: 0.62,
+        warnings: ["One or more assumptions are untested.", "Objections remain unresolved."]
+      },
+      assumptions: [
+        "Directories improve SEO authority",
+        "Approval lag is temporary",
+        "Niche directories produce better qualified traffic"
+      ],
+      unresolvedObjections: ["Generic directory ROI is not validated yet"],
+      tradeoffs: ["Niche focus trades submission volume for audience fit."]
+    };
+  }
+  if (id === "decision-commitment-purpose-specific-faq") {
+    return {
+      rationale: "Purpose-Specific AI FAQ supports SEO/AEO positioning and the differentiated VidMaker category story.",
+      evidenceIds: ["claim-purpose-specific-ai-differentiates", "belief-category-content-aeo-geo"],
+      successCriteria: ["FAQ answers Purpose-Specific AI intent", "FAQ links back to proof-led product pages"],
+      requiredResources: ["Content owner", "SEO review"],
+      dependencies: ["FAQ draft"],
+      expectedOutcome: "Clear answer-engine coverage for Purpose-Specific AI positioning."
+    };
+  }
+  if (id === "decision-commitment-founder-authority-content") {
+    return {
+      rationale: "Founder-led authority content is supported by engagement evidence and founder trust claims.",
+      evidenceIds: ["claim-founder-content-trust", "learning-05"],
+      successCriteria: ["One founder proof narrative reviewed and published", "Engagement quality captured after publication"],
+      requiredResources: ["Founder review", "Content production"],
+      dependencies: ["Proof angle", "Founder availability"],
+      expectedOutcome: "Founder-led authority strengthens trust and category ownership."
+    };
+  }
+  return {};
+}
+
 const decisionCommitments: DecisionCommitment[] = ([
   ["decision-commitment-demo-first", "decision-situation-blog-005-demo", "deliberation-blog-005-demo", "decision-option-demo-first", "Finish the product-page demo before BLOG-005", "Commit capacity to demo proof, then publish BLOG-005 with source-to-output evidence.", "EXECUTE_NOW", "IN_PROGRESS", "Growth", 2, "execution-product-page-demo", "plan-item-10"],
   ["decision-commitment-founder-content", "decision-situation-founder-content", "deliberation-founder-content", "decision-option-founder-increase", "Reserve founder review for proof narrative", "Use founder review capacity for one proof-led narrative this week.", "SCHEDULE", "COMMITTED", "Tom Promise", 3, "execution-founder-vpi-post", "plan-item-02"],
   ["decision-commitment-proof-assets", "decision-situation-directory-pause", "deliberation-directory-pause", "decision-option-proof-assets-first", "Improve proof assets before directory scale", "Shift authority sequencing toward proof asset readiness before broad submissions.", "EXECUTE_NOW", "COMMITTED", "Growth", 4, "execution-4k-proof-asset", "plan-item-10"],
   ["decision-commitment-product-hunt", "decision-situation-channel-priority", "deliberation-channel-priority", "decision-option-product-hunt-priority", "Reply to Product Hunt with proof", "Use the best demo proof in Product Hunt follow-up before launch attention decays.", "EXECUTE_NOW", "COMMITTED", "Community Intelligence", 1, "execution-product-hunt-reply", "plan-item-15"],
-  ["decision-commitment-demo-capacity", "decision-situation-product-page-capacity", "deliberation-product-page-capacity", "decision-option-add-demo-capacity", "Move extra capacity to product-page demo", "Assign the next focused work block to product-page demo completion.", "SCHEDULE", "COMMITTED", "Growth", 2, "execution-product-page-demo", "plan-item-10"]
+  ["decision-commitment-demo-capacity", "decision-situation-product-page-capacity", "deliberation-product-page-capacity", "decision-option-add-demo-capacity", "Move extra capacity to product-page demo", "Assign the next focused work block to product-page demo completion.", "SCHEDULE", "COMMITTED", "Growth", 2, "execution-product-page-demo", "plan-item-10"],
+  ["decision-commitment-product-demo-integrity", "decision-situation-demo-priority", "deliberation-demo-priority", "decision-option-finish-demo-immediately", "Finish product-page-to-video demo", "Complete the product-page-to-video proof asset before the next BOFU campaign.", "EXECUTE_NOW", "IN_PROGRESS", "Founder/Product", 5, "execution-product-page-demo", "plan-item-10"],
+  ["decision-commitment-generic-directory-continue", "decision-situation-directory-strategy", "deliberation-directory-strategy", "decision-option-continue-all-directories", "Continue generic directory submissions", "Continue broad generic directory submissions despite weak ROI evidence.", "EXECUTE_NOW", "COMMITTED", "Growth", 6, null, null],
+  ["decision-commitment-purpose-specific-faq", "decision-situation-founder-content", "deliberation-founder-content", "decision-option-founder-increase", "Publish Purpose-Specific AI FAQ", "Publish a focused FAQ that clarifies Purpose-Specific AI and supports SEO/AEO positioning.", "EXECUTE_NOW", "COMMITTED", "Growth Content", 4, null, "plan-item-02"],
+  ["decision-commitment-founder-authority-content", "decision-situation-founder-content", "deliberation-founder-content", "decision-option-founder-increase", "Increase founder-led authority content", "Publish founder-led authority content grounded in proof and category positioning.", "SCHEDULE", "COMMITTED", "Tom Promise", 7, "execution-founder-vpi-post", "plan-item-02"]
 ] as const).map(([id, situationId, deliberationId, optionId, title, description, commitmentType, status, owner, dueInDays, linkedExecutionItemId, linkedPlanItemId], index) => ({
   id,
   situationId,
@@ -4232,6 +4335,7 @@ const decisionCommitments: DecisionCommitment[] = ([
   dueDate: daysFromNow(dueInDays),
   linkedExecutionItemId,
   linkedPlanItemId,
+  ...commitmentMetadata(id),
   ...scoped(index)
 }));
 
@@ -4328,6 +4432,256 @@ const decisionQualityScores: DecisionQualityScore[] = [
     confidenceJustification: 0.52,
     overallScore: 0.62,
     warnings: ["One or more assumptions are untested.", "Objections remain unresolved."]
+  }
+];
+
+const commitmentRiskProfiles: CommitmentRiskProfile[] = [
+  {
+    commitmentId: "decision-commitment-product-demo-integrity",
+    workspaceId,
+    riskLevel: "MEDIUM",
+    riskScore: 0.46,
+    ownershipRisk: 0.08,
+    resourceRisk: 0.28,
+    dependencyRisk: 0.32,
+    evidenceRisk: 0.18,
+    deadlineRisk: 0.58,
+    driftRisk: 0.12,
+    executionRisk: 0.42,
+    warnings: ["Success criteria and delivery confirmation need sharper review."],
+    recommendedAction: "CONTINUE",
+    computedAt: daysAgo(0)
+  },
+  {
+    commitmentId: "decision-commitment-generic-directory-continue",
+    workspaceId,
+    riskLevel: "HIGH",
+    riskScore: 0.74,
+    ownershipRisk: 0.12,
+    resourceRisk: 0.42,
+    dependencyRisk: 0.58,
+    evidenceRisk: 0.88,
+    deadlineRisk: 0.34,
+    driftRisk: 0.82,
+    executionRisk: 0.62,
+    warnings: ["Weak evidence and strategy drift from niche directory focus."],
+    recommendedAction: "REPLAN",
+    computedAt: daysAgo(0)
+  },
+  {
+    commitmentId: "decision-commitment-purpose-specific-faq",
+    workspaceId,
+    riskLevel: "LOW",
+    riskScore: 0.2,
+    ownershipRisk: 0.05,
+    resourceRisk: 0.12,
+    dependencyRisk: 0.18,
+    evidenceRisk: 0.2,
+    deadlineRisk: 0.2,
+    driftRisk: 0.08,
+    executionRisk: 0.2,
+    warnings: [],
+    recommendedAction: "CONTINUE",
+    computedAt: daysAgo(0)
+  },
+  {
+    commitmentId: "decision-commitment-founder-authority-content",
+    workspaceId,
+    riskLevel: "LOW",
+    riskScore: 0.22,
+    ownershipRisk: 0.05,
+    resourceRisk: 0.18,
+    dependencyRisk: 0.2,
+    evidenceRisk: 0.18,
+    deadlineRisk: 0.18,
+    driftRisk: 0.08,
+    executionRisk: 0.28,
+    warnings: [],
+    recommendedAction: "CONTINUE",
+    computedAt: daysAgo(0)
+  }
+];
+
+const executionReadinessScores: ExecutionReadiness[] = [
+  {
+    commitmentId: "decision-commitment-product-demo-integrity",
+    ownerAssigned: true,
+    rationalePresent: true,
+    evidenceLinked: true,
+    decisionLinked: true,
+    successCriteriaDefined: true,
+    requiredResourcesKnown: true,
+    dependenciesKnown: true,
+    blockersKnown: true,
+    dueDateDefined: true,
+    readinessScore: 0.82,
+    ready: true,
+    warnings: ["Delivery date should be confirmed before next BOFU campaign."]
+  },
+  {
+    commitmentId: "decision-commitment-generic-directory-continue",
+    ownerAssigned: true,
+    rationalePresent: true,
+    evidenceLinked: false,
+    decisionLinked: true,
+    successCriteriaDefined: false,
+    requiredResourcesKnown: true,
+    dependenciesKnown: true,
+    blockersKnown: true,
+    dueDateDefined: true,
+    readinessScore: 0.58,
+    ready: false,
+    warnings: ["No supporting evidence is linked.", "Success criteria or expected outcome is unclear."]
+  },
+  {
+    commitmentId: "decision-commitment-purpose-specific-faq",
+    ownerAssigned: true,
+    rationalePresent: true,
+    evidenceLinked: true,
+    decisionLinked: true,
+    successCriteriaDefined: true,
+    requiredResourcesKnown: true,
+    dependenciesKnown: true,
+    blockersKnown: true,
+    dueDateDefined: true,
+    readinessScore: 0.92,
+    ready: true,
+    warnings: []
+  },
+  {
+    commitmentId: "decision-commitment-founder-authority-content",
+    ownerAssigned: true,
+    rationalePresent: true,
+    evidenceLinked: true,
+    decisionLinked: true,
+    successCriteriaDefined: true,
+    requiredResourcesKnown: true,
+    dependenciesKnown: true,
+    blockersKnown: true,
+    dueDateDefined: true,
+    readinessScore: 0.9,
+    ready: true,
+    warnings: []
+  }
+];
+
+const commitmentIntegrityScores: CommitmentIntegrityScore[] = [
+  {
+    commitmentId: "decision-commitment-product-demo-integrity",
+    decisionAlignment: 0.86,
+    evidenceTraceability: 0.92,
+    ownerClarity: 0.95,
+    executionReadiness: 0.82,
+    progressVisibility: 0.82,
+    driftControl: 0.72,
+    outcomeMeasurability: 0.72,
+    overallScore: 0.83,
+    warnings: ["Success criteria can be sharper."]
+  },
+  {
+    commitmentId: "decision-commitment-generic-directory-continue",
+    decisionAlignment: 0.42,
+    evidenceTraceability: 0.18,
+    ownerClarity: 0.95,
+    executionReadiness: 0.58,
+    progressVisibility: 0.36,
+    driftControl: 0.38,
+    outcomeMeasurability: 0.28,
+    overallScore: 0.45,
+    warnings: ["Evidence traceability is weak.", "Commitment drift needs review."]
+  },
+  {
+    commitmentId: "decision-commitment-purpose-specific-faq",
+    decisionAlignment: 0.78,
+    evidenceTraceability: 0.78,
+    ownerClarity: 0.95,
+    executionReadiness: 0.92,
+    progressVisibility: 0.62,
+    driftControl: 0.88,
+    outcomeMeasurability: 0.86,
+    overallScore: 0.84,
+    warnings: []
+  },
+  {
+    commitmentId: "decision-commitment-founder-authority-content",
+    decisionAlignment: 0.81,
+    evidenceTraceability: 0.78,
+    ownerClarity: 0.95,
+    executionReadiness: 0.9,
+    progressVisibility: 0.82,
+    driftControl: 0.88,
+    outcomeMeasurability: 0.86,
+    overallScore: 0.86,
+    warnings: []
+  }
+];
+
+const commitmentDriftSignals: CommitmentDriftSignal[] = [
+  {
+    id: "commitment-drift-generic-directory-strategy",
+    commitmentId: "decision-commitment-generic-directory-continue",
+    workspaceId,
+    driftType: "STRATEGIC_DRIFT",
+    severity: "HIGH",
+    description: "Generic directory submissions drift from the validated strategy to focus on niche AI/video/productivity directories.",
+    originalIntent: "Pause low-confidence generic directories and focus on niche AI/video/productivity directories.",
+    currentState: "Generic directory submissions are still committed.",
+    evidenceIds: ["deliberation-directory-strategy"],
+    detectedAt: daysAgo(0)
+  }
+];
+
+const commitmentEscalations: CommitmentEscalation[] = [
+  {
+    id: "commitment-escalation-generic-directory",
+    commitmentId: "decision-commitment-generic-directory-continue",
+    workspaceId,
+    escalationType: "DRIFT",
+    reason: "Directory submission work is drifting from validated niche authority strategy.",
+    severity: "HIGH",
+    recommendedRecipient: "Strategy Owner",
+    status: "OPEN",
+    createdAt: daysAgo(0),
+    resolvedAt: null
+  }
+];
+
+const commitmentMonitoringPlans: CommitmentMonitoringPlan[] = [
+  {
+    commitmentId: "decision-commitment-product-demo-integrity",
+    workspaceId,
+    monitoringFrequency: "TWICE_WEEKLY",
+    leadingIndicators: ["Demo production progress", "Founder/Product review completed"],
+    laggingIndicators: ["Qualified replies influenced by demo proof", "BOFU conversion trust evidence"],
+    riskTriggers: ["Demo misses campaign date", "Success criteria remain unclear"],
+    reviewCadence: "Review in Executive Brief until demo ships.",
+    owner: "Founder/Product",
+    createdAt: daysAgo(1),
+    updatedAt: daysAgo(0)
+  },
+  {
+    commitmentId: "decision-commitment-purpose-specific-faq",
+    workspaceId,
+    monitoringFrequency: "WEEKLY",
+    leadingIndicators: ["FAQ draft completed", "SEO/AEO review completed"],
+    laggingIndicators: ["Search impressions for Purpose-Specific AI", "AEO answer coverage"],
+    riskTriggers: ["FAQ lacks proof links", "Messaging drifts from validated category claim"],
+    reviewCadence: "Review after publication and first search signal.",
+    owner: "Growth Content",
+    createdAt: daysAgo(1),
+    updatedAt: daysAgo(0)
+  },
+  {
+    commitmentId: "decision-commitment-founder-authority-content",
+    workspaceId,
+    monitoringFrequency: "WEEKLY",
+    leadingIndicators: ["Founder review completed", "Proof narrative ready"],
+    laggingIndicators: ["Engagement quality", "Founder-led reply quality"],
+    riskTriggers: ["Founder review unavailable", "Content lacks proof artifact"],
+    reviewCadence: "Review during weekly founder content planning.",
+    owner: "Tom Promise",
+    createdAt: daysAgo(1),
+    updatedAt: daysAgo(0)
   }
 ];
 
@@ -5580,6 +5934,12 @@ export const initialPlatformState: PlatformState = {
   deliberationTradeoffs,
   deliberationObjections,
   decisionQualityScores,
+  commitmentRiskProfiles,
+  executionReadinessScores,
+  commitmentIntegrityScores,
+  commitmentDriftSignals,
+  commitmentEscalations,
+  commitmentMonitoringPlans,
   connectors,
   rawSignals,
   normalizedSignals,

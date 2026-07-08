@@ -16,6 +16,7 @@ import {
   scoreDecisionQuality
 } from "@/kernel/deliberation/decision-quality";
 import { summarizeDeliberation as summarizeDeliberationRecord } from "@/kernel/deliberation/deliberation-summary";
+import type { CommitmentMonitoringPlan } from "@/kernel/commitments/commitment-types";
 import type {
   Assumption,
   AssumptionType,
@@ -95,6 +96,12 @@ export function createDecisionCommitment(input: {
     optionId: input.option.id,
     title: isDeferred ? `Monitor evidence for ${input.situation.title}` : `Commit: ${input.option.title}`,
     description: isDeferred ? input.deliberation.whatWouldChangeDecision : input.option.description,
+    rationale: input.deliberation.finalJudgment || input.deliberation.summary,
+    evidenceIds: [...new Set([...(input.option.evidenceIds ?? []), ...input.option.evidence])],
+    successCriteria: input.option.expectedUpside ? [input.option.expectedUpside] : [],
+    requiredResources: input.option.requiredResources ?? [],
+    dependencies: input.option.constraints ?? [],
+    expectedOutcome: input.option.expectedUpside ?? input.option.description,
     commitmentType: isDeferred ? "DEFER" : input.option.optionType === "RUN_EXPERIMENT" ? "EXPERIMENT" : input.option.optionType === "DEFER_DECISION" ? "DEFER" : "EXECUTE_NOW",
     status: "COMMITTED",
     owner: input.owner ?? "Growth Intelligence",
@@ -329,6 +336,11 @@ export function recommendDecisionReadiness(input: DecisionQualityInput | Decisio
 export function convertDeliberationToDecision(input: {
   deliberation: Deliberation;
   qualityScore?: DecisionQualityScore;
+  assumptions?: Assumption[];
+  objections?: Objection[];
+  tradeoffs?: string[];
+  evidenceIds?: string[];
+  recommendedMonitoringPlan?: CommitmentMonitoringPlan;
   title?: string;
   rationale?: string;
   now?: string;
@@ -346,6 +358,13 @@ export function convertDeliberationToDecision(input: {
     recommendedOptionId: input.deliberation.recommendedOptionId,
     confidenceScore: input.deliberation.confidenceScore,
     qualityScore: input.qualityScore,
+    assumptions: input.assumptions?.map((assumption) => assumption.statement),
+    unresolvedObjections: input.objections
+      ?.filter((objection) => !["MITIGATED", "REJECTED", "SUPERSEDED"].includes(objection.status))
+      .map((objection) => objection.statement),
+    tradeoffs: input.tradeoffs,
+    evidenceIds: input.evidenceIds,
+    recommendedMonitoringPlan: input.recommendedMonitoringPlan,
     createdAt: date,
     updatedAt: date
   };
