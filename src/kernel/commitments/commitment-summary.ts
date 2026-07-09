@@ -80,6 +80,55 @@ function escalationForCommitment(state: PlatformState, commitment: DecisionCommi
   return state.commitmentEscalations.find((item) => item.commitmentId === commitment.id && item.status === "OPEN");
 }
 
+function outcomeLearningForCommitment(state: PlatformState, commitment: DecisionCommitment) {
+  const evaluation = state.outcomeEvaluations.find((item) =>
+    item.workspaceId === commitment.workspaceId &&
+    item.sourceId === commitment.id &&
+    (item.sourceType === "DecisionCommitment" || item.sourceType === "Commitment")
+  );
+  const attribution = evaluation
+    ? state.outcomeAttributions.find((item) => item.outcomeId === evaluation.outcomeId)
+    : undefined;
+  const integrity = state.learningLoopIntegrities.find((item) =>
+    item.workspaceId === commitment.workspaceId &&
+    item.sourceId === commitment.id &&
+    (item.sourceType === "DecisionCommitment" || item.sourceType === "Commitment")
+  );
+  const learningArtifact = state.learningArtifacts.find((item) =>
+    item.workspaceId === commitment.workspaceId &&
+    (item.sourceId === commitment.id || (evaluation ? item.id.includes(evaluation.outcomeId) : false))
+  );
+  const capabilityImpact = evaluation
+    ? state.capabilityImpacts.find((item) => item.outcomeId === evaluation.outcomeId)
+    : undefined;
+  const outcomeStatus: CommitmentIntegritySummary["outcomeStatus"] =
+    evaluation && /not yet measurable|pending/i.test(evaluation.actualOutcome)
+      ? "PENDING_MEASUREMENT"
+      : evaluation
+        ? "EVALUATED"
+        : "NOT_RECORDED";
+  const outcomeWarnings = [
+    ...(evaluation?.warnings ?? []),
+    ...(integrity?.warnings ?? []),
+    commitment.status === "COMPLETED" && !evaluation
+      ? "Commitment appears complete, but no outcome evaluation exists yet."
+      : "",
+    attribution && attribution.confidenceScore < 0.58 ? "Outcome attribution confidence is low." : ""
+  ].filter(Boolean);
+
+  return {
+    outcomeStatus,
+    outcomeEvaluation: evaluation,
+    attributionConfidence: attribution?.confidenceScore,
+    learningLoopIntegrity: integrity,
+    learningLoopComplete: Boolean(integrity?.complete),
+    createdReusableLearning: Boolean(learningArtifact),
+    learningArtifact,
+    capabilityImpact,
+    outcomeWarnings
+  };
+}
+
 function nextStep(profile: CommitmentRiskProfile) {
   if (profile.recommendedAction === "CLARIFY_OWNER") return "Assign a named owner before execution continues.";
   if (profile.recommendedAction === "ADD_EVIDENCE") return "Link evidence or reduce commitment confidence.";
@@ -262,6 +311,7 @@ export function summarizeCommitmentIntegrity(input: {
           now: input.now
         }).data
       : undefined);
+  const outcomeLearning = outcomeLearningForCommitment(state, commitment);
 
   return {
     success: true,
@@ -278,9 +328,10 @@ export function summarizeCommitmentIntegrity(input: {
       evidence: evidenceIds,
       rationale: commitment.rationale ?? commitment.description,
       recommendedAction: riskProfile.recommendedAction,
-      nextStep: nextStep(riskProfile)
+      nextStep: nextStep(riskProfile),
+      ...outcomeLearning
     },
-    warnings: [...riskProfile.warnings, ...integrity.warnings]
+    warnings: [...riskProfile.warnings, ...integrity.warnings, ...outcomeLearning.outcomeWarnings]
   };
 }
 

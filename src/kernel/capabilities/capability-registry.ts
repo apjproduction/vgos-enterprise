@@ -486,6 +486,42 @@ export const capabilityRegistry: CapabilityDefinition[] = [
     status: "ACTIVE"
   },
   {
+    id: "outcome-attribution-learning-loop",
+    name: "Outcome Attribution & Learning Loop Integrity",
+    description: "Attributes outcomes, evaluates learning-loop completeness, and updates claims, capabilities, reflections, and organizational state without overstating causality.",
+    version: "1.3.0-alpha",
+    inputs: ["Outcomes", "Commitments", "Decisions", "Evidence", "Reflections", "Claims", "Capabilities"],
+    outputs: [
+      "Outcome Evaluations",
+      "Outcome Attributions",
+      "Learning Loop Integrity Scores",
+      "Claim Impacts",
+      "Capability Impacts",
+      "Learning Artifacts"
+    ],
+    dependencies: [
+      "Organizational VM Kernel",
+      "Deliberation & Decision Quality",
+      "Commitment Risk & Execution Integrity",
+      "Measurement & Learning Engine",
+      "Executive Intelligence Experience"
+    ],
+    eventsConsumed: [
+      "OUTCOME_RECORDED",
+      "EXECUTION_COMPLETED",
+      "DECISION_REVIEWED",
+      "REFLECTION_CREATED"
+    ],
+    eventsProduced: [
+      "OUTCOME_EVALUATED",
+      "OUTCOME_ATTRIBUTED",
+      "CLAIM_IMPACT_RECORDED",
+      "CAPABILITY_IMPACT_RECORDED",
+      "LEARNING_ARTIFACT_CREATED"
+    ],
+    status: "BETA"
+  },
+  {
     id: "event-system",
     name: "Event System",
     description: "Records workspace-scoped events that trigger workflows and kernel updates.",

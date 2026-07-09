@@ -68,6 +68,14 @@ import type {
   CommitmentRiskProfile,
   ExecutionReadiness
 } from "@/kernel/commitments/commitment-types";
+import type {
+  CapabilityImpact,
+  ClaimImpact,
+  LearningArtifact,
+  LearningLoopIntegrity,
+  OutcomeAttribution,
+  OutcomeEvaluation
+} from "@/kernel/outcomes/outcome-types";
 export type Status =
   | "NOT_STARTED"
   | "RESEARCHING"
@@ -689,6 +697,12 @@ export type Experiment = ScopedRecord & {
 export type Outcome = ScopedRecord & {
   title: string;
   experimentId?: string;
+  sourceType?: string;
+  sourceId?: string;
+  expectedOutcome?: string;
+  actualOutcome?: string;
+  successCriteria?: string[];
+  evidenceIds?: string[];
   metricName: string;
   metricBefore?: number;
   metricAfter?: number;
@@ -1432,6 +1446,12 @@ export type PlatformState = {
   hypotheses: Hypothesis[];
   experiments: Experiment[];
   outcomes: Outcome[];
+  outcomeEvaluations: OutcomeEvaluation[];
+  outcomeAttributions: OutcomeAttribution[];
+  learningLoopIntegrities: LearningLoopIntegrity[];
+  claimImpacts: ClaimImpact[];
+  capabilityImpacts: CapabilityImpact[];
+  learningArtifacts: LearningArtifact[];
   conversations: CoreRecord[];
   questions: Question[];
   painPoints: PainPoint[];
@@ -4005,6 +4025,7 @@ const claims: Claim[] = ([
   ["claim-vpi-category", "Video Production Intelligence can become a category.", "VidMaker can define Video Production Intelligence as a differentiated category beyond generic AI video tools.", "STRATEGIC", "SUPPORTED", 0.76, 0.68, "ContentAsset", "content-blog-004"],
   ["claim-purpose-specific-ai-differentiates", "Purpose-Specific AI differentiates VidMaker from generic video tools.", "Purpose-Specific AI clarifies why VidMaker's workflow differs from generic video generation.", "STRATEGIC", "SUPPORTED", 0.74, 0.66, "RecommendedAction", "action-29"],
   ["claim-directory-submissions-slow", "Directory submissions are slower than expected.", "Directory approvals are lagging enough to weaken immediate authority forecasts.", "OPERATIONAL", "CHALLENGED", 0.58, 0.74, "Learning", "learning-03"],
+  ["claim-directory-short-term-roi", "Generic directory submissions improve short-term ROI.", "Broad generic directory submissions should create visible short-term discovery or authority ROI.", "SEO", "CHALLENGED", 0.46, 0.5, "Outcome", "outcome-generic-directory-submissions"],
   ["claim-product-hunt-url-proof-demand", "Product Hunt comments show demand for URL-to-video proof.", "Launch comments are asking for URL-to-video and product-page proof before trusting the product claim.", "CUSTOMER", "VALIDATED", 0.86, 0.82, "Observation", "observation-product-hunt-comments"]
 ] as const).map(([id, title, statement, claimType, status, confidenceScore, evidenceStrength, sourceType, sourceId], index) => ({
   id,
@@ -4025,6 +4046,7 @@ const claimEvidence: ClaimEvidence[] = ([
   ["claim-evidence-vpi-blog-positioning", "claim-vpi-category", "CONTENT", "ContentAsset", "content-blog-004", "Video Production Intelligence content clarifies a category story for answer and generative engines.", 0.68, true, false],
   ["claim-evidence-purpose-specific-faq", "claim-purpose-specific-ai-differentiates", "RECOMMENDATION", "RecommendedAction", "action-29", "Purpose-Specific AI FAQ is expected to answer objections without replacing product proof.", 0.66, true, false],
   ["claim-evidence-directory-approval-delays", "claim-directory-submissions-slow", "COUNTER_EVIDENCE", "Learning", "learning-03", "Directory approvals lag submissions, weakening confidence in immediate authority outcomes.", 0.74, false, true],
+  ["claim-evidence-directory-short-term-roi", "claim-directory-short-term-roi", "COUNTER_EVIDENCE", "Outcome", "outcome-generic-directory-submissions", "Generic directory approvals lagged and short-term ROI remained unclear.", 0.72, false, true],
   ["claim-evidence-product-hunt-comments", "claim-product-hunt-url-proof-demand", "SIGNAL", "Observation", "observation-product-hunt-comments", "Product Hunt comments asked directly for URL-to-video and product-page proof.", 0.82, true, false]
 ] as const).map(([id, claimId, evidenceType, sourceType, sourceId, summary, strengthScore, supportsClaim, weakensClaim], index) => ({
   id,
@@ -4682,6 +4704,307 @@ const commitmentMonitoringPlans: CommitmentMonitoringPlan[] = [
     owner: "Tom Promise",
     createdAt: daysAgo(1),
     updatedAt: daysAgo(0)
+  }
+];
+
+const outcomeEvaluations: OutcomeEvaluation[] = [
+  {
+    outcomeId: "outcome-founder-led-carousel",
+    workspaceId,
+    sourceType: "DecisionCommitment",
+    sourceId: "decision-commitment-founder-authority-content",
+    expectedOutcome: "Increase founder authority and product awareness.",
+    actualOutcome: "Founder-led carousel content generated stronger engagement than company-page posts.",
+    deltaSummary: "Expected founder authority and awareness; actual engagement quality was stronger than company-page posts.",
+    successScore: 0.82,
+    confidenceScore: 0.78,
+    evaluationSummary: "Founder-led content produced a strong outcome, but VGOS should still keep decision quality and execution quality separate from the outcome itself.",
+    evaluatedAt: daysAgo(1),
+    warnings: []
+  },
+  {
+    outcomeId: "outcome-product-hunt-comments-demo-clarity",
+    workspaceId,
+    sourceType: "DecisionCommitment",
+    sourceId: "decision-commitment-product-hunt",
+    expectedOutcome: "Validate early product interest.",
+    actualOutcome: "Product Hunt users asked for a clearer product-page-to-video demo before trusting the workflow.",
+    deltaSummary: "Expected early product interest; actual comments validated interest while pointing to product demo clarity as the trust bottleneck.",
+    successScore: 0.69,
+    confidenceScore: 0.74,
+    evaluationSummary: "The outcome supports early product interest, but it also changed the next required proof asset: demo clarity matters before BOFU campaigns scale.",
+    evaluatedAt: daysAgo(1),
+    warnings: []
+  },
+  {
+    outcomeId: "outcome-generic-directory-submissions",
+    workspaceId,
+    sourceType: "DecisionCommitment",
+    sourceId: "decision-commitment-generic-directory-continue",
+    expectedOutcome: "Improve discovery and SEO authority.",
+    actualOutcome: "Directory approval lagged and short-term ROI remained unclear.",
+    deltaSummary: "Expected discovery and authority lift; actual approval timing lagged and immediate ROI stayed unclear.",
+    successScore: 0.32,
+    confidenceScore: 0.66,
+    evaluationSummary: "Generic directory submissions did not yet prove short-term authority ROI. VGOS should not treat this as proof that all directories fail, only that generic directories need qualification criteria before execution.",
+    evaluatedAt: daysAgo(0),
+    warnings: ["Outcome contradicts the short-term ROI expectation.", "Attribution should account for approval lag and channel quality."]
+  },
+  {
+    outcomeId: "outcome-purpose-specific-ai-faq",
+    workspaceId,
+    sourceType: "DecisionCommitment",
+    sourceId: "decision-commitment-purpose-specific-faq",
+    expectedOutcome: "Improve differentiation and AEO/SEO positioning.",
+    actualOutcome: "No measurable result yet.",
+    deltaSummary: "Expected differentiation and AEO/SEO positioning; actual measurement is pending.",
+    successScore: 0.24,
+    confidenceScore: 0.46,
+    evaluationSummary: "Outcome is not yet measurable. VGOS should keep the FAQ hypothesis open and avoid updating claims or capabilities until measurement exists.",
+    evaluatedAt: daysAgo(0),
+    warnings: ["Outcome is not yet measurable.", "Attribution confidence is low."]
+  }
+];
+
+const outcomeAttributions: OutcomeAttribution[] = [
+  {
+    id: "outcome-attribution-founder-led-carousel",
+    workspaceId,
+    outcomeId: "outcome-founder-led-carousel",
+    attributedSourceType: "Campaign",
+    attributedSourceId: "campaign-founder-led-carousel",
+    attributionType: "PRIMARY_CAUSE",
+    contributionScore: 0.82,
+    confidenceScore: 0.76,
+    rationale: "Founder-led content was the primary contributing factor because the same product awareness goal performed better when carried by founder proof narrative than by company-page posting.",
+    evidenceIds: ["claim-founder-content-trust", "learning-05", "metric-linkedin-impressions"],
+    createdAt: daysAgo(1)
+  },
+  {
+    id: "outcome-attribution-product-hunt-demo-clarity",
+    workspaceId,
+    outcomeId: "outcome-product-hunt-comments-demo-clarity",
+    attributedSourceType: "Observation",
+    attributedSourceId: "observation-product-hunt-comments",
+    attributionType: "CONTRIBUTING_FACTOR",
+    contributionScore: 0.72,
+    confidenceScore: 0.74,
+    rationale: "Product demo clarity is a key conversion trust factor because users asked to see the product-page-to-video workflow before trusting the claim.",
+    evidenceIds: ["observation-product-hunt-comments", "claim-product-hunt-url-proof-demand", "claim-product-page-demos-trust"],
+    createdAt: daysAgo(1)
+  },
+  {
+    id: "outcome-attribution-generic-directory-submissions",
+    workspaceId,
+    outcomeId: "outcome-generic-directory-submissions",
+    attributedSourceType: "Channel",
+    attributedSourceId: "generic-directory-submissions",
+    attributionType: "BLOCKING_FACTOR",
+    contributionScore: 0.62,
+    confidenceScore: 0.63,
+    rationale: "Generic directories appear to be weak short-term authority channels because approval lag and broad-channel quality limited measurable ROI.",
+    evidenceIds: ["claim-directory-submissions-slow", "claim-evidence-directory-short-term-roi", "commitment-drift-generic-directory-strategy"],
+    createdAt: daysAgo(0)
+  },
+  {
+    id: "outcome-attribution-purpose-specific-ai-faq",
+    workspaceId,
+    outcomeId: "outcome-purpose-specific-ai-faq",
+    attributedSourceType: "ContentAsset",
+    attributedSourceId: "execution-purpose-specific-faq",
+    attributionType: "UNKNOWN",
+    contributionScore: 0.12,
+    confidenceScore: 0.32,
+    rationale: "Attribution is unknown because no measurable FAQ result has been recorded yet.",
+    evidenceIds: ["claim-purpose-specific-ai-differentiates"],
+    createdAt: daysAgo(0)
+  }
+];
+
+const claimImpacts: ClaimImpact[] = [
+  {
+    id: "claim-impact-founder-led-carousel",
+    workspaceId,
+    claimId: "claim-founder-content-trust",
+    outcomeId: "outcome-founder-led-carousel",
+    impactType: "VALIDATES",
+    confidenceDelta: 0.08,
+    previousStatus: "VALIDATED",
+    newStatus: "VALIDATED",
+    rationale: "Founder-led carousel engagement supports the claim that founder-led content improves authority and trust.",
+    evidenceIds: ["claim-founder-content-trust", "learning-05", "metric-linkedin-impressions"],
+    createdAt: daysAgo(1)
+  },
+  {
+    id: "claim-impact-product-hunt-demo-clarity",
+    workspaceId,
+    claimId: "claim-product-page-demos-trust",
+    outcomeId: "outcome-product-hunt-comments-demo-clarity",
+    impactType: "SUPPORTS",
+    confidenceDelta: 0.06,
+    previousStatus: "SUPPORTED",
+    newStatus: "SUPPORTED",
+    rationale: "Product Hunt comments support the claim that product demos improve BOFU conversion trust.",
+    evidenceIds: ["observation-product-hunt-comments", "claim-product-page-demos-trust"],
+    createdAt: daysAgo(1)
+  },
+  {
+    id: "claim-impact-generic-directory-submissions",
+    workspaceId,
+    claimId: "claim-directory-short-term-roi",
+    outcomeId: "outcome-generic-directory-submissions",
+    impactType: "CHALLENGES",
+    confidenceDelta: -0.08,
+    previousStatus: "SUPPORTED",
+    newStatus: "CHALLENGED",
+    rationale: "Directory lag and unclear short-term ROI challenge the claim that broad generic directory submissions produce immediate authority return.",
+    evidenceIds: ["claim-evidence-directory-short-term-roi", "claim-directory-submissions-slow"],
+    createdAt: daysAgo(0)
+  }
+];
+
+const capabilityImpacts: CapabilityImpact[] = [
+  {
+    id: "capability-impact-founder-distribution",
+    workspaceId,
+    capabilityId: "founder-distribution",
+    outcomeId: "outcome-founder-led-carousel",
+    impactType: "IMPROVED",
+    maturityDelta: 0.11,
+    confidenceDelta: 0.07,
+    rationale: "Founder-led proof content improved the Founder Distribution capability because it generated stronger engagement than company-page posts.",
+    evidenceIds: ["metric-linkedin-impressions", "learning-05"],
+    createdAt: daysAgo(1)
+  },
+  {
+    id: "capability-impact-product-proof-asset",
+    workspaceId,
+    capabilityId: "product-proof-asset",
+    outcomeId: "outcome-product-hunt-comments-demo-clarity",
+    impactType: "CREATED",
+    maturityDelta: 0.16,
+    confidenceDelta: 0.1,
+    rationale: "Product Hunt comments created a clear Product Proof Asset capability requirement: proof assets should precede BOFU campaigns.",
+    evidenceIds: ["observation-product-hunt-comments", "claim-product-page-demos-trust"],
+    createdAt: daysAgo(1)
+  },
+  {
+    id: "capability-impact-directory-qualification",
+    workspaceId,
+    capabilityId: "directory-qualification",
+    outcomeId: "outcome-generic-directory-submissions",
+    impactType: "WEAKENED",
+    maturityDelta: -0.09,
+    confidenceDelta: -0.05,
+    rationale: "Directory Qualification needs improvement because generic directory execution did not show clear short-term ROI.",
+    evidenceIds: ["claim-evidence-directory-short-term-roi", "commitment-drift-generic-directory-strategy"],
+    createdAt: daysAgo(0)
+  }
+];
+
+const learningArtifacts: LearningArtifact[] = [
+  {
+    id: "learning-artifact-founder-led-carousel",
+    workspaceId,
+    sourceType: "DecisionCommitment",
+    sourceId: "decision-commitment-founder-authority-content",
+    lesson: "Founder-led content should remain a primary distribution channel during early launch.",
+    reusableLearning: "Use founder-led walkthrough or proof narrative when the desired outcome is trust, authority, and product awareness.",
+    appliesTo: ["Founder Distribution", "Early launch distribution", "Authority content"],
+    confidenceScore: 0.76,
+    evidenceIds: ["claim-founder-content-trust", "learning-05", "metric-linkedin-impressions"],
+    createdAt: daysAgo(1)
+  },
+  {
+    id: "learning-artifact-product-hunt-demo-clarity",
+    workspaceId,
+    sourceType: "DecisionCommitment",
+    sourceId: "decision-commitment-product-hunt",
+    lesson: "Proof assets should precede BOFU campaigns.",
+    reusableLearning: "When Product Hunt or launch users ask for proof, create the product-page-to-video demo before scaling conversion copy.",
+    appliesTo: ["BOFU campaigns", "Product Hunt follow-up", "Proof asset sequencing"],
+    confidenceScore: 0.74,
+    evidenceIds: ["observation-product-hunt-comments", "claim-product-page-demos-trust"],
+    createdAt: daysAgo(1)
+  },
+  {
+    id: "learning-artifact-generic-directory-qualification",
+    workspaceId,
+    sourceType: "DecisionCommitment",
+    sourceId: "decision-commitment-generic-directory-continue",
+    lesson: "Directory campaigns require qualification criteria before execution.",
+    reusableLearning: "Prioritize niche, relevant, reviewable directories and avoid treating generic directory submissions as short-term authority wins.",
+    appliesTo: ["Directory Qualification", "SEO authority campaigns", "Channel selection"],
+    confidenceScore: 0.66,
+    evidenceIds: ["claim-evidence-directory-short-term-roi", "claim-directory-submissions-slow"],
+    createdAt: daysAgo(0)
+  }
+];
+
+const learningLoopIntegrities: LearningLoopIntegrity[] = [
+  {
+    sourceType: "DecisionCommitment",
+    sourceId: "decision-commitment-founder-authority-content",
+    workspaceId,
+    hasExpectedOutcome: true,
+    hasActualOutcome: true,
+    hasEvaluation: true,
+    hasAttribution: true,
+    hasReflection: true,
+    hasClaimImpact: true,
+    hasCapabilityImpact: true,
+    hasStateTransition: true,
+    integrityScore: 0.96,
+    complete: true,
+    warnings: []
+  },
+  {
+    sourceType: "DecisionCommitment",
+    sourceId: "decision-commitment-product-hunt",
+    workspaceId,
+    hasExpectedOutcome: true,
+    hasActualOutcome: true,
+    hasEvaluation: true,
+    hasAttribution: true,
+    hasReflection: true,
+    hasClaimImpact: true,
+    hasCapabilityImpact: true,
+    hasStateTransition: true,
+    integrityScore: 0.94,
+    complete: true,
+    warnings: []
+  },
+  {
+    sourceType: "DecisionCommitment",
+    sourceId: "decision-commitment-generic-directory-continue",
+    workspaceId,
+    hasExpectedOutcome: true,
+    hasActualOutcome: true,
+    hasEvaluation: true,
+    hasAttribution: true,
+    hasReflection: true,
+    hasClaimImpact: true,
+    hasCapabilityImpact: true,
+    hasStateTransition: false,
+    integrityScore: 0.84,
+    complete: false,
+    warnings: ["State transition has not recorded outcome learning metadata."]
+  },
+  {
+    sourceType: "DecisionCommitment",
+    sourceId: "decision-commitment-purpose-specific-faq",
+    workspaceId,
+    hasExpectedOutcome: true,
+    hasActualOutcome: false,
+    hasEvaluation: true,
+    hasAttribution: true,
+    hasReflection: false,
+    hasClaimImpact: false,
+    hasCapabilityImpact: false,
+    hasStateTransition: false,
+    integrityScore: 0.44,
+    complete: false,
+    warnings: ["Commitment has no recorded outcome.", "Attribution confidence is low.", "Learning loop is incomplete because outcome measurement is pending."]
   }
 ];
 
@@ -5766,12 +6089,84 @@ export const initialPlatformState: PlatformState = {
       id: "outcome-product-page-demo-series",
       title: "Pending outcome for product-page-to-video demo series",
       experimentId: "experiment-product-page-demo-series",
+      sourceType: "Experiment",
+      sourceId: "experiment-product-page-demo-series",
+      expectedOutcome: "Validate whether product-page demo distribution improves trust and qualified signups.",
+      actualOutcome: "",
+      successCriteria: ["Demo assets produce qualified engagement", "Signup quality improves after demo distribution"],
+      evidenceIds: ["metric-qualified-signups"],
       metricName: "trial_conversion_rate",
       resultSummary: "",
       learnings: "",
       ...scoped(0)
+    },
+    {
+      id: "outcome-founder-led-carousel",
+      title: "Founder-led carousel campaign outcome",
+      sourceType: "DecisionCommitment",
+      sourceId: "decision-commitment-founder-authority-content",
+      expectedOutcome: "Increase founder authority and product awareness.",
+      actualOutcome: "Generated stronger engagement than company-page posts.",
+      successCriteria: ["Engagement quality improves", "Founder authority signal increases"],
+      evidenceIds: ["claim-founder-content-trust", "learning-05", "metric-linkedin-impressions"],
+      metricName: "engagement_quality",
+      resultSummary: "Founder-led carousel content generated stronger engagement than company-page posts.",
+      learnings: "Founder-led content should remain a primary distribution channel during early launch.",
+      ...scoped(1)
+    },
+    {
+      id: "outcome-product-hunt-comments-demo-clarity",
+      title: "Product Hunt launch comments outcome",
+      sourceType: "DecisionCommitment",
+      sourceId: "decision-commitment-product-hunt",
+      expectedOutcome: "Validate early product interest.",
+      actualOutcome: "Users asked for a clearer product-page-to-video demo.",
+      successCriteria: ["Product interest appears in comments", "Trust blockers become specific"],
+      evidenceIds: ["observation-product-hunt-comments", "claim-product-page-demos-trust"],
+      metricName: "comment_replies",
+      metricBefore: 0,
+      metricAfter: 3,
+      resultSummary: "Users asked for clearer product-page-to-video proof after Product Hunt launch activity.",
+      learnings: "Proof assets should precede BOFU campaigns.",
+      ...scoped(2)
+    },
+    {
+      id: "outcome-generic-directory-submissions",
+      title: "Generic directory submissions outcome",
+      sourceType: "DecisionCommitment",
+      sourceId: "decision-commitment-generic-directory-continue",
+      expectedOutcome: "Improve discovery and SEO authority.",
+      actualOutcome: "Approval lagged and short-term ROI remained unclear.",
+      successCriteria: ["Directory approvals increase", "Short-term ROI becomes visible"],
+      evidenceIds: ["claim-directory-submissions-slow", "claim-evidence-directory-short-term-roi"],
+      metricName: "directory_approvals",
+      metricBefore: 0,
+      metricAfter: 2,
+      resultSummary: "Approval lagged and short-term ROI remained unclear.",
+      learnings: "Directory campaigns require qualification criteria before execution.",
+      ...scoped(3)
+    },
+    {
+      id: "outcome-purpose-specific-ai-faq",
+      title: "Purpose-Specific AI FAQ outcome",
+      sourceType: "DecisionCommitment",
+      sourceId: "decision-commitment-purpose-specific-faq",
+      expectedOutcome: "Improve differentiation and AEO/SEO positioning.",
+      actualOutcome: "No measurable result yet.",
+      successCriteria: ["Search impressions improve", "AEO answer coverage improves"],
+      evidenceIds: ["claim-purpose-specific-ai-differentiates"],
+      metricName: "aeo_answer_coverage",
+      resultSummary: "No measurable result yet.",
+      learnings: "",
+      ...scoped(4)
     }
   ],
+  outcomeEvaluations,
+  outcomeAttributions,
+  learningLoopIntegrities,
+  claimImpacts,
+  capabilityImpacts,
+  learningArtifacts,
   conversations: [
     {
       id: "conversation-url-to-video-demand",

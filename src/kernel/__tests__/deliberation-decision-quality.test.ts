@@ -39,8 +39,12 @@ function option(overrides: Partial<DecisionOption> = {}): DecisionOption {
   };
 }
 
-function score(options: DecisionOption[], extra: Parameters<typeof computeDecisionQuality>[0] = { decisionId: "decision-test", options }) {
-  const result = computeDecisionQuality({ decisionId: "decision-test", options, ...extra });
+function score(options: DecisionOption[], extra: Partial<Parameters<typeof computeDecisionQuality>[0]> = {}) {
+  const result = computeDecisionQuality({
+    ...extra,
+    decisionId: extra.decisionId ?? "decision-test",
+    options: extra.options ?? options
+  });
   expect(result.success).toBe(true);
   expect(result.data).toBeDefined();
   return result.data!;

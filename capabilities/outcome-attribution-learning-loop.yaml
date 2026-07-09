@@ -1,0 +1,46 @@
+id: outcome-attribution-learning-loop
+name: Outcome Attribution & Learning Loop Integrity
+version: 1.3.0
+owner: organizational-vm-kernel
+status: alpha
+
+depends_on:
+  - organizational-vm-kernel
+  - deliberation-decision-quality
+  - commitment-risk-execution-integrity
+  - measurement-learning-engine
+  - executive-intelligence-experience
+
+produces:
+  - outcome-evaluations
+  - outcome-attributions
+  - learning-loop-integrity-scores
+  - claim-impacts
+  - capability-impacts
+  - learning-artifacts
+  - outcome-learning-summaries
+
+consumes:
+  - outcomes
+  - commitments
+  - decisions
+  - deliberations
+  - assumptions
+  - claims
+  - capabilities
+  - evidence
+  - reflections
+  - state-transitions
+  - organizational-state
+
+publicApi:
+  - evaluateOutcome
+  - attributeOutcome
+  - computeAttributionConfidence
+  - computeLearningLoopIntegrity
+  - determineClaimImpact
+  - determineCapabilityImpact
+  - createLearningArtifact
+  - convertOutcomeToReflection
+  - summarizeOutcomeLearning
+  - explainOutcomeAttribution

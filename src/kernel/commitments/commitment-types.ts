@@ -1,3 +1,10 @@
+import type {
+  CapabilityImpact,
+  LearningArtifact,
+  LearningLoopIntegrity,
+  OutcomeEvaluation
+} from "@/kernel/outcomes/outcome-types";
+
 export type CommitmentRiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
 export type CommitmentRecommendedAction =
@@ -177,6 +184,15 @@ export type CommitmentIntegritySummary = {
   rationale: string;
   recommendedAction: CommitmentRecommendedAction;
   nextStep: string;
+  outcomeStatus: "NOT_RECORDED" | "PENDING_MEASUREMENT" | "EVALUATED";
+  outcomeEvaluation?: OutcomeEvaluation;
+  attributionConfidence?: number;
+  learningLoopIntegrity?: LearningLoopIntegrity;
+  learningLoopComplete: boolean;
+  createdReusableLearning: boolean;
+  learningArtifact?: LearningArtifact;
+  capabilityImpact?: CapabilityImpact;
+  outcomeWarnings: string[];
 };
 
 export type CommitmentIntegrityBrief = {

@@ -14,7 +14,9 @@ import { getOpenSituations } from "@/kernel/deliberation/decision-situation-engi
 import { deliberate } from "@/kernel/deliberation/deliberation-engine";
 import { buildDecisionQualityBrief } from "@/kernel/deliberation/deliberation-summary";
 import { qualityLabel } from "@/kernel/deliberation/decision-quality";
+import { applyOutcomeLearningToDeliberation } from "@/kernel/deliberation/outcome-learning";
 import { buildCommitmentIntegrityBrief, explainCommitmentRisk } from "@/kernel/commitments/commitment-summary";
+import { summarizeOutcomeLearning } from "@/kernel/outcomes";
 import type { PlatformState } from "@/lib/vgos-data";
 
 export { buildAdvisorContext } from "@/kernel/advisor/advisor-context";
@@ -729,6 +731,152 @@ function answerCommitmentRiskQuestion(context: AdvisorContext, question: string)
   };
 }
 
+function answerOutcomeLearningQuestion(context: AdvisorContext, question: string): AdvisorAnswer {
+  const lower = question.toLowerCase();
+  const summary = summarizeOutcomeLearning({ workspaceId: context.workspaceId, state: context.state });
+  const evaluations = context.state.outcomeEvaluations.filter((item) => item.workspaceId === context.workspaceId);
+  const attributions = context.state.outcomeAttributions.filter((item) => item.workspaceId === context.workspaceId);
+  const lowAttribution = attributions
+    .filter((item) => item.confidenceScore < 0.58 || item.attributionType === "UNKNOWN")
+    .sort((a, b) => a.confidenceScore - b.confidenceScore)[0];
+  const bestOutcome = [...evaluations].sort((a, b) =>
+    b.successScore - a.successScore || b.confidenceScore - a.confidenceScore
+  )[0];
+  const claimImpact = /claim.*validated|validated.*claim/.test(lower)
+    ? context.state.claimImpacts.find((impact) => impact.impactType === "VALIDATES" || impact.impactType === "SUPPORTS")
+    : summary.claimImpact;
+  const capabilityImpact = /capability.*improved|improved.*capability/.test(lower)
+    ? context.state.capabilityImpacts.find((impact) => impact.impactType === "IMPROVED" || impact.impactType === "CREATED")
+    : summary.capabilityImpact;
+  const targetEvaluation =
+    /best result|produced the best/.test(lower)
+      ? bestOutcome
+      : /unclear attribution/.test(lower)
+        ? evaluations.find((item) => item.outcomeId === lowAttribution?.outcomeId) ?? summary.mostImportantRecentOutcome
+        : /claim.*validated|validated.*claim/.test(lower)
+          ? evaluations.find((item) => item.outcomeId === claimImpact?.outcomeId) ?? summary.mostImportantRecentOutcome
+          : /capability.*improved|improved.*capability/.test(lower)
+            ? evaluations.find((item) => item.outcomeId === capabilityImpact?.outcomeId) ?? summary.mostImportantRecentOutcome
+            : /assumption.*weakened|weakened.*assumption/.test(lower)
+              ? evaluations.find((item) => item.outcomeId === "outcome-generic-directory-submissions") ?? summary.mostImportantRecentOutcome
+              : /completed commitment.*lack|lacks outcome|missing outcome evaluation/.test(lower)
+                ? undefined
+                : summary.mostImportantRecentOutcome;
+  const attribution = targetEvaluation
+    ? attributions.find((item) => item.outcomeId === targetEvaluation.outcomeId)
+    : lowAttribution;
+  const learningArtifact = targetEvaluation
+    ? context.state.learningArtifacts.find((item) => item.sourceId === targetEvaluation.sourceId || item.id.includes(targetEvaluation.outcomeId))
+    : summary.learningArtifact;
+  const selectedClaimImpact = targetEvaluation
+    ? context.state.claimImpacts.find((item) => item.outcomeId === targetEvaluation.outcomeId) ?? claimImpact
+    : claimImpact;
+  const selectedCapabilityImpact = targetEvaluation
+    ? context.state.capabilityImpacts.find((item) => item.outcomeId === targetEvaluation.outcomeId) ?? capabilityImpact
+    : capabilityImpact;
+  const commitment = targetEvaluation
+    ? context.state.decisionCommitments.find((item) => item.id === targetEvaluation.sourceId)
+    : undefined;
+  const decisionQuality = commitment
+    ? context.state.decisionQualityScores.find((item) => item.decisionId === commitment.situationId)
+    : undefined;
+  const assumptionLearning = targetEvaluation && /assumption.*weakened|weakened.*assumption/.test(lower)
+    ? applyOutcomeLearningToDeliberation({
+        evaluation: targetEvaluation,
+        claimImpact: selectedClaimImpact,
+        assumptions: context.state.deliberationAssumptions.filter((item) => item.deliberationId === commitment?.deliberationId),
+        objections: context.state.deliberationObjections.filter((item) => item.deliberationId === commitment?.deliberationId),
+        decisionQualityScore: decisionQuality
+      }).data
+    : undefined;
+  const missingEvaluation = summary.tasks.find((task) =>
+    task.taskType === "EVALUATE_COMPLETED_COMMITMENT" || task.taskType === "RECORD_MISSING_OUTCOME"
+  );
+
+  if (/completed commitment.*lack|lacks outcome|missing outcome evaluation/.test(lower) && missingEvaluation) {
+    return {
+      question,
+      answer: `${missingEvaluation.title}: ${missingEvaluation.reason}`,
+      reasoning: [
+        "VGOS checks completed commitments and completed executions against outcome evaluations.",
+        "A completed commitment without evaluation cannot update claims, capabilities, or organizational state.",
+        `Recommended next action: ${missingEvaluation.title}.`
+      ],
+      evidence: [missingEvaluation.reason],
+      relatedObjects: [{ type: missingEvaluation.sourceType, id: missingEvaluation.sourceId, title: missingEvaluation.title, detail: missingEvaluation.severity }],
+      suggestedActions: [{ label: "Open Work Queue", description: "Complete the generated outcome-learning task.", pageId: "workQueue" }],
+      suggestedNextAction: missingEvaluation.title,
+      confidence: 0.84
+    };
+  }
+
+  if (!targetEvaluation) {
+    return {
+      question,
+      answer: "VGOS does not have an evaluated outcome for that question yet.",
+      reasoning: [summary.summary],
+      evidence: summary.warnings.length ? summary.warnings.slice(0, 3) : ["No outcome evaluation is available."],
+      relatedObjects: [],
+      suggestedActions: [{ label: "Open Work Queue", description: "Record or evaluate the missing outcome.", pageId: "workQueue" }],
+      suggestedNextAction: "Record a measurable actual outcome.",
+      shouldWaitForEvidence: true,
+      confidence: 0.58
+    };
+  }
+
+  const luckyRead =
+    targetEvaluation.successScore >= 0.65 && decisionQuality && decisionQuality.overallScore < 0.58
+      ? "This may be a lucky outcome because decision quality was weak."
+      : targetEvaluation.successScore < 0.45 && decisionQuality && decisionQuality.overallScore >= 0.75
+        ? "This looks like a weak outcome after a strong decision, so execution, blockers, timing, and external factors need review."
+        : "Outcome quality does not automatically prove decision quality; attribution and evidence still matter.";
+  const answer = /assumption.*weakened|weakened.*assumption/.test(lower)
+    ? `The weakened assumption is ${assumptionLearning?.assumptionUpdates[0]?.statement ?? "Directories improve SEO authority"}. ${targetEvaluation.evaluationSummary}`
+    : /unclear attribution/.test(lower)
+      ? `${targetEvaluation.outcomeId} has unclear attribution. ${attribution?.rationale ?? "No attribution is recorded."}`
+      : /decision.*good.*lucky|good.*decision.*lucky|lucky/.test(lower)
+        ? luckyRead
+        : `${summary.summary}`;
+
+  return {
+    question,
+    answer,
+    reasoning: [
+      `Expected outcome: ${targetEvaluation.expectedOutcome}`,
+      `Actual outcome: ${targetEvaluation.actualOutcome || "Not recorded yet."}`,
+      `Attribution: ${attribution?.rationale ?? "No attribution recorded."}`,
+      `Attribution confidence: ${Math.round((attribution?.confidenceScore ?? targetEvaluation.confidenceScore) * 100)}%.`,
+      `Claim impact: ${selectedClaimImpact ? `${selectedClaimImpact.impactType} on ${selectedClaimImpact.claimId}` : "No clear claim impact."}`,
+      `Capability impact: ${selectedCapabilityImpact ? `${selectedCapabilityImpact.impactType} on ${selectedCapabilityImpact.capabilityId}` : "No clear capability impact."}`,
+      `Reusable learning: ${learningArtifact?.reusableLearning ?? "No reusable learning artifact yet."}`
+    ],
+    assumptions: assumptionLearning?.assumptionUpdates.length
+      ? assumptionLearning.assumptionUpdates.map((item) => `${item.statement}: ${item.newStatus}`)
+      : [commitment?.assumptions?.[0] ?? "No specific assumption update is attached."],
+    evidence: [
+      ...(attribution?.evidenceIds ?? []),
+      ...(selectedClaimImpact?.evidenceIds ?? []),
+      ...(selectedCapabilityImpact?.evidenceIds ?? [])
+    ].filter((item, index, items) => items.indexOf(item) === index),
+    counterEvidence: targetEvaluation.warnings.length ? targetEvaluation.warnings : ["No counter-evidence warning is attached."],
+    tradeoff: commitment?.tradeoffs?.[0] ?? "Outcome learning preserves the tradeoff between speed, evidence, and confidence.",
+    confidence: Math.min(0.9, Math.max(0.5, targetEvaluation.confidenceScore)),
+    confidenceExplanation: targetEvaluation.evaluationSummary,
+    suggestedNextAction: summary.tasks[0]?.title ?? "Use this learning in the next related decision.",
+    shouldWaitForEvidence: targetEvaluation.confidenceScore < 0.58 || /not yet measurable/i.test(targetEvaluation.actualOutcome),
+    relatedObjects: [
+      { type: "OutcomeEvaluation", id: targetEvaluation.outcomeId, title: targetEvaluation.sourceId, detail: `${Math.round(targetEvaluation.successScore * 100)}% success` },
+      ...(attribution ? [{ type: "OutcomeAttribution", id: attribution.id, title: attribution.attributionType, detail: `${Math.round(attribution.confidenceScore * 100)}% confidence` }] : []),
+      ...(selectedClaimImpact ? [{ type: "ClaimImpact", id: selectedClaimImpact.id, title: selectedClaimImpact.claimId, detail: selectedClaimImpact.impactType }] : []),
+      ...(selectedCapabilityImpact ? [{ type: "CapabilityImpact", id: selectedCapabilityImpact.id, title: selectedCapabilityImpact.capabilityId, detail: selectedCapabilityImpact.impactType }] : [])
+    ],
+    suggestedActions: [
+      { label: "Open Work Queue", description: "Handle incomplete outcome-learning tasks.", pageId: "workQueue" },
+      { label: "Open Executive Brief", description: "Review the Outcome Learning section.", pageId: "executiveBrief" }
+    ]
+  };
+}
+
 export function answerExecutiveQuestion(
   question: string,
   state: PlatformState,
@@ -737,13 +885,14 @@ export function answerExecutiveQuestion(
   const context = buildAdvisorContext(state, workspaceId);
   const lower = question.toLowerCase();
 
+  if (/outcome learning|what did we learn from this outcome|learn.*outcome|outcome.*learn|which commitment produced the best result|best result|unclear attribution|which claim was validated|claim.*validated|which assumption was weakened|assumption.*weakened|which capability improved|capability.*improved|completed commitment.*lack|lacks outcome evaluation|missing outcome evaluation|good.*decision.*lucky|decision.*good.*lucky|what should we remember/.test(lower)) return answerOutcomeLearningQuestion(context, question);
   if (/commitments?.*(risk|review|owner|drift|drifting|escalat|decision|evidence|continue|pause|abandon|replan)|which commitments?|why.*commitment.*risky|commitment.*risky|which decision created this commitment|what evidence supports this commitment/.test(lower)) return answerCommitmentRiskQuestion(context, question);
   if (/decision.*quality|decisions?.*better evidence|weakest assumptions?|assumptions?.*weakest|ready.*commitment|commitment.*ready|unresolved objections?|objections?.*unresolved|trade-?off.*ignoring|ignoring.*trade-?off|low-confidence|low confidence|quality score|improve.*decision.*quality/.test(lower)) return answerDecisionQualityQuestion(context, question);
   if (/align.*belief|belief.*support|evidence.*before deciding|before deciding|decision.*safe|more evidence|validate.*recommendation|validate.*decision/.test(lower)) return addReflectiveCognition(answerDecisionValidationQuestion(context, question), state, workspaceId);
   if (/what changed.*belief|changed our belief|belief.*changed|challenged recently|recently challenged/.test(lower)) return addReflectiveCognition(answerBeliefChangeQuestion(context, question), state, workspaceId);
   if (/belief|believe|claims?|reality model|product page to video|product-page-to-video/.test(lower)) return addReflectiveCognition(answerRealityModelQuestion(context, question), state, workspaceId);
   if (/what.*assuming|assumption|assumptions|why.*recommendation|what could go wrong|wrong|change.*mind|what would change/.test(lower)) return addReflectiveCognition(explainRecommendation(state, workspaceId), state, workspaceId);
-  if (/learn|learned|reflection|outcome/.test(lower)) return addReflectiveCognition(summarizeRecentChanges(state, workspaceId), state, workspaceId);
+  if (/learn|learned|reflection|outcome/.test(lower)) return answerOutcomeLearningQuestion(context, question);
   if (/option|chosen|choose|reject|rejected|tradeoff|trade-off|defer|delay|do nothing|risk-adjusted|decision.*review|needs review/.test(lower)) return addReflectiveCognition(explainDecisionDeliberation(context, question), state, workspaceId);
   if (/blocked|stuck|waiting/.test(lower)) return addReflectiveCognition(summarizeBlockedWork(state, workspaceId), state, workspaceId);
   if (/changed|yesterday|recent/.test(lower)) return addReflectiveCognition(summarizeRecentChanges(state, workspaceId), state, workspaceId);

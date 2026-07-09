@@ -178,6 +178,7 @@ import { deliberate } from "@/kernel/deliberation/deliberation-engine";
 import { buildDecisionQualityBrief } from "@/kernel/deliberation/deliberation-summary";
 import { challengeOption } from "@/kernel/deliberation/option-challenger";
 import { buildCommitmentIntegrityBrief } from "@/kernel/commitments/commitment-summary";
+import { summarizeOutcomeLearning } from "@/kernel/outcomes";
 import type {
   DecisionOption,
   DeliberationResult
@@ -3237,6 +3238,10 @@ function ExecutiveBriefPage({
   const context = useMemo(() => buildAdvisorContext(state, activeWorkspaceId), [state, activeWorkspaceId]);
   const decisionQuality = useMemo(() => buildDecisionQualityBrief(state, activeWorkspaceId), [state, activeWorkspaceId]);
   const commitmentIntegrity = useMemo(() => buildCommitmentIntegrityBrief(state, activeWorkspaceId), [state, activeWorkspaceId]);
+  const outcomeLearning = useMemo(
+    () => summarizeOutcomeLearning({ workspaceId: activeWorkspaceId, state }),
+    [state, activeWorkspaceId]
+  );
   const judgment = brief.executiveJudgment;
   const decisionNeeded = useMemo(() => {
     const situation = getOpenSituations(state, activeWorkspaceId)[0];
@@ -3377,6 +3382,52 @@ function ExecutiveBriefPage({
             </CardHeader>
             <CardContent>
               <InlineList title="Updated beliefs" items={brief.beliefsUpdated.length ? brief.beliefsUpdated : ["No belief confidence changes need attention today."]} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Outcome Learning</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">{outcomeLearning.summary}</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <FocusRow
+                  label="Recent outcome"
+                  value={outcomeLearning.mostImportantRecentOutcome ? outcomeLearning.mostImportantRecentOutcome.sourceId : "No evaluated outcome yet"}
+                />
+                <FocusRow
+                  label="Cause"
+                  value={outcomeLearning.attribution ? `${formatEnum(outcomeLearning.attribution.attributionType)} (${Math.round(outcomeLearning.attribution.confidenceScore * 100)}%)` : "Unclear"}
+                />
+                <FocusRow
+                  label="Claim"
+                  value={outcomeLearning.claimImpact ? `${outcomeLearning.claimImpact.claimId}: ${formatEnum(outcomeLearning.claimImpact.impactType)}` : "No claim impact"}
+                />
+                <FocusRow
+                  label="Capability"
+                  value={outcomeLearning.capabilityImpact ? `${outcomeLearning.capabilityImpact.capabilityId}: ${formatEnum(outcomeLearning.capabilityImpact.impactType)}` : "No capability impact"}
+                />
+                <FocusRow
+                  label="Missing evaluation"
+                  value={outcomeLearning.commitmentMissingOutcomeEvaluation?.title ?? outcomeLearning.tasks.find((task) => task.taskType === "EVALUATE_COMPLETED_COMMITMENT")?.title ?? "None"}
+                />
+                <FocusRow
+                  label="Incomplete loop"
+                  value={outcomeLearning.incompleteLearningLoop ? `${outcomeLearning.incompleteLearningLoop.sourceId} (${Math.round(outcomeLearning.incompleteLearningLoop.integrityScore * 100)}%)` : "None"}
+                />
+              </div>
+              <InlineList
+                title="What VGOS learned"
+                items={[
+                  outcomeLearning.learningArtifact?.lesson ?? "No reusable learning artifact yet.",
+                  outcomeLearning.learningArtifact?.reusableLearning ?? "Outcome should be converted into reusable learning."
+                ]}
+              />
+              <InlineList
+                title="Outcome tasks"
+                items={outcomeLearning.tasks.length ? outcomeLearning.tasks.slice(0, 4).map((task) => `${task.title}: ${task.reason}`) : ["No outcome-learning tasks are open."]}
+              />
             </CardContent>
           </Card>
 
@@ -3842,6 +3893,10 @@ function WorkQueuePage({
   const capacityDecision = capacitySituation ? deliberate(capacitySituation, state) : null;
   const decisionQuality = useMemo(() => buildDecisionQualityBrief(state, activeWorkspaceId), [state, activeWorkspaceId]);
   const commitmentIntegrity = useMemo(() => buildCommitmentIntegrityBrief(state, activeWorkspaceId), [state, activeWorkspaceId]);
+  const outcomeLearning = useMemo(
+    () => summarizeOutcomeLearning({ workspaceId: activeWorkspaceId, state }),
+    [state, activeWorkspaceId]
+  );
 
   return (
     <div className="space-y-4">
@@ -3960,6 +4015,40 @@ function WorkQueuePage({
           {commitmentIntegrity.tasks.length === 0 ? (
             <div className="flex min-h-32 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground lg:col-span-3">
               No commitment-integrity tasks are open.
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <CardTitle>Outcome Learning Tasks</CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">Work that closes the loop from outcome to attribution, reflection, claims, capabilities, and state.</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => onNavigate("executiveBrief")}>
+            <ArrowRight className="h-4 w-4" />
+            Executive Brief
+          </Button>
+        </CardHeader>
+        <CardContent className="grid gap-3 lg:grid-cols-3">
+          {outcomeLearning.tasks.slice(0, 9).map((task) => (
+            <div key={task.id} className="rounded-md border border-border bg-background p-3">
+              <div className="flex flex-wrap gap-2">
+                <Badge tone={priorityTone(task.severity)}>{formatEnum(task.severity)}</Badge>
+                <Badge tone="blue">{formatEnum(task.taskType)}</Badge>
+              </div>
+              <p className="mt-2 text-sm font-semibold">{task.title}</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{task.reason}</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <FocusRow label="Source" value={`${task.sourceType}: ${task.sourceId}`} />
+                <FocusRow label="Outcome" value={task.outcomeId ?? "Pending"} />
+              </div>
+            </div>
+          ))}
+          {outcomeLearning.tasks.length === 0 ? (
+            <div className="flex min-h-32 items-center justify-center rounded-md border border-dashed border-border text-sm text-muted-foreground lg:col-span-3">
+              No outcome-learning tasks are open.
             </div>
           ) : null}
         </CardContent>

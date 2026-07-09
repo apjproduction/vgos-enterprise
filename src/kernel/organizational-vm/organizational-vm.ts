@@ -1,6 +1,11 @@
 import { createScopedId, orgId } from "@/lib/vgos-data";
 import { buildCommitmentIntegrityBrief } from "@/kernel/commitments/commitment-summary";
 import { computeExecutionReadiness } from "@/kernel/commitments/execution-readiness";
+import {
+  convertOutcomeToReflection,
+  evaluateOutcome,
+  summarizeOutcomeLearning
+} from "@/kernel/outcomes";
 import type {
   CommitmentIntegritySummary,
   CommitmentRiskProfile,
@@ -8,6 +13,14 @@ import type {
 } from "@/kernel/commitments/commitment-types";
 import type { PlatformState } from "@/lib/vgos-data";
 import type { DecisionQualityScore, InstructionResult } from "@/kernel/deliberation/deliberation-types";
+import type {
+  CapabilityImpact,
+  ClaimImpact,
+  LearningLoopIntegrity,
+  OutcomeAttribution,
+  OutcomeEvaluation,
+  OutcomeReflection
+} from "@/kernel/outcomes";
 
 function nowIso() {
   return new Date().toISOString();
@@ -47,6 +60,31 @@ export type OrganizationalCommitment = {
   updatedAt: string;
 };
 
+export type OrganizationalOutcome = {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  sourceType: string;
+  sourceId: string;
+  title: string;
+  expectedOutcome: string;
+  actualOutcome: string;
+  successCriteria: string[];
+  evidenceIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type OutcomeLearningTransitionMetadata = {
+  outcomeId: string;
+  evaluationSummary?: string;
+  attributionRationale?: string;
+  claimImpact?: string;
+  capabilityImpact?: string;
+  learning?: string;
+  integrityScore?: number;
+};
+
 export type OrganizationalStateTransition = {
   id: string;
   organizationId: string;
@@ -58,6 +96,7 @@ export type OrganizationalStateTransition = {
   reason: string;
   decisionQualityScore?: DecisionQualityScore;
   commitmentRiskProfile?: CommitmentRiskProfile;
+  outcomeLearning?: OutcomeLearningTransitionMetadata;
   createdAt: string;
   updatedAt: string;
 };
@@ -66,6 +105,9 @@ export type OrganizationalState = {
   workspaceId: string;
   activeCommitments: CommitmentIntegritySummary[];
   highRiskCommitments: CommitmentIntegritySummary[];
+  learningLoopIntegrity: LearningLoopIntegrity[];
+  learningLoopIntegrityScore: number;
+  outcomeLearningSummary: string;
   computedAt: string;
 };
 
@@ -183,6 +225,82 @@ export function createCommitment(input: {
   };
 }
 
+export function recordOutcome(input: {
+  workspaceId: string;
+  sourceType: string;
+  sourceId: string;
+  title: string;
+  expectedOutcome: string;
+  actualOutcome: string;
+  successCriteria?: string[];
+  evidenceIds?: string[];
+  decisionQualityScore?: DecisionQualityScore;
+  commitmentIntegrityScore?: number;
+  executionQualityScore?: number;
+  organizationId?: string;
+  now?: string;
+}): InstructionResult<{ outcome: OrganizationalOutcome; evaluation: OutcomeEvaluation }> {
+  if (!input.workspaceId) return { success: false, error: "workspaceId is required." };
+  if (!input.sourceType) return { success: false, error: "sourceType is required." };
+  if (!input.sourceId) return { success: false, error: "sourceId is required." };
+  if (!input.expectedOutcome.trim()) return { success: false, error: "expectedOutcome is required." };
+
+  const date = input.now ?? nowIso();
+  const outcomeId = createScopedId("outcome");
+  const evaluation = evaluateOutcome({
+    workspaceId: input.workspaceId,
+    outcomeId,
+    sourceType: input.sourceType,
+    sourceId: input.sourceId,
+    expectedOutcome: input.expectedOutcome,
+    actualOutcome: input.actualOutcome,
+    successCriteria: input.successCriteria,
+    evidenceIds: input.evidenceIds,
+    decisionQualityScore: input.decisionQualityScore?.overallScore,
+    commitmentIntegrityScore: input.commitmentIntegrityScore,
+    executionQualityScore: input.executionQualityScore,
+    now: date
+  });
+  if (!evaluation.success || !evaluation.data) return { success: false, error: evaluation.error ?? "Outcome evaluation failed." };
+
+  return {
+    success: true,
+    data: {
+      outcome: {
+        id: outcomeId,
+        organizationId: input.organizationId ?? orgId,
+        workspaceId: input.workspaceId,
+        sourceType: input.sourceType,
+        sourceId: input.sourceId,
+        title: input.title,
+        expectedOutcome: input.expectedOutcome,
+        actualOutcome: input.actualOutcome,
+        successCriteria: input.successCriteria ?? [],
+        evidenceIds: input.evidenceIds ?? [],
+        createdAt: date,
+        updatedAt: date
+      },
+      evaluation: evaluation.data
+    },
+    warnings: evaluation.warnings
+  };
+}
+
+export function reflect(input: {
+  workspaceId: string;
+  sourceType: string;
+  sourceId: string;
+  outcomeId: string;
+  evaluation: OutcomeEvaluation;
+  attribution?: OutcomeAttribution;
+  claimImpact?: ClaimImpact;
+  capabilityImpact?: CapabilityImpact;
+  appliesTo?: string[];
+  now?: string;
+}): InstructionResult<OutcomeReflection> {
+  return convertOutcomeToReflection(input);
+}
+
 export function createStateTransition(input: {
   workspaceId: string;
   sourceType: string;
@@ -192,6 +310,7 @@ export function createStateTransition(input: {
   reason: string;
   decisionQualityScore?: DecisionQualityScore;
   commitmentRiskProfile?: CommitmentRiskProfile;
+  outcomeLearning?: OutcomeLearningTransitionMetadata;
   organizationId?: string;
   now?: string;
 }): InstructionResult<OrganizationalStateTransition> {
@@ -207,6 +326,7 @@ export function createStateTransition(input: {
     reason: input.reason,
     decisionQualityScore: input.sourceType === "Decision" ? input.decisionQualityScore : undefined,
     commitmentRiskProfile: input.sourceType === "Commitment" ? input.commitmentRiskProfile : undefined,
+    outcomeLearning: input.outcomeLearning,
     createdAt: date,
     updatedAt: date
   };
@@ -239,8 +359,11 @@ export function explainStateChange(transition: OrganizationalStateTransition) {
     : commitmentRisk.riskLevel === "LOW" || commitmentRisk.riskLevel === "MEDIUM"
       ? ` Commitment risk is ${commitmentRisk.riskLevel.toLowerCase()} and the transition appears to reduce organizational risk if monitoring continues.`
       : ` Commitment risk is ${commitmentRisk.riskLevel.toLowerCase()}, so this transition increases organizational risk until the recommended action is handled.`;
+  const learningText = !transition.outcomeLearning
+    ? ""
+    : ` VGOS learned from outcome ${transition.outcomeLearning.outcomeId}: ${transition.outcomeLearning.learning ?? transition.outcomeLearning.evaluationSummary ?? "outcome learning was recorded"}. ${transition.outcomeLearning.attributionRationale ?? ""}`.trimEnd();
 
-  return `${transition.fromState} changed to ${transition.toState} because ${transition.reason}. ${deliberationText}${commitmentText}`;
+  return `${transition.fromState} changed to ${transition.toState} because ${transition.reason}. ${deliberationText}${commitmentText}${learningText ? ` ${learningText}` : ""}`;
 }
 
 export function computeOrganizationalState(input: {
@@ -253,6 +376,11 @@ export function computeOrganizationalState(input: {
     b.riskProfile.riskScore - a.riskProfile.riskScore || a.integrity.overallScore - b.integrity.overallScore
   );
   const highRiskCommitments = activeCommitments.filter((item) => ["HIGH", "CRITICAL"].includes(item.riskProfile.riskLevel));
+  const learningLoopIntegrity = input.state.learningLoopIntegrities.filter((item) => item.workspaceId === input.workspaceId);
+  const learningLoopIntegrityScore = learningLoopIntegrity.length
+    ? learningLoopIntegrity.reduce((sum, item) => sum + item.integrityScore, 0) / learningLoopIntegrity.length
+    : 0;
+  const outcomeSummary = summarizeOutcomeLearning({ workspaceId: input.workspaceId, state: input.state, now: input.now });
 
   return {
     success: true,
@@ -260,6 +388,9 @@ export function computeOrganizationalState(input: {
       workspaceId: input.workspaceId,
       activeCommitments,
       highRiskCommitments,
+      learningLoopIntegrity,
+      learningLoopIntegrityScore,
+      outcomeLearningSummary: outcomeSummary.summary,
       computedAt: input.now ?? nowIso()
     }
   };
